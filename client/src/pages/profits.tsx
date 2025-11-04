@@ -151,10 +151,15 @@ export default function Profits() {
     const totalShippingProfit = exchangeRate > 0 ? parseFloat(convertToLYD(totalShippingProfitUSD)) : totalShippingProfitUSD;
     const totalProfit = exchangeRate > 0 ? parseFloat(convertToLYD(totalProfitUSD)) : totalProfitUSD;
     
-    // Exchange rate profit is ONLY added when viewing in LYD (since it's calculated in LYD)
-    // When viewing in USD, exchangeRateProfit is not applicable
-    const exchangeRateProfit = (exchangeRate > 0) ? exchangeRateProfitLYD : 0;
-    const totalProfitWithExchange = totalProfit + exchangeRateProfit; // Both in same currency now (LYD or USD=0)
+    // Exchange rate profit is ALWAYS in LYD (calculated from per-order rates)
+    // It's a real profit component that exists regardless of viewing currency
+    const exchangeRateProfit = exchangeRateProfitLYD;
+    
+    // Total profit with exchange: when viewing in LYD, both are in LYD so we add them
+    // When viewing in USD, we keep exchange profit separate since it's inherently in LYD
+    const totalProfitWithExchange = exchangeRate > 0 
+      ? (totalProfit + exchangeRateProfit) // Both in LYD
+      : totalProfit; // USD only, exchange profit shown separately
     
     const averageOrderValue = exchangeRate > 0 ? parseFloat(convertToLYD(averageOrderValueUSD)) : averageOrderValueUSD;
     const profitMargin = totalRevenue > 0 ? (totalProfitWithExchange / totalRevenue) * 100 : 0;
@@ -238,9 +243,14 @@ export default function Profits() {
       const totalItemsProfit = exchangeRate > 0 ? totalItemsProfitUSD * exchangeRate : totalItemsProfitUSD;
       const totalShippingProfit = exchangeRate > 0 ? totalShippingProfitUSD * exchangeRate : totalShippingProfitUSD;
       
-      // Exchange rate profit is ONLY added when viewing in LYD (since it's calculated in LYD)
-      const exchangeRateProfit = (exchangeRate > 0) ? exchangeRateProfitLYD : 0;
-      const totalProfitWithExchange = totalProfit + exchangeRateProfit; // Both in same currency now
+      // Exchange rate profit is ALWAYS in LYD (calculated from per-order rates)
+      const exchangeRateProfit = exchangeRateProfitLYD;
+      
+      // Total profit with exchange: when viewing in LYD, both are in LYD so we add them
+      // When viewing in USD, we keep exchange profit separate since it's inherently in LYD
+      const totalProfitWithExchange = exchangeRate > 0 
+        ? (totalProfit + exchangeRateProfit) // Both in LYD
+        : totalProfit; // USD only, exchange profit shown separately
       
       const profitMargin = totalRevenue > 0 ? (totalProfitWithExchange / totalRevenue) * 100 : 0;
       
@@ -724,11 +734,13 @@ export default function Profits() {
                   </span>
                 </div>
 
-                {lydExchangeRate > 0 && lydPurchaseExchangeRate > 0 && metrics.exchangeRateProfit > 0 && (
+                {metrics.exchangeRateProfit !== 0 && (
                   <div className="flex items-center justify-between pl-4">
-                    <span className="text-sm text-muted-foreground">{t('exchangeRateProfit')}</span>
-                    <span className="font-semibold text-amber-600">
-                      {metrics.exchangeRateProfit.toFixed(2)} LYD
+                    <span className="text-sm text-muted-foreground">
+                      {metrics.exchangeRateProfit >= 0 ? t('exchangeRateProfit') : 'Exchange Rate Loss'}
+                    </span>
+                    <span className={`font-semibold ${metrics.exchangeRateProfit >= 0 ? 'text-amber-600' : 'text-red-600'}`}>
+                      {metrics.exchangeRateProfit >= 0 ? '+' : ''}{metrics.exchangeRateProfit.toFixed(2)} LYD
                     </span>
                   </div>
                 )}
@@ -737,12 +749,26 @@ export default function Profits() {
 
                 <div className="flex items-center justify-between pt-2">
                   <span className="text-sm font-semibold text-foreground">{t('totalProfit')}</span>
-                  <span className="text-xl font-bold text-green-600">
-                    {lydExchangeRate > 0 && lydPurchaseExchangeRate > 0 && metrics.exchangeRateProfit > 0
-                      ? metrics.totalProfitWithExchange.toFixed(2)
-                      : metrics.totalProfit.toFixed(2)
-                    } {currency}
-                  </span>
+                  <div className="text-right">
+                    {exchangeRate > 0 ? (
+                      // LYD mode: everything in LYD, simple total
+                      <span className="text-xl font-bold text-green-600">
+                        {metrics.totalProfitWithExchange.toFixed(2)} {currency}
+                      </span>
+                    ) : (
+                      // USD mode: show USD profit +/− LYD exchange profit/loss
+                      <div>
+                        <span className="text-xl font-bold text-green-600">
+                          {metrics.totalProfit.toFixed(2)} {currency}
+                        </span>
+                        {metrics.exchangeRateProfit !== 0 && (
+                          <div className={`text-sm font-semibold mt-1 ${metrics.exchangeRateProfit >= 0 ? 'text-amber-600' : 'text-red-600'}`}>
+                            {metrics.exchangeRateProfit >= 0 ? '+' : '−'} {Math.abs(metrics.exchangeRateProfit).toFixed(2)} LYD
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
                 </div>
               </div>
 
@@ -750,10 +776,22 @@ export default function Profits() {
               <div className="space-y-3 pt-4 border-t">
                 <div className="flex items-center justify-between">
                   <span className="text-sm font-semibold text-muted-foreground">{t('profitMargin')}</span>
-                  <span className="text-lg font-bold text-blue-600">
-                    {metrics.profitMargin.toFixed(2)}%
-                  </span>
+                  <div className="text-right">
+                    <span className="text-lg font-bold text-blue-600">
+                      {metrics.profitMargin.toFixed(2)}%
+                    </span>
+                    {exchangeRate === 0 && metrics.exchangeRateProfit !== 0 && (
+                      <div className="text-xs text-muted-foreground mt-0.5">
+                        USD operations only
+                      </div>
+                    )}
+                  </div>
                 </div>
+                {exchangeRate === 0 && metrics.exchangeRateProfit !== 0 && (
+                  <p className="text-xs text-muted-foreground italic">
+                    Note: Margin calculation excludes LYD exchange {metrics.exchangeRateProfit >= 0 ? 'profit' : 'loss'}. Switch to LYD view for complete margin including all profit/loss components.
+                  </p>
+                )}
               </div>
 
               {/* Average Order Value */}
