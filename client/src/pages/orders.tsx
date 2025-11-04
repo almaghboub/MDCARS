@@ -2936,6 +2936,42 @@ export default function Orders() {
                         )}
                       </div>
                     </div>
+                    
+                    {/* Exchange Rates Used for This Order */}
+                    {(viewingOrder.lydExchangeRate || viewingOrder.lydPurchaseExchangeRate) && (
+                      <div className="border-t pt-3 mt-2">
+                        <h4 className="text-sm font-semibold text-blue-900 dark:text-blue-100 mb-2">LYD Exchange Rates Used</h4>
+                        <div className="grid grid-cols-2 gap-3 text-xs">
+                          {viewingOrder.lydExchangeRate && (
+                            <div className="bg-blue-50 dark:bg-blue-950/30 p-2 rounded">
+                              <div className="text-muted-foreground mb-1">Sale Rate (Customer Paid)</div>
+                              <div className="font-semibold text-blue-700 dark:text-blue-300" data-testid="text-view-sale-rate">
+                                {parseFloat(viewingOrder.lydExchangeRate).toFixed(4)} LYD/USD
+                              </div>
+                            </div>
+                          )}
+                          {viewingOrder.lydPurchaseExchangeRate && (
+                            <div className="bg-green-50 dark:bg-green-950/30 p-2 rounded">
+                              <div className="text-muted-foreground mb-1">Purchase Rate (You Paid)</div>
+                              <div className="font-semibold text-green-700 dark:text-green-300" data-testid="text-view-purchase-rate">
+                                {parseFloat(viewingOrder.lydPurchaseExchangeRate).toFixed(4)} LYD/USD
+                              </div>
+                            </div>
+                          )}
+                          {viewingOrder.lydExchangeRate && viewingOrder.lydPurchaseExchangeRate && (
+                            <div className="col-span-2 bg-amber-50 dark:bg-amber-950/30 p-2 rounded">
+                              <div className="text-muted-foreground mb-1">Exchange Rate Profit (This Order)</div>
+                              <div className="font-semibold text-amber-700 dark:text-amber-300" data-testid="text-view-exchange-profit">
+                                {((parseFloat(viewingOrder.lydExchangeRate) - parseFloat(viewingOrder.lydPurchaseExchangeRate)) * parseFloat(viewingOrder.totalAmount)).toFixed(2)} LYD
+                              </div>
+                              <div className="text-muted-foreground text-xs mt-0.5">
+                                Margin: {(parseFloat(viewingOrder.lydExchangeRate) - parseFloat(viewingOrder.lydPurchaseExchangeRate)).toFixed(4)} LYD per USD
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    )}
                   </div>
                 </div>
 
