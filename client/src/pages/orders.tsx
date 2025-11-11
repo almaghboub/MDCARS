@@ -2055,20 +2055,35 @@ export default function Orders() {
                         <div className="flex justify-between text-orange-600 font-medium">
                           <span>{t('remainingBalance')}:</span>
                           <div className="text-right">
-                            {parseFloat(lydExchangeRate || "0") > 0 ? (
-                              <>
-                                <div className="font-bold" data-testid="text-payment-remaining">
-                                  {((calculateTotals().total - parseFloat(downPayment || "0")) * parseFloat(lydExchangeRate || "0")).toFixed(2)} LYD
-                                </div>
-                                <div className="text-xs text-muted-foreground">
-                                  (${(calculateTotals().total - parseFloat(downPayment || "0")).toFixed(2)})
-                                </div>
-                              </>
-                            ) : (
-                              <div data-testid="text-payment-remaining">
-                                ${(calculateTotals().total - parseFloat(downPayment || "0")).toFixed(2)}
-                              </div>
-                            )}
+                            {(() => {
+                              // Convert down payment to USD if it's in LYD
+                              const rate = parseFloat(orderLydRate || "0") > 0 ? parseFloat(orderLydRate || "0") : exchangeRate;
+                              const downPaymentValue = parseFloat(downPayment || "0");
+                              const downPaymentUSD = downPaymentCurrency === "LYD" && rate > 0 
+                                ? downPaymentValue / rate 
+                                : downPaymentValue;
+                              
+                              const remainingUSD = calculateTotals().total - downPaymentUSD;
+                              
+                              if (parseFloat(lydExchangeRate || "0") > 0) {
+                                return (
+                                  <>
+                                    <div className="font-bold" data-testid="text-payment-remaining">
+                                      {(remainingUSD * parseFloat(lydExchangeRate || "0")).toFixed(2)} LYD
+                                    </div>
+                                    <div className="text-xs text-muted-foreground">
+                                      (${remainingUSD.toFixed(2)})
+                                    </div>
+                                  </>
+                                );
+                              } else {
+                                return (
+                                  <div data-testid="text-payment-remaining">
+                                    ${remainingUSD.toFixed(2)}
+                                  </div>
+                                );
+                              }
+                            })()}
                           </div>
                         </div>
                       )}
