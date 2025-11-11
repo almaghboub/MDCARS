@@ -2029,7 +2029,9 @@ export default function Orders() {
                             <option value="USD">USD ($)</option>
                             <option value="LYD">LYD (د.ل)</option>
                           </select>
-                          <Label htmlFor="down-payment" className="text-sm">{t('downPaymentAmount') || 'Down Payment Amount'}</Label>
+                          <Label htmlFor="down-payment" className="text-sm">
+                            {t('downPaymentAmount') || 'Down Payment Amount'} ({downPaymentCurrency})
+                          </Label>
                           <Input
                             id="down-payment"
                             type="text"
