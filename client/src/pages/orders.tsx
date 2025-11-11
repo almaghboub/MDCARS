@@ -2065,11 +2065,14 @@ export default function Orders() {
                               
                               const remainingUSD = calculateTotals().total - downPaymentUSD;
                               
-                              if (parseFloat(lydExchangeRate || "0") > 0) {
+                              // Check if we have a valid exchange rate to show LYD
+                              const displayRate = parseFloat(orderLydRate || "0") > 0 ? parseFloat(orderLydRate || "0") : exchangeRate;
+                              
+                              if (displayRate > 0) {
                                 return (
                                   <>
                                     <div className="font-bold" data-testid="text-payment-remaining">
-                                      {(remainingUSD * parseFloat(lydExchangeRate || "0")).toFixed(2)} LYD
+                                      {(remainingUSD * displayRate).toFixed(2)} LYD
                                     </div>
                                     <div className="text-xs text-muted-foreground">
                                       (${remainingUSD.toFixed(2)})
