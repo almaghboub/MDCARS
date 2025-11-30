@@ -3,8 +3,7 @@ import { createServer, type Server } from "http";
 import passport from "passport";
 import { Strategy as LocalStrategy } from "passport-local";
 import session from "express-session";
-import connectPgSimple from "connect-pg-simple";
-import { Pool } from "@neondatabase/serverless";
+import MemoryStore from "memorystore";
 import { storage } from "./storage";
 import { hashPassword, verifyPassword } from "./auth";
 import { requireAuth, requireOwner, requireOperational, requireDeliveryManager, requireShippingStaff, requireDeliveryAccess } from "./middleware";
@@ -40,23 +39,20 @@ declare global {
 }
 
 export async function registerRoutes(app: Express): Promise<Server> {
-  // Session configuration with PostgreSQL store
-  const PgSession = connectPgSimple(session);
-  const sessionPool = new Pool({ connectionString: process.env.DATABASE_URL });
+  // Session configuration with MemoryStore
+  const MemoryStoreSession = MemoryStore(session);
   
   app.set('trust proxy', 1);
   app.use(
     session({
-      store: new PgSession({
-        pool: sessionPool,
-        tableName: 'session',
-        createTableIfMissing: true,
+      store: new MemoryStoreSession({
+        checkPeriod: 86400000, // prune expired entries every 24h
       }),
       secret: process.env.SESSION_SECRET || "your-secret-key",
       resave: false,
       saveUninitialized: false,
       cookie: {
-        secure: process.env.NODE_ENV === 'production',
+        secure: false, // Allow cookies over HTTP for development
         httpOnly: true,
         sameSite: 'lax',
         maxAge: 24 * 60 * 60 * 1000, // 24 hours
