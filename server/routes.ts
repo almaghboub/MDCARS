@@ -3,6 +3,8 @@ import { createServer, type Server } from "http";
 import passport from "passport";
 import { Strategy as LocalStrategy } from "passport-local";
 import session from "express-session";
+import connectPgSimple from "connect-pg-simple";
+import { Pool } from "@neondatabase/serverless";
 import { storage } from "./storage";
 import { hashPassword, verifyPassword } from "./auth";
 import { requireAuth, requireOwner, requireOperational, requireDeliveryManager, requireShippingStaff, requireDeliveryAccess } from "./middleware";
@@ -38,10 +40,18 @@ declare global {
 }
 
 export async function registerRoutes(app: Express): Promise<Server> {
-  // Session configuration
+  // Session configuration with PostgreSQL store
+  const PgSession = connectPgSimple(session);
+  const sessionPool = new Pool({ connectionString: process.env.DATABASE_URL });
+  
   app.set('trust proxy', 1);
   app.use(
     session({
+      store: new PgSession({
+        pool: sessionPool,
+        tableName: 'session',
+        createTableIfMissing: true,
+      }),
       secret: process.env.SESSION_SECRET || "your-secret-key",
       resave: false,
       saveUninitialized: false,
@@ -132,7 +142,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
         if (err) {
           return next(err);
         }
-        res.json({ user });
+        // Explicitly save session before responding
+        req.session.save((saveErr) => {
+          if (saveErr) {
+            console.error("Session save error:", saveErr);
+            return next(saveErr);
+          }
+          res.json({ user });
+        });
       });
     })(req, res, next);
   });
