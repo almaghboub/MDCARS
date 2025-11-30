@@ -52,9 +52,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       resave: false,
       saveUninitialized: false,
       cookie: {
-        secure: false, // Allow cookies over HTTP for development
+        secure: true,
         httpOnly: true,
-        sameSite: 'lax',
+        sameSite: 'none',
         maxAge: 24 * 60 * 60 * 1000, // 24 hours
       },
     })
@@ -163,7 +163,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.get("/api/auth/me", (req, res) => {
     console.log("Auth check - Session ID:", req.sessionID);
-    console.log("Auth check - Session user:", req.session?.passport?.user);
+    console.log("Auth check - Session user:", (req.session as any)?.passport?.user);
     console.log("Auth check - isAuthenticated:", req.isAuthenticated());
     console.log("Auth check - Cookies received:", req.headers.cookie);
     if (req.isAuthenticated()) {
