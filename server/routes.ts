@@ -148,6 +148,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
             console.error("Session save error:", saveErr);
             return next(saveErr);
           }
+          console.log("Login success - Session ID:", req.sessionID);
+          console.log("Login success - User:", user.username);
           res.json({ user });
         });
       });
@@ -164,6 +166,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   app.get("/api/auth/me", (req, res) => {
+    console.log("Auth check - Session ID:", req.sessionID);
+    console.log("Auth check - Session user:", req.session?.passport?.user);
+    console.log("Auth check - isAuthenticated:", req.isAuthenticated());
+    console.log("Auth check - Cookies received:", req.headers.cookie);
     if (req.isAuthenticated()) {
       res.json({ user: req.user });
     } else {
