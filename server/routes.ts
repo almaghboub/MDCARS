@@ -609,6 +609,29 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // PATCH endpoint for partial updates (same as PUT)
+  app.patch("/api/orders/:id", requireOperational, async (req, res) => {
+    try {
+      const result = insertOrderSchema.partial().safeParse(req.body);
+      if (!result.success) {
+        return res.status(400).json({ message: "Invalid order data", errors: result.error.errors });
+      }
+
+      const order = await storage.updateOrder(req.params.id, result.data);
+      if (!order) {
+        return res.status(404).json({ message: "Order not found" });
+      }
+
+      res.json(order);
+    } catch (error) {
+      console.error("Order update error:", error);
+      res.status(500).json({ 
+        message: "Failed to update order",
+        error: process.env.NODE_ENV === 'development' ? (error as Error).message : undefined
+      });
+    }
+  });
+
   app.delete("/api/orders/:id", requireOperational, async (req, res) => {
     try {
       const success = await storage.deleteOrder(req.params.id);
