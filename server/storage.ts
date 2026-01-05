@@ -24,6 +24,29 @@ import {
   type DeliveryTaskWithDetails,
   type OrderWithCustomer,
   type CustomerWithOrders,
+  type RevenueAccount,
+  type InsertRevenueAccount,
+  type Safe,
+  type InsertSafe,
+  type SafeTransaction,
+  type InsertSafeTransaction,
+  type Bank,
+  type InsertBank,
+  type BankTransaction,
+  type InsertBankTransaction,
+  type CurrencySettlement,
+  type InsertCurrencySettlement,
+  type Warehouse,
+  type InsertWarehouse,
+  type WarehouseStock,
+  type InsertWarehouseStock,
+  type Supplier,
+  type InsertSupplier,
+  type Receipt,
+  type InsertReceipt,
+  type AccountingEntry,
+  type InsertAccountingEntry,
+  type MainOfficeAccountType,
   users,
   customers,
   orders,
@@ -35,6 +58,18 @@ import {
   messages,
   deliveryTasks,
   expenses,
+  revenueAccounts,
+  safes,
+  safeTransactions,
+  banks,
+  bankTransactions,
+  currencySettlements,
+  warehouses,
+  warehouseStock,
+  suppliers,
+  receipts,
+  accountingEntries,
+  mainOfficeAccount,
 } from "@shared/schema";
 import { randomUUID } from "crypto";
 import { hashPassword } from "./auth";
@@ -141,6 +176,73 @@ export interface IStorage {
   createExpense(expense: InsertExpense): Promise<Expense>;
   getAllExpenses(): Promise<Expense[]>;
   deleteExpense(id: string): Promise<boolean>;
+
+  // ============ FINANCIAL MODULE METHODS ============
+
+  // Revenue Accounts
+  getAllRevenueAccounts(): Promise<RevenueAccount[]>;
+  createRevenueAccount(account: InsertRevenueAccount): Promise<RevenueAccount>;
+  updateRevenueAccount(id: string, account: Partial<InsertRevenueAccount>): Promise<RevenueAccount | undefined>;
+  deleteRevenueAccount(id: string): Promise<boolean>;
+
+  // Safes
+  getAllSafes(): Promise<Safe[]>;
+  createSafe(safe: InsertSafe): Promise<Safe>;
+  updateSafe(id: string, safe: Partial<InsertSafe>): Promise<Safe | undefined>;
+  deleteSafe(id: string): Promise<boolean>;
+  getSafeTransactions(safeId: string): Promise<SafeTransaction[]>;
+  createSafeTransaction(transaction: InsertSafeTransaction): Promise<SafeTransaction>;
+
+  // Banks
+  getAllBanks(): Promise<Bank[]>;
+  createBank(bank: InsertBank): Promise<Bank>;
+  updateBank(id: string, bank: Partial<InsertBank>): Promise<Bank | undefined>;
+  deleteBank(id: string): Promise<boolean>;
+  getBankTransactions(bankId: string): Promise<BankTransaction[]>;
+  createBankTransaction(transaction: InsertBankTransaction): Promise<BankTransaction>;
+
+  // Currency Settlements
+  getAllCurrencySettlements(): Promise<CurrencySettlement[]>;
+  createCurrencySettlement(settlement: InsertCurrencySettlement): Promise<CurrencySettlement>;
+
+  // Warehouses
+  getAllWarehouses(): Promise<Warehouse[]>;
+  createWarehouse(warehouse: InsertWarehouse): Promise<Warehouse>;
+  updateWarehouse(id: string, warehouse: Partial<InsertWarehouse>): Promise<Warehouse | undefined>;
+  deleteWarehouse(id: string): Promise<boolean>;
+  getWarehouseStock(warehouseId: string): Promise<WarehouseStock[]>;
+  addWarehouseStock(stock: InsertWarehouseStock): Promise<WarehouseStock>;
+  updateWarehouseStock(id: string, stock: Partial<InsertWarehouseStock>): Promise<WarehouseStock | undefined>;
+
+  // Suppliers
+  getAllSuppliers(): Promise<Supplier[]>;
+  createSupplier(supplier: InsertSupplier): Promise<Supplier>;
+  updateSupplier(id: string, supplier: Partial<InsertSupplier>): Promise<Supplier | undefined>;
+  deleteSupplier(id: string): Promise<boolean>;
+
+  // Receipts
+  getAllReceipts(): Promise<Receipt[]>;
+  getReceipt(id: string): Promise<Receipt | undefined>;
+  createReceipt(receipt: InsertReceipt): Promise<Receipt>;
+
+  // Accounting Entries
+  getAllAccountingEntries(): Promise<AccountingEntry[]>;
+  createAccountingEntry(entry: InsertAccountingEntry): Promise<AccountingEntry>;
+
+  // Main Office Account
+  getMainOfficeAccount(): Promise<MainOfficeAccountType | undefined>;
+  updateMainOfficeAccount(account: Partial<MainOfficeAccountType>): Promise<MainOfficeAccountType | undefined>;
+
+  // Financial Summary
+  getFinancialSummary(): Promise<{
+    totalSafeBalanceUSD: number;
+    totalSafeBalanceLYD: number;
+    totalBankBalanceUSD: number;
+    totalBankBalanceLYD: number;
+    totalCustomerDebt: number;
+    totalSupplierDebt: number;
+    recentTransactions: Array<{ type: string; amount: number; date: Date }>;
+  }>;
 }
 
 export class MemStorage implements IStorage {
@@ -1369,6 +1471,395 @@ export class PostgreSQLStorage implements IStorage {
   async deleteExpense(id: string): Promise<boolean> {
     const result = await db.delete(expenses).where(eq(expenses.id, id)).returning();
     return result.length > 0;
+  }
+
+  // ============ FINANCIAL MODULE IMPLEMENTATIONS ============
+
+  // Revenue Accounts
+  async getAllRevenueAccounts(): Promise<RevenueAccount[]> {
+    return await db.select().from(revenueAccounts).orderBy(revenueAccounts.code);
+  }
+
+  async createRevenueAccount(account: InsertRevenueAccount): Promise<RevenueAccount> {
+    const result = await db.insert(revenueAccounts).values(account).returning();
+    return result[0];
+  }
+
+  async updateRevenueAccount(id: string, account: Partial<InsertRevenueAccount>): Promise<RevenueAccount | undefined> {
+    const result = await db.update(revenueAccounts)
+      .set({ ...account, updatedAt: new Date() })
+      .where(eq(revenueAccounts.id, id))
+      .returning();
+    return result[0];
+  }
+
+  async deleteRevenueAccount(id: string): Promise<boolean> {
+    const result = await db.delete(revenueAccounts).where(eq(revenueAccounts.id, id)).returning();
+    return result.length > 0;
+  }
+
+  // Safes
+  async getAllSafes(): Promise<Safe[]> {
+    return await db.select().from(safes).orderBy(safes.code);
+  }
+
+  async createSafe(safe: InsertSafe): Promise<Safe> {
+    const result = await db.insert(safes).values(safe).returning();
+    return result[0];
+  }
+
+  async updateSafe(id: string, safe: Partial<InsertSafe>): Promise<Safe | undefined> {
+    const result = await db.update(safes)
+      .set({ ...safe, updatedAt: new Date() })
+      .where(eq(safes.id, id))
+      .returning();
+    return result[0];
+  }
+
+  async deleteSafe(id: string): Promise<boolean> {
+    const result = await db.delete(safes).where(eq(safes.id, id)).returning();
+    return result.length > 0;
+  }
+
+  async getSafeTransactions(safeId: string): Promise<SafeTransaction[]> {
+    return await db.select()
+      .from(safeTransactions)
+      .where(eq(safeTransactions.safeId, safeId))
+      .orderBy(desc(safeTransactions.createdAt));
+  }
+
+  async createSafeTransaction(transaction: InsertSafeTransaction): Promise<SafeTransaction> {
+    const result = await db.insert(safeTransactions).values(transaction).returning();
+    
+    // Update safe balance based on transaction type
+    const safe = await db.select().from(safes).where(eq(safes.id, transaction.safeId)).limit(1);
+    if (safe[0]) {
+      let multiplier = 0;
+      switch (transaction.type) {
+        case 'deposit':
+        case 'transfer': // Incoming transfer
+          multiplier = 1;
+          break;
+        case 'withdrawal':
+        case 'settlement':
+        case 'currency_adjustment':
+          // For settlement/adjustment, use the sign of the amount to determine direction
+          multiplier = -1;
+          break;
+        default:
+          multiplier = 0;
+      }
+      const newBalanceUSD = Number(safe[0].balanceUSD) + (Number(transaction.amountUSD || 0) * multiplier);
+      const newBalanceLYD = Number(safe[0].balanceLYD) + (Number(transaction.amountLYD || 0) * multiplier);
+      await db.update(safes)
+        .set({ balanceUSD: String(newBalanceUSD), balanceLYD: String(newBalanceLYD), updatedAt: new Date() })
+        .where(eq(safes.id, transaction.safeId));
+    }
+    
+    return result[0];
+  }
+
+  // Banks
+  async getAllBanks(): Promise<Bank[]> {
+    return await db.select().from(banks).orderBy(banks.code);
+  }
+
+  async createBank(bank: InsertBank): Promise<Bank> {
+    const result = await db.insert(banks).values(bank).returning();
+    return result[0];
+  }
+
+  async updateBank(id: string, bank: Partial<InsertBank>): Promise<Bank | undefined> {
+    const result = await db.update(banks)
+      .set({ ...bank, updatedAt: new Date() })
+      .where(eq(banks.id, id))
+      .returning();
+    return result[0];
+  }
+
+  async deleteBank(id: string): Promise<boolean> {
+    const result = await db.delete(banks).where(eq(banks.id, id)).returning();
+    return result.length > 0;
+  }
+
+  async getBankTransactions(bankId: string): Promise<BankTransaction[]> {
+    return await db.select()
+      .from(bankTransactions)
+      .where(eq(bankTransactions.bankId, bankId))
+      .orderBy(desc(bankTransactions.createdAt));
+  }
+
+  async createBankTransaction(transaction: InsertBankTransaction): Promise<BankTransaction> {
+    const result = await db.insert(bankTransactions).values(transaction).returning();
+    
+    // Update bank balance based on transaction type
+    const bank = await db.select().from(banks).where(eq(banks.id, transaction.bankId)).limit(1);
+    if (bank[0]) {
+      let multiplier = 0;
+      switch (transaction.type) {
+        case 'deposit':
+        case 'transfer': // Incoming transfer
+          multiplier = 1;
+          break;
+        case 'withdrawal':
+        case 'settlement':
+        case 'currency_adjustment':
+          multiplier = -1;
+          break;
+        default:
+          multiplier = 0;
+      }
+      const newBalanceUSD = Number(bank[0].balanceUSD) + (Number(transaction.amountUSD || 0) * multiplier);
+      const newBalanceLYD = Number(bank[0].balanceLYD) + (Number(transaction.amountLYD || 0) * multiplier);
+      await db.update(banks)
+        .set({ balanceUSD: String(newBalanceUSD), balanceLYD: String(newBalanceLYD), updatedAt: new Date() })
+        .where(eq(banks.id, transaction.bankId));
+      
+      // Only update linked safe for transfer type (where funds move between bank and safe)
+      // For transfers: bank deposit (+) means safe withdrawal (-), and vice versa
+      if (bank[0].linkedSafeId && transaction.type === 'transfer') {
+        const linkedSafe = await db.select().from(safes).where(eq(safes.id, bank[0].linkedSafeId)).limit(1);
+        if (linkedSafe[0]) {
+          // Opposite sign for linked safe: if bank increases, safe decreases
+          const safeMultiplier = -multiplier;
+          const safeNewBalanceUSD = Number(linkedSafe[0].balanceUSD) + (Number(transaction.amountUSD || 0) * safeMultiplier);
+          const safeNewBalanceLYD = Number(linkedSafe[0].balanceLYD) + (Number(transaction.amountLYD || 0) * safeMultiplier);
+          await db.update(safes)
+            .set({ balanceUSD: String(safeNewBalanceUSD), balanceLYD: String(safeNewBalanceLYD), updatedAt: new Date() })
+            .where(eq(safes.id, bank[0].linkedSafeId));
+        }
+      }
+    }
+    
+    return result[0];
+  }
+
+  // Currency Settlements
+  async getAllCurrencySettlements(): Promise<CurrencySettlement[]> {
+    return await db.select().from(currencySettlements).orderBy(desc(currencySettlements.createdAt));
+  }
+
+  async createCurrencySettlement(settlement: InsertCurrencySettlement): Promise<CurrencySettlement> {
+    const result = await db.insert(currencySettlements).values(settlement).returning();
+    return result[0];
+  }
+
+  // Warehouses
+  async getAllWarehouses(): Promise<Warehouse[]> {
+    return await db.select().from(warehouses).orderBy(warehouses.code);
+  }
+
+  async createWarehouse(warehouse: InsertWarehouse): Promise<Warehouse> {
+    const result = await db.insert(warehouses).values(warehouse).returning();
+    return result[0];
+  }
+
+  async updateWarehouse(id: string, warehouse: Partial<InsertWarehouse>): Promise<Warehouse | undefined> {
+    const result = await db.update(warehouses)
+      .set({ ...warehouse, updatedAt: new Date() })
+      .where(eq(warehouses.id, id))
+      .returning();
+    return result[0];
+  }
+
+  async deleteWarehouse(id: string): Promise<boolean> {
+    const result = await db.delete(warehouses).where(eq(warehouses.id, id)).returning();
+    return result.length > 0;
+  }
+
+  async getWarehouseStock(warehouseId: string): Promise<WarehouseStock[]> {
+    return await db.select()
+      .from(warehouseStock)
+      .where(eq(warehouseStock.warehouseId, warehouseId))
+      .orderBy(warehouseStock.productName);
+  }
+
+  async addWarehouseStock(stock: InsertWarehouseStock): Promise<WarehouseStock> {
+    // Calculate average cost for existing stock
+    const existing = await db.select()
+      .from(warehouseStock)
+      .where(sql`${warehouseStock.warehouseId} = ${stock.warehouseId} AND ${warehouseStock.productCode} = ${stock.productCode}`)
+      .limit(1);
+
+    if (existing[0]) {
+      // Update existing stock with new average cost
+      const currentQty = Number(existing[0].quantity);
+      const currentTotalCost = Number(existing[0].totalCost);
+      const newQty = currentQty + Number(stock.quantity);
+      const newTotalCost = currentTotalCost + Number(stock.totalCost);
+      const newAverageCost = newTotalCost / newQty;
+
+      const result = await db.update(warehouseStock)
+        .set({
+          quantity: newQty,
+          totalCost: String(newTotalCost),
+          averageCost: String(newAverageCost),
+          lastPurchasePrice: stock.lastPurchasePrice,
+          updatedAt: new Date(),
+        })
+        .where(eq(warehouseStock.id, existing[0].id))
+        .returning();
+      return result[0];
+    } else {
+      // Insert new stock item
+      const quantity = Number(stock.quantity);
+      const totalCost = Number(stock.totalCost);
+      const averageCost = quantity > 0 ? totalCost / quantity : 0;
+
+      const result = await db.insert(warehouseStock).values({
+        ...stock,
+        averageCost: String(averageCost),
+      }).returning();
+      return result[0];
+    }
+  }
+
+  async updateWarehouseStock(id: string, stock: Partial<InsertWarehouseStock>): Promise<WarehouseStock | undefined> {
+    const result = await db.update(warehouseStock)
+      .set({ ...stock, updatedAt: new Date() })
+      .where(eq(warehouseStock.id, id))
+      .returning();
+    return result[0];
+  }
+
+  // Suppliers
+  async getAllSuppliers(): Promise<Supplier[]> {
+    return await db.select().from(suppliers).orderBy(suppliers.name);
+  }
+
+  async createSupplier(supplier: InsertSupplier): Promise<Supplier> {
+    const result = await db.insert(suppliers).values(supplier).returning();
+    return result[0];
+  }
+
+  async updateSupplier(id: string, supplier: Partial<InsertSupplier>): Promise<Supplier | undefined> {
+    const result = await db.update(suppliers)
+      .set({ ...supplier, updatedAt: new Date() })
+      .where(eq(suppliers.id, id))
+      .returning();
+    return result[0];
+  }
+
+  async deleteSupplier(id: string): Promise<boolean> {
+    const result = await db.delete(suppliers).where(eq(suppliers.id, id)).returning();
+    return result.length > 0;
+  }
+
+  // Receipts
+  async getAllReceipts(): Promise<Receipt[]> {
+    return await db.select().from(receipts).orderBy(desc(receipts.createdAt));
+  }
+
+  async getReceipt(id: string): Promise<Receipt | undefined> {
+    const result = await db.select().from(receipts).where(eq(receipts.id, id)).limit(1);
+    return result[0];
+  }
+
+  async createReceipt(receipt: InsertReceipt): Promise<Receipt> {
+    const result = await db.insert(receipts).values(receipt).returning();
+    return result[0];
+  }
+
+  // Accounting Entries
+  async getAllAccountingEntries(): Promise<AccountingEntry[]> {
+    return await db.select().from(accountingEntries).orderBy(desc(accountingEntries.date));
+  }
+
+  async createAccountingEntry(entry: InsertAccountingEntry): Promise<AccountingEntry> {
+    const result = await db.insert(accountingEntries).values(entry).returning();
+    return result[0];
+  }
+
+  // Main Office Account
+  async getMainOfficeAccount(): Promise<MainOfficeAccountType | undefined> {
+    const result = await db.select().from(mainOfficeAccount).limit(1);
+    if (result.length === 0) {
+      // Create default account if not exists
+      const created = await db.insert(mainOfficeAccount).values({ name: 'Main Office' }).returning();
+      return created[0];
+    }
+    return result[0];
+  }
+
+  async updateMainOfficeAccount(account: Partial<MainOfficeAccountType>): Promise<MainOfficeAccountType | undefined> {
+    const existing = await this.getMainOfficeAccount();
+    if (!existing) return undefined;
+    
+    const result = await db.update(mainOfficeAccount)
+      .set({ ...account, updatedAt: new Date() })
+      .where(eq(mainOfficeAccount.id, existing.id))
+      .returning();
+    return result[0];
+  }
+
+  // Financial Summary
+  async getFinancialSummary(): Promise<{
+    totalSafeBalanceUSD: number;
+    totalSafeBalanceLYD: number;
+    totalBankBalanceUSD: number;
+    totalBankBalanceLYD: number;
+    totalCustomerDebt: number;
+    totalSupplierDebt: number;
+    recentTransactions: Array<{ type: string; amount: number; date: Date }>;
+  }> {
+    // Get safe totals
+    const safeResults = await db.select({
+      totalUSD: sql<number>`COALESCE(SUM(balance_usd::numeric), 0)`,
+      totalLYD: sql<number>`COALESCE(SUM(balance_lyd::numeric), 0)`,
+    }).from(safes);
+
+    // Get bank totals
+    const bankResults = await db.select({
+      totalUSD: sql<number>`COALESCE(SUM(balance_usd::numeric), 0)`,
+      totalLYD: sql<number>`COALESCE(SUM(balance_lyd::numeric), 0)`,
+    }).from(banks);
+
+    // Get customer debt total (balance_owed)
+    const customerDebtResult = await db.select({
+      total: sql<number>`COALESCE(SUM(balance_owed::numeric), 0)`,
+    }).from(customers);
+
+    // Get supplier debt total
+    const supplierDebtResult = await db.select({
+      total: sql<number>`COALESCE(SUM(balance_owed::numeric), 0)`,
+    }).from(suppliers);
+
+    // Get recent transactions from both safes and banks (last 10)
+    const recentSafeTransactions = await db.select({
+      type: safeTransactions.type,
+      amountUSD: safeTransactions.amountUSD,
+      createdAt: safeTransactions.createdAt,
+    }).from(safeTransactions).orderBy(desc(safeTransactions.createdAt)).limit(5);
+
+    const recentBankTransactions = await db.select({
+      type: bankTransactions.type,
+      amountUSD: bankTransactions.amountUSD,
+      createdAt: bankTransactions.createdAt,
+    }).from(bankTransactions).orderBy(desc(bankTransactions.createdAt)).limit(5);
+
+    // Combine and format recent transactions
+    const recentTransactions = [
+      ...recentSafeTransactions.map(t => ({
+        type: `safe_${t.type}`,
+        amount: Number(t.amountUSD),
+        date: t.createdAt,
+      })),
+      ...recentBankTransactions.map(t => ({
+        type: `bank_${t.type}`,
+        amount: Number(t.amountUSD),
+        date: t.createdAt,
+      })),
+    ].sort((a, b) => b.date.getTime() - a.date.getTime()).slice(0, 10);
+
+    return {
+      totalSafeBalanceUSD: Number(safeResults[0]?.totalUSD || 0),
+      totalSafeBalanceLYD: Number(safeResults[0]?.totalLYD || 0),
+      totalBankBalanceUSD: Number(bankResults[0]?.totalUSD || 0),
+      totalBankBalanceLYD: Number(bankResults[0]?.totalLYD || 0),
+      totalCustomerDebt: Number(customerDebtResult[0]?.total || 0),
+      totalSupplierDebt: Number(supplierDebtResult[0]?.total || 0),
+      recentTransactions,
+    };
   }
 }
 

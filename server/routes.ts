@@ -20,6 +20,17 @@ import {
   insertMessageSchema,
   insertDeliveryTaskSchema,
   insertExpenseSchema,
+  insertRevenueAccountSchema,
+  insertSafeSchema,
+  insertSafeTransactionSchema,
+  insertBankSchema,
+  insertBankTransactionSchema,
+  insertCurrencySettlementSchema,
+  insertWarehouseSchema,
+  insertWarehouseStockSchema,
+  insertSupplierSchema,
+  insertReceiptSchema,
+  insertAccountingEntrySchema,
   loginSchema,
 } from "@shared/schema";
 import { darbAssabilService } from "./services/darbAssabil";
@@ -1397,6 +1408,454 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.json({ message: "Expense deleted successfully" });
     } catch (error) {
       res.status(500).json({ message: "Failed to delete expense" });
+    }
+  });
+
+  // ============ FINANCIAL MODULE ROUTES ============
+
+  // Revenue Accounts
+  app.get("/api/revenue-accounts", requireAuth, async (req, res) => {
+    try {
+      const accounts = await storage.getAllRevenueAccounts();
+      res.json(accounts);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to fetch revenue accounts" });
+    }
+  });
+
+  app.post("/api/revenue-accounts", requireOwner, async (req, res) => {
+    try {
+      const result = insertRevenueAccountSchema.safeParse(req.body);
+      if (!result.success) {
+        return res.status(400).json({ message: "Invalid revenue account data", errors: result.error.errors });
+      }
+      const account = await storage.createRevenueAccount(result.data);
+      res.status(201).json(account);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to create revenue account" });
+    }
+  });
+
+  app.patch("/api/revenue-accounts/:id", requireOwner, async (req, res) => {
+    try {
+      const account = await storage.updateRevenueAccount(req.params.id, req.body);
+      if (!account) {
+        return res.status(404).json({ message: "Revenue account not found" });
+      }
+      res.json(account);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to update revenue account" });
+    }
+  });
+
+  app.delete("/api/revenue-accounts/:id", requireOwner, async (req, res) => {
+    try {
+      const success = await storage.deleteRevenueAccount(req.params.id);
+      if (!success) {
+        return res.status(404).json({ message: "Revenue account not found" });
+      }
+      res.json({ message: "Revenue account deleted successfully" });
+    } catch (error) {
+      res.status(500).json({ message: "Failed to delete revenue account" });
+    }
+  });
+
+  // Safes
+  app.get("/api/safes", requireAuth, async (req, res) => {
+    try {
+      const safes = await storage.getAllSafes();
+      res.json(safes);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to fetch safes" });
+    }
+  });
+
+  app.post("/api/safes", requireOwner, async (req, res) => {
+    try {
+      const result = insertSafeSchema.safeParse(req.body);
+      if (!result.success) {
+        return res.status(400).json({ message: "Invalid safe data", errors: result.error.errors });
+      }
+      const safe = await storage.createSafe(result.data);
+      res.status(201).json(safe);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to create safe" });
+    }
+  });
+
+  app.patch("/api/safes/:id", requireOwner, async (req, res) => {
+    try {
+      const safe = await storage.updateSafe(req.params.id, req.body);
+      if (!safe) {
+        return res.status(404).json({ message: "Safe not found" });
+      }
+      res.json(safe);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to update safe" });
+    }
+  });
+
+  app.delete("/api/safes/:id", requireOwner, async (req, res) => {
+    try {
+      const success = await storage.deleteSafe(req.params.id);
+      if (!success) {
+        return res.status(404).json({ message: "Safe not found" });
+      }
+      res.json({ message: "Safe deleted successfully" });
+    } catch (error) {
+      res.status(500).json({ message: "Failed to delete safe" });
+    }
+  });
+
+  // Safe Transactions
+  app.get("/api/safes/:safeId/transactions", requireAuth, async (req, res) => {
+    try {
+      const transactions = await storage.getSafeTransactions(req.params.safeId);
+      res.json(transactions);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to fetch safe transactions" });
+    }
+  });
+
+  app.post("/api/safes/:safeId/transactions", requireOwner, async (req, res) => {
+    try {
+      const result = insertSafeTransactionSchema.safeParse({
+        ...req.body,
+        safeId: req.params.safeId,
+        createdByUserId: req.user!.id,
+      });
+      if (!result.success) {
+        return res.status(400).json({ message: "Invalid transaction data", errors: result.error.errors });
+      }
+      const transaction = await storage.createSafeTransaction(result.data);
+      res.status(201).json(transaction);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to create safe transaction" });
+    }
+  });
+
+  // Banks
+  app.get("/api/banks", requireAuth, async (req, res) => {
+    try {
+      const banks = await storage.getAllBanks();
+      res.json(banks);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to fetch banks" });
+    }
+  });
+
+  app.post("/api/banks", requireOwner, async (req, res) => {
+    try {
+      const result = insertBankSchema.safeParse(req.body);
+      if (!result.success) {
+        return res.status(400).json({ message: "Invalid bank data", errors: result.error.errors });
+      }
+      const bank = await storage.createBank(result.data);
+      res.status(201).json(bank);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to create bank" });
+    }
+  });
+
+  app.patch("/api/banks/:id", requireOwner, async (req, res) => {
+    try {
+      const bank = await storage.updateBank(req.params.id, req.body);
+      if (!bank) {
+        return res.status(404).json({ message: "Bank not found" });
+      }
+      res.json(bank);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to update bank" });
+    }
+  });
+
+  app.delete("/api/banks/:id", requireOwner, async (req, res) => {
+    try {
+      const success = await storage.deleteBank(req.params.id);
+      if (!success) {
+        return res.status(404).json({ message: "Bank not found" });
+      }
+      res.json({ message: "Bank deleted successfully" });
+    } catch (error) {
+      res.status(500).json({ message: "Failed to delete bank" });
+    }
+  });
+
+  // Bank Transactions
+  app.get("/api/banks/:bankId/transactions", requireAuth, async (req, res) => {
+    try {
+      const transactions = await storage.getBankTransactions(req.params.bankId);
+      res.json(transactions);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to fetch bank transactions" });
+    }
+  });
+
+  app.post("/api/banks/:bankId/transactions", requireOwner, async (req, res) => {
+    try {
+      const result = insertBankTransactionSchema.safeParse({
+        ...req.body,
+        bankId: req.params.bankId,
+        createdByUserId: req.user!.id,
+      });
+      if (!result.success) {
+        return res.status(400).json({ message: "Invalid transaction data", errors: result.error.errors });
+      }
+      const transaction = await storage.createBankTransaction(result.data);
+      res.status(201).json(transaction);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to create bank transaction" });
+    }
+  });
+
+  // Currency Settlements
+  app.get("/api/currency-settlements", requireOwner, async (req, res) => {
+    try {
+      const settlements = await storage.getAllCurrencySettlements();
+      res.json(settlements);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to fetch currency settlements" });
+    }
+  });
+
+  app.post("/api/currency-settlements", requireOwner, async (req, res) => {
+    try {
+      const result = insertCurrencySettlementSchema.safeParse({
+        ...req.body,
+        createdByUserId: req.user!.id,
+      });
+      if (!result.success) {
+        return res.status(400).json({ message: "Invalid settlement data", errors: result.error.errors });
+      }
+      const settlement = await storage.createCurrencySettlement(result.data);
+      res.status(201).json(settlement);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to create currency settlement" });
+    }
+  });
+
+  // Warehouses
+  app.get("/api/warehouses", requireAuth, async (req, res) => {
+    try {
+      const warehouses = await storage.getAllWarehouses();
+      res.json(warehouses);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to fetch warehouses" });
+    }
+  });
+
+  app.post("/api/warehouses", requireOwner, async (req, res) => {
+    try {
+      const result = insertWarehouseSchema.safeParse(req.body);
+      if (!result.success) {
+        return res.status(400).json({ message: "Invalid warehouse data", errors: result.error.errors });
+      }
+      const warehouse = await storage.createWarehouse(result.data);
+      res.status(201).json(warehouse);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to create warehouse" });
+    }
+  });
+
+  app.patch("/api/warehouses/:id", requireOwner, async (req, res) => {
+    try {
+      const warehouse = await storage.updateWarehouse(req.params.id, req.body);
+      if (!warehouse) {
+        return res.status(404).json({ message: "Warehouse not found" });
+      }
+      res.json(warehouse);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to update warehouse" });
+    }
+  });
+
+  app.delete("/api/warehouses/:id", requireOwner, async (req, res) => {
+    try {
+      const success = await storage.deleteWarehouse(req.params.id);
+      if (!success) {
+        return res.status(404).json({ message: "Warehouse not found" });
+      }
+      res.json({ message: "Warehouse deleted successfully" });
+    } catch (error) {
+      res.status(500).json({ message: "Failed to delete warehouse" });
+    }
+  });
+
+  // Warehouse Stock
+  app.get("/api/warehouses/:warehouseId/stock", requireAuth, async (req, res) => {
+    try {
+      const stock = await storage.getWarehouseStock(req.params.warehouseId);
+      res.json(stock);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to fetch warehouse stock" });
+    }
+  });
+
+  app.post("/api/warehouses/:warehouseId/stock", requireOwner, async (req, res) => {
+    try {
+      const result = insertWarehouseStockSchema.safeParse({
+        ...req.body,
+        warehouseId: req.params.warehouseId,
+      });
+      if (!result.success) {
+        return res.status(400).json({ message: "Invalid stock data", errors: result.error.errors });
+      }
+      const stockItem = await storage.addWarehouseStock(result.data);
+      res.status(201).json(stockItem);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to add warehouse stock" });
+    }
+  });
+
+  app.patch("/api/warehouse-stock/:id", requireOwner, async (req, res) => {
+    try {
+      const stockItem = await storage.updateWarehouseStock(req.params.id, req.body);
+      if (!stockItem) {
+        return res.status(404).json({ message: "Stock item not found" });
+      }
+      res.json(stockItem);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to update stock item" });
+    }
+  });
+
+  // Suppliers
+  app.get("/api/suppliers", requireAuth, async (req, res) => {
+    try {
+      const suppliers = await storage.getAllSuppliers();
+      res.json(suppliers);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to fetch suppliers" });
+    }
+  });
+
+  app.post("/api/suppliers", requireOwner, async (req, res) => {
+    try {
+      const result = insertSupplierSchema.safeParse(req.body);
+      if (!result.success) {
+        return res.status(400).json({ message: "Invalid supplier data", errors: result.error.errors });
+      }
+      const supplier = await storage.createSupplier(result.data);
+      res.status(201).json(supplier);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to create supplier" });
+    }
+  });
+
+  app.patch("/api/suppliers/:id", requireOwner, async (req, res) => {
+    try {
+      const supplier = await storage.updateSupplier(req.params.id, req.body);
+      if (!supplier) {
+        return res.status(404).json({ message: "Supplier not found" });
+      }
+      res.json(supplier);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to update supplier" });
+    }
+  });
+
+  app.delete("/api/suppliers/:id", requireOwner, async (req, res) => {
+    try {
+      const success = await storage.deleteSupplier(req.params.id);
+      if (!success) {
+        return res.status(404).json({ message: "Supplier not found" });
+      }
+      res.json({ message: "Supplier deleted successfully" });
+    } catch (error) {
+      res.status(500).json({ message: "Failed to delete supplier" });
+    }
+  });
+
+  // Receipts
+  app.get("/api/receipts", requireAuth, async (req, res) => {
+    try {
+      const receipts = await storage.getAllReceipts();
+      res.json(receipts);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to fetch receipts" });
+    }
+  });
+
+  app.post("/api/receipts", requireOwner, async (req, res) => {
+    try {
+      const result = insertReceiptSchema.safeParse({
+        ...req.body,
+        createdByUserId: req.user!.id,
+      });
+      if (!result.success) {
+        return res.status(400).json({ message: "Invalid receipt data", errors: result.error.errors });
+      }
+      const receipt = await storage.createReceipt(result.data);
+      res.status(201).json(receipt);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to create receipt" });
+    }
+  });
+
+  app.get("/api/receipts/:id", requireAuth, async (req, res) => {
+    try {
+      const receipt = await storage.getReceipt(req.params.id);
+      if (!receipt) {
+        return res.status(404).json({ message: "Receipt not found" });
+      }
+      res.json(receipt);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to fetch receipt" });
+    }
+  });
+
+  // Accounting Entries
+  app.get("/api/accounting-entries", requireOwner, async (req, res) => {
+    try {
+      const entries = await storage.getAllAccountingEntries();
+      res.json(entries);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to fetch accounting entries" });
+    }
+  });
+
+  app.post("/api/accounting-entries", requireOwner, async (req, res) => {
+    try {
+      const result = insertAccountingEntrySchema.safeParse({
+        ...req.body,
+        createdByUserId: req.user!.id,
+      });
+      if (!result.success) {
+        return res.status(400).json({ message: "Invalid accounting entry data", errors: result.error.errors });
+      }
+      const entry = await storage.createAccountingEntry(result.data);
+      res.status(201).json(entry);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to create accounting entry" });
+    }
+  });
+
+  // Main Office Account
+  app.get("/api/main-office-account", requireOwner, async (req, res) => {
+    try {
+      const account = await storage.getMainOfficeAccount();
+      res.json(account);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to fetch main office account" });
+    }
+  });
+
+  app.patch("/api/main-office-account", requireOwner, async (req, res) => {
+    try {
+      const account = await storage.updateMainOfficeAccount(req.body);
+      res.json(account);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to update main office account" });
+    }
+  });
+
+  // Financial Summary for Dashboard
+  app.get("/api/financial-summary", requireOwner, async (req, res) => {
+    try {
+      const summary = await storage.getFinancialSummary();
+      res.json(summary);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to fetch financial summary" });
     }
   });
 
