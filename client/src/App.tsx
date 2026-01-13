@@ -22,6 +22,7 @@ import TaskAssignment from "@/pages/task-assignment";
 import TaskHistory from "@/pages/task-history";
 import DarbAssabil from "@/pages/darb-assabil";
 import ReadyToBuy from "@/pages/ready-to-buy";
+import Finance from "@/pages/finance";
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { isAuthenticated, isLoading } = useAuth();
@@ -200,6 +201,12 @@ function Router() {
       <Route path="/ready-to-buy">
         <RoleProtectedRoute allowedRoles={["owner", "customer_service", "receptionist"]}>
           <ReadyToBuy />
+        </RoleProtectedRoute>
+      </Route>
+
+      <Route path="/finance">
+        <RoleProtectedRoute allowedRoles={["owner"]}>
+          <Finance />
         </RoleProtectedRoute>
       </Route>
 
