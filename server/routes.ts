@@ -24,12 +24,18 @@ const SessionStore = MemoryStore(session);
 
 export async function registerRoutes(app: Express): Promise<Server> {
   app.set('trust proxy', 1);
+  const isProduction = process.env.NODE_ENV === 'production';
   app.use(session({
     secret: process.env.SESSION_SECRET || "md-cars-secret-key-2024",
     resave: false,
     saveUninitialized: false,
     store: new SessionStore({ checkPeriod: 86400000 }),
-    cookie: { secure: true, httpOnly: true, sameSite: 'none', maxAge: 24 * 60 * 60 * 1000 },
+    cookie: { 
+      secure: isProduction, 
+      httpOnly: true, 
+      sameSite: isProduction ? 'none' : 'lax', 
+      maxAge: 24 * 60 * 60 * 1000 
+    },
   }));
 
   app.use(passport.initialize());
@@ -58,7 +64,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post("/api/auth/login", passport.authenticate("local"), (req, res) => {
     const user = req.user as any;
-    res.json({ id: user.id, username: user.username, role: user.role, firstName: user.firstName, lastName: user.lastName, email: user.email });
+    res.json({ user: { id: user.id, username: user.username, role: user.role, firstName: user.firstName, lastName: user.lastName, email: user.email } });
   });
 
   app.post("/api/auth/logout", (req, res) => {
@@ -70,7 +76,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.get("/api/auth/me", requireAuth, (req, res) => {
     const user = req.user as any;
-    res.json({ id: user.id, username: user.username, role: user.role, firstName: user.firstName, lastName: user.lastName, email: user.email });
+    res.json({ user: { id: user.id, username: user.username, role: user.role, firstName: user.firstName, lastName: user.lastName, email: user.email } });
   });
 
   app.get("/api/users", requireOwner, async (req, res) => {
