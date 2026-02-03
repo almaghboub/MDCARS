@@ -1,0 +1,219 @@
+MD CARS – Car Accessories Sales & Inventory Management System
+System Overview
+
+MD CARS is a single-branch car accessories sales and inventory management system designed to manage daily retail operations in one store.
+The system focuses on accurate stock control, fast sales processing, customer tracking, and clear financial records.
+
+Unlike multi-branch systems, MD CARS operates with one inventory, one cash flow, and one branch, which simplifies management while maintaining strong accounting discipline.
+
+Business Scope
+
+Store Name: MD CARS
+
+Business Type: Car accessories retail
+
+Branches: One branch only
+
+Inventory: Centralized
+
+Customers: Shared within the store
+
+Sales: In-store sales only (optional delivery)
+
+Core Functionalities
+1. Product Management
+
+Central product catalog
+
+Each product includes:
+
+Name
+
+Category
+
+SKU / Barcode
+
+Cost price
+
+Selling price
+
+Description
+
+Products are stored in one unified inventory.
+
+2. Inventory Management
+
+Single inventory for the store
+
+Stock in / stock out tracking
+
+Inventory updates when:
+
+New stock is added
+
+Products are sold
+
+Manual adjustments are made
+
+Low-stock alerts
+
+3. Sales & Order Management
+
+Fast sales (POS-style)
+
+Select customer or sell as walk-in
+
+Add products to order
+
+Automatic stock deduction after sale
+
+Supports:
+
+Cash sales
+
+Partial payments (down payment)
+
+Generates sales record for each transaction
+
+4. Customer Management
+
+Central customer database
+
+Stores:
+
+Name
+
+Phone number
+
+Purchase history
+
+Outstanding balance (if any)
+
+Customers can be reused for future sales
+
+5. Financial Management
+Cashbox
+
+Single cashbox for the store
+
+Tracks:
+
+Cash in
+
+Cash out
+
+Supports:
+
+LYD
+
+USD
+
+Expenses
+
+Record store expenses
+
+Each expense requires:
+
+Expense category
+
+Amount
+
+Currency
+
+Source (cashbox)
+
+Expenses affect cashbox balance
+
+Revenues
+
+Sales revenue
+
+Exchange rate difference revenue (optional)
+
+Other income sources
+
+6. Accounting Structure
+
+Basic chart of accounts
+
+Supports:
+
+Revenues
+
+Expenses
+
+Cash
+
+Capital
+
+Accounts can be expanded in the future
+
+7. Receipts & Invoices
+
+Generate receipt for every sale
+
+Receipt includes:
+
+Store name (MD CARS)
+
+Date and time
+
+Items sold
+
+Total amount
+
+Currency
+
+Option to print or download receipt
+
+8. Reporting & Analytics
+
+Daily sales report
+
+Monthly sales report
+
+Best-selling products
+
+Current stock levels
+
+Total revenue and expenses
+
+Profit summary
+
+9. User Roles (Optional)
+
+Owner – full access
+
+Cashier – sales only
+
+Stock Manager – inventory only
+
+Example Workflow
+
+Add new product (e.g., Car Speaker)
+
+Add stock to inventory
+
+Customer visits MD CARS
+
+Create new sale
+
+Select product and quantity
+
+Complete payment
+
+Stock is deducted automatically
+
+Receipt is generated
+
+System Goals
+
+Simple and fast daily operations
+
+Accurate stock tracking
+
+Clear financial records
+
+Easy to use for small retail store
+
+Ready for future expansion
