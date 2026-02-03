@@ -92,6 +92,87 @@ export default function Finance() {
     queryKey: ["/api/customers"],
   });
 
+  const { data: ownerAccounts = [], isLoading: ownerAccountsLoading } = useQuery<any[]>({
+    queryKey: ["/api/owner-accounts"],
+  });
+
+  const [selectedOwnerAccount, setSelectedOwnerAccount] = useState<any>(null);
+  const { data: ownerTransactions = [], isLoading: ownerTransactionsLoading } = useQuery<any[]>({
+    queryKey: ["/api/owner-accounts", selectedOwnerAccount?.id, "transactions"],
+    enabled: !!selectedOwnerAccount,
+  });
+
+  const [selectedReconcileSafe, setSelectedReconcileSafe] = useState<string>("");
+  const { data: reconciliations = [], isLoading: reconciliationsLoading } = useQuery<any[]>({
+    queryKey: ["/api/safes", selectedReconcileSafe, "reconciliations"],
+    enabled: !!selectedReconcileSafe,
+  });
+
+  const [newReconcileDialogOpen, setNewReconcileDialogOpen] = useState(false);
+  const [actualBalanceUSD, setActualBalanceUSD] = useState("");
+  const [actualBalanceLYD, setActualBalanceLYD] = useState("");
+  const [reconcileNotes, setReconcileNotes] = useState("");
+
+  const createReconciliationMutation = useMutation({
+    mutationFn: async (data: any) => {
+      return await apiRequest("POST", `/api/safes/${selectedReconcileSafe}/reconciliations`, data);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/safes", selectedReconcileSafe, "reconciliations"] });
+      setNewReconcileDialogOpen(false);
+      setActualBalanceUSD("");
+      setActualBalanceLYD("");
+      setReconcileNotes("");
+      toast({ title: isRTL ? "تمت المطابقة بنجاح" : "Reconciliation recorded" });
+    },
+    onError: () => {
+      toast({ title: t("error") || "Error", description: isRTL ? "فشل في تسجيل المطابقة" : "Failed to record reconciliation", variant: "destructive" });
+    },
+  });
+
+  const [newOwnerAccountDialogOpen, setNewOwnerAccountDialogOpen] = useState(false);
+  const [ownerAccountName, setOwnerAccountName] = useState("");
+  const [ownerAccountType, setOwnerAccountType] = useState("capital");
+
+  const createOwnerAccountMutation = useMutation({
+    mutationFn: async (data: any) => {
+      return await apiRequest("POST", "/api/owner-accounts", data);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/owner-accounts"] });
+      setNewOwnerAccountDialogOpen(false);
+      setOwnerAccountName("");
+      setOwnerAccountType("capital");
+      toast({ title: isRTL ? "تم إنشاء الحساب بنجاح" : "Account created successfully" });
+    },
+    onError: () => {
+      toast({ title: t("error") || "Error", description: isRTL ? "فشل في إنشاء الحساب" : "Failed to create account", variant: "destructive" });
+    },
+  });
+
+  const [newOwnerTransactionDialogOpen, setNewOwnerTransactionDialogOpen] = useState(false);
+  const [ownerTransactionType, setOwnerTransactionType] = useState<"injection" | "withdrawal">("injection");
+  const [ownerTransactionAmount, setOwnerTransactionAmount] = useState("");
+  const [ownerTransactionCurrency, setOwnerTransactionCurrency] = useState<"USD" | "LYD">("USD");
+  const [ownerTransactionDescription, setOwnerTransactionDescription] = useState("");
+
+  const createOwnerTransactionMutation = useMutation({
+    mutationFn: async (data: any) => {
+      return await apiRequest("POST", `/api/owner-accounts/${selectedOwnerAccount?.id}/transactions`, data);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/owner-accounts", selectedOwnerAccount?.id, "transactions"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/owner-accounts"] });
+      setNewOwnerTransactionDialogOpen(false);
+      setOwnerTransactionAmount("");
+      setOwnerTransactionDescription("");
+      toast({ title: isRTL ? "تم تسجيل العملية بنجاح" : "Transaction recorded" });
+    },
+    onError: () => {
+      toast({ title: t("error") || "Error", description: isRTL ? "فشل في تسجيل العملية" : "Failed to record transaction", variant: "destructive" });
+    },
+  });
+
   const [newReceiptDialogOpen, setNewReceiptDialogOpen] = useState(false);
   const [receiptType, setReceiptType] = useState<"payment" | "collection">("collection");
   const [receiptCustomerId, setReceiptCustomerId] = useState("");
@@ -324,7 +405,7 @@ export default function Finance() {
       </div>
 
       <Tabs value={activeTab} onValueChange={setActiveTab}>
-        <TabsList className="grid w-full grid-cols-4 lg:w-auto lg:inline-grid">
+        <TabsList className="grid w-full grid-cols-3 sm:grid-cols-6 lg:w-auto lg:inline-grid gap-1">
           <TabsTrigger value="overview" data-testid="tab-overview">
             {t("overview") || "Overview"}
           </TabsTrigger>
@@ -336,6 +417,12 @@ export default function Finance() {
           </TabsTrigger>
           <TabsTrigger value="receipts" data-testid="tab-receipts">
             {isRTL ? "الإيصالات" : "Receipts"}
+          </TabsTrigger>
+          <TabsTrigger value="capital" data-testid="tab-capital">
+            {isRTL ? "رأس المال" : "Capital"}
+          </TabsTrigger>
+          <TabsTrigger value="reconciliation" data-testid="tab-reconciliation">
+            {isRTL ? "المطابقة" : "Reconcile"}
           </TabsTrigger>
         </TabsList>
 
@@ -1067,6 +1154,384 @@ export default function Finance() {
               </CardContent>
             </Card>
           )}
+        </TabsContent>
+
+        {/* Owner Capital Tab */}
+        <TabsContent value="capital" className="space-y-6">
+          <div className="flex justify-between items-center">
+            <h3 className="text-lg font-semibold">
+              {isRTL ? "حسابات الملاك ورأس المال" : "Owner Accounts & Capital"}
+            </h3>
+            <Dialog open={newOwnerAccountDialogOpen} onOpenChange={setNewOwnerAccountDialogOpen}>
+              <DialogTrigger asChild>
+                <Button data-testid="button-new-owner-account">
+                  <Plus className="h-4 w-4 mr-2" />
+                  {isRTL ? "حساب جديد" : "New Account"}
+                </Button>
+              </DialogTrigger>
+              <DialogContent className="sm:max-w-[400px]">
+                <DialogHeader>
+                  <DialogTitle>{isRTL ? "إنشاء حساب مالك جديد" : "Create Owner Account"}</DialogTitle>
+                </DialogHeader>
+                <div className="space-y-4">
+                  <div className="space-y-2">
+                    <Label>{isRTL ? "اسم الحساب" : "Account Name"}</Label>
+                    <Input 
+                      value={ownerAccountName}
+                      onChange={(e) => setOwnerAccountName(e.target.value)}
+                      data-testid="input-owner-account-name"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>{isRTL ? "نوع الحساب" : "Account Type"}</Label>
+                    <Select value={ownerAccountType} onValueChange={setOwnerAccountType}>
+                      <SelectTrigger data-testid="select-owner-account-type">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="capital">{isRTL ? "رأس المال" : "Capital"}</SelectItem>
+                        <SelectItem value="personal">{isRTL ? "شخصي" : "Personal"}</SelectItem>
+                        <SelectItem value="loan">{isRTL ? "قرض" : "Loan"}</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+                <DialogFooter>
+                  <Button 
+                    onClick={() => createOwnerAccountMutation.mutate({ name: ownerAccountName, type: ownerAccountType })}
+                    disabled={createOwnerAccountMutation.isPending || !ownerAccountName}
+                    data-testid="button-submit-owner-account"
+                  >
+                    {createOwnerAccountMutation.isPending ? (isRTL ? "جاري الحفظ..." : "Saving...") : (isRTL ? "حفظ" : "Save")}
+                  </Button>
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
+          </div>
+
+          {ownerAccountsLoading ? (
+            <div className="flex justify-center py-12">
+              <RefreshCw className="h-8 w-8 animate-spin text-muted-foreground" />
+            </div>
+          ) : (
+            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+              {ownerAccounts.map((account: any) => (
+                <Card 
+                  key={account.id} 
+                  className={`cursor-pointer transition-all ${selectedOwnerAccount?.id === account.id ? 'ring-2 ring-primary' : ''}`}
+                  onClick={() => setSelectedOwnerAccount(account)}
+                  data-testid={`card-owner-account-${account.id}`}
+                >
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-lg">{account.name}</CardTitle>
+                    <CardDescription>
+                      <Badge variant="outline">
+                        {account.type === 'capital' ? (isRTL ? 'رأس المال' : 'Capital') : 
+                         account.type === 'personal' ? (isRTL ? 'شخصي' : 'Personal') : 
+                         (isRTL ? 'قرض' : 'Loan')}
+                      </Badge>
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="text-2xl font-bold text-green-600">
+                      ${parseFloat(account.balanceUSD || 0).toFixed(2)}
+                    </div>
+                    <div className="text-sm text-blue-600">
+                      {parseFloat(account.balanceLYD || 0).toFixed(2)} {isRTL ? 'د.ل' : 'LYD'}
+                    </div>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          )}
+
+          {selectedOwnerAccount && (
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between">
+                <div>
+                  <CardTitle>{selectedOwnerAccount.name}</CardTitle>
+                  <CardDescription>{isRTL ? "سجل العمليات" : "Transaction History"}</CardDescription>
+                </div>
+                <Dialog open={newOwnerTransactionDialogOpen} onOpenChange={setNewOwnerTransactionDialogOpen}>
+                  <DialogTrigger asChild>
+                    <Button size="sm" data-testid="button-new-owner-transaction">
+                      <Plus className="h-4 w-4 mr-2" />
+                      {isRTL ? "عملية جديدة" : "New Transaction"}
+                    </Button>
+                  </DialogTrigger>
+                  <DialogContent className="sm:max-w-[400px]">
+                    <DialogHeader>
+                      <DialogTitle>{isRTL ? "تسجيل عملية" : "Record Transaction"}</DialogTitle>
+                    </DialogHeader>
+                    <div className="space-y-4">
+                      <div className="space-y-2">
+                        <Label>{isRTL ? "نوع العملية" : "Transaction Type"}</Label>
+                        <Select value={ownerTransactionType} onValueChange={(v) => setOwnerTransactionType(v as "injection" | "withdrawal")}>
+                          <SelectTrigger data-testid="select-owner-transaction-type">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="injection">{isRTL ? "إيداع / ضخ رأس مال" : "Injection / Deposit"}</SelectItem>
+                            <SelectItem value="withdrawal">{isRTL ? "سحب" : "Withdrawal"}</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div className="grid grid-cols-2 gap-4">
+                        <div className="space-y-2">
+                          <Label>{isRTL ? "المبلغ" : "Amount"}</Label>
+                          <Input 
+                            type="number" 
+                            step="0.01" 
+                            value={ownerTransactionAmount}
+                            onChange={(e) => setOwnerTransactionAmount(e.target.value)}
+                            data-testid="input-owner-transaction-amount"
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label>{isRTL ? "العملة" : "Currency"}</Label>
+                          <Select value={ownerTransactionCurrency} onValueChange={(v) => setOwnerTransactionCurrency(v as "USD" | "LYD")}>
+                            <SelectTrigger data-testid="select-owner-transaction-currency">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="USD">USD</SelectItem>
+                              <SelectItem value="LYD">{isRTL ? "د.ل" : "LYD"}</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      </div>
+                      <div className="space-y-2">
+                        <Label>{isRTL ? "الوصف" : "Description"}</Label>
+                        <Input 
+                          value={ownerTransactionDescription}
+                          onChange={(e) => setOwnerTransactionDescription(e.target.value)}
+                          data-testid="input-owner-transaction-description"
+                        />
+                      </div>
+                    </div>
+                    <DialogFooter>
+                      <Button 
+                        onClick={() => {
+                          const amountNum = parseFloat(ownerTransactionAmount);
+                          createOwnerTransactionMutation.mutate({
+                            type: ownerTransactionType,
+                            amountUSD: ownerTransactionCurrency === 'USD' ? ownerTransactionAmount : '0',
+                            amountLYD: ownerTransactionCurrency === 'LYD' ? ownerTransactionAmount : '0',
+                            description: ownerTransactionDescription,
+                          });
+                        }}
+                        disabled={createOwnerTransactionMutation.isPending || !ownerTransactionAmount}
+                        data-testid="button-submit-owner-transaction"
+                      >
+                        {createOwnerTransactionMutation.isPending ? (isRTL ? "جاري الحفظ..." : "Saving...") : (isRTL ? "حفظ" : "Save")}
+                      </Button>
+                    </DialogFooter>
+                  </DialogContent>
+                </Dialog>
+              </CardHeader>
+              <CardContent>
+                {ownerTransactionsLoading ? (
+                  <div className="flex justify-center py-8">
+                    <RefreshCw className="h-6 w-6 animate-spin text-muted-foreground" />
+                  </div>
+                ) : ownerTransactions.length === 0 ? (
+                  <p className="text-center text-muted-foreground py-8">
+                    {isRTL ? "لا توجد عمليات" : "No transactions"}
+                  </p>
+                ) : (
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>{isRTL ? "النوع" : "Type"}</TableHead>
+                        <TableHead>{isRTL ? "المبلغ (USD)" : "Amount (USD)"}</TableHead>
+                        <TableHead>{isRTL ? "المبلغ (LYD)" : "Amount (LYD)"}</TableHead>
+                        <TableHead>{isRTL ? "الوصف" : "Description"}</TableHead>
+                        <TableHead>{isRTL ? "التاريخ" : "Date"}</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {ownerTransactions.map((tx: any) => (
+                        <TableRow key={tx.id}>
+                          <TableCell>
+                            <Badge variant={tx.type === 'injection' ? 'default' : 'destructive'}>
+                              {tx.type === 'injection' ? (isRTL ? 'إيداع' : 'Injection') : (isRTL ? 'سحب' : 'Withdrawal')}
+                            </Badge>
+                          </TableCell>
+                          <TableCell className={tx.type === 'injection' ? 'text-green-600' : 'text-red-600'}>
+                            {tx.type === 'injection' ? '+' : '-'}${parseFloat(tx.amountUSD || 0).toFixed(2)}
+                          </TableCell>
+                          <TableCell className={tx.type === 'injection' ? 'text-green-600' : 'text-red-600'}>
+                            {tx.type === 'injection' ? '+' : '-'}{parseFloat(tx.amountLYD || 0).toFixed(2)} {isRTL ? 'د.ل' : 'LYD'}
+                          </TableCell>
+                          <TableCell>{tx.description || '-'}</TableCell>
+                          <TableCell>{format(new Date(tx.createdAt), 'dd/MM/yyyy')}</TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                )}
+              </CardContent>
+            </Card>
+          )}
+        </TabsContent>
+
+        {/* Reconciliation Tab */}
+        <TabsContent value="reconciliation" className="space-y-6">
+          <div className="flex justify-between items-center">
+            <h3 className="text-lg font-semibold">
+              {isRTL ? "مطابقة الخزنة" : "Safe Reconciliation"}
+            </h3>
+          </div>
+
+          <Card>
+            <CardHeader>
+              <CardTitle>{isRTL ? "اختر الخزنة للمطابقة" : "Select Safe to Reconcile"}</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <Select value={selectedReconcileSafe} onValueChange={setSelectedReconcileSafe}>
+                <SelectTrigger data-testid="select-reconcile-safe">
+                  <SelectValue placeholder={isRTL ? "اختر الخزنة" : "Select safe"} />
+                </SelectTrigger>
+                <SelectContent>
+                  {safes.map((safe) => (
+                    <SelectItem key={safe.id} value={safe.id}>
+                      {safe.name} ({safe.code})
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+
+              {selectedReconcileSafe && (
+                <>
+                  {(() => {
+                    const selectedSafe = safes.find(s => s.id === selectedReconcileSafe);
+                    return selectedSafe ? (
+                      <div className="p-4 bg-muted rounded-lg">
+                        <p className="text-sm text-muted-foreground mb-2">{isRTL ? "الرصيد الحالي في النظام:" : "Current System Balance:"}</p>
+                        <div className="flex gap-4">
+                          <div className="text-xl font-bold text-green-600">
+                            ${parseFloat(String(selectedSafe.balanceUSD) || '0').toFixed(2)} USD
+                          </div>
+                          <div className="text-xl font-bold text-blue-600">
+                            {parseFloat(String(selectedSafe.balanceLYD) || '0').toFixed(2)} {isRTL ? 'د.ل' : 'LYD'}
+                          </div>
+                        </div>
+                      </div>
+                    ) : null;
+                  })()}
+
+                  <Dialog open={newReconcileDialogOpen} onOpenChange={setNewReconcileDialogOpen}>
+                    <DialogTrigger asChild>
+                      <Button data-testid="button-new-reconciliation">
+                        <Plus className="h-4 w-4 mr-2" />
+                        {isRTL ? "تسجيل مطابقة جديدة" : "Record Reconciliation"}
+                      </Button>
+                    </DialogTrigger>
+                    <DialogContent className="sm:max-w-[400px]">
+                      <DialogHeader>
+                        <DialogTitle>{isRTL ? "تسجيل مطابقة الخزنة" : "Record Safe Reconciliation"}</DialogTitle>
+                      </DialogHeader>
+                      <div className="space-y-4">
+                        <div className="space-y-2">
+                          <Label>{isRTL ? "الرصيد الفعلي (USD)" : "Actual Balance (USD)"}</Label>
+                          <Input 
+                            type="number" 
+                            step="0.01" 
+                            value={actualBalanceUSD}
+                            onChange={(e) => setActualBalanceUSD(e.target.value)}
+                            data-testid="input-actual-balance-usd"
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label>{isRTL ? "الرصيد الفعلي (LYD)" : "Actual Balance (LYD)"}</Label>
+                          <Input 
+                            type="number" 
+                            step="0.01" 
+                            value={actualBalanceLYD}
+                            onChange={(e) => setActualBalanceLYD(e.target.value)}
+                            data-testid="input-actual-balance-lyd"
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label>{isRTL ? "ملاحظات" : "Notes"}</Label>
+                          <Input 
+                            value={reconcileNotes}
+                            onChange={(e) => setReconcileNotes(e.target.value)}
+                            data-testid="input-reconcile-notes"
+                          />
+                        </div>
+                      </div>
+                      <DialogFooter>
+                        <Button 
+                          onClick={() => {
+                            const selectedSafe = safes.find(s => s.id === selectedReconcileSafe);
+                            createReconciliationMutation.mutate({
+                              systemBalanceUSD: selectedSafe?.balanceUSD || '0',
+                              systemBalanceLYD: selectedSafe?.balanceLYD || '0',
+                              actualBalanceUSD: actualBalanceUSD || '0',
+                              actualBalanceLYD: actualBalanceLYD || '0',
+                              notes: reconcileNotes,
+                            });
+                          }}
+                          disabled={createReconciliationMutation.isPending}
+                          data-testid="button-submit-reconciliation"
+                        >
+                          {createReconciliationMutation.isPending ? (isRTL ? "جاري الحفظ..." : "Saving...") : (isRTL ? "حفظ" : "Save")}
+                        </Button>
+                      </DialogFooter>
+                    </DialogContent>
+                  </Dialog>
+
+                  {reconciliationsLoading ? (
+                    <div className="flex justify-center py-8">
+                      <RefreshCw className="h-6 w-6 animate-spin text-muted-foreground" />
+                    </div>
+                  ) : reconciliations.length === 0 ? (
+                    <p className="text-center text-muted-foreground py-8">
+                      {isRTL ? "لا توجد سجلات مطابقة" : "No reconciliation records"}
+                    </p>
+                  ) : (
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>{isRTL ? "التاريخ" : "Date"}</TableHead>
+                          <TableHead>{isRTL ? "رصيد النظام (USD)" : "System (USD)"}</TableHead>
+                          <TableHead>{isRTL ? "الرصيد الفعلي (USD)" : "Actual (USD)"}</TableHead>
+                          <TableHead>{isRTL ? "الفرق (USD)" : "Diff (USD)"}</TableHead>
+                          <TableHead>{isRTL ? "رصيد النظام (LYD)" : "System (LYD)"}</TableHead>
+                          <TableHead>{isRTL ? "الرصيد الفعلي (LYD)" : "Actual (LYD)"}</TableHead>
+                          <TableHead>{isRTL ? "الفرق (LYD)" : "Diff (LYD)"}</TableHead>
+                          <TableHead>{isRTL ? "ملاحظات" : "Notes"}</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {reconciliations.map((rec: any) => {
+                          const diffUSD = parseFloat(rec.actualBalanceUSD || 0) - parseFloat(rec.systemBalanceUSD || 0);
+                          const diffLYD = parseFloat(rec.actualBalanceLYD || 0) - parseFloat(rec.systemBalanceLYD || 0);
+                          return (
+                            <TableRow key={rec.id}>
+                              <TableCell>{format(new Date(rec.createdAt), 'dd/MM/yyyy HH:mm')}</TableCell>
+                              <TableCell>${parseFloat(rec.systemBalanceUSD || 0).toFixed(2)}</TableCell>
+                              <TableCell>${parseFloat(rec.actualBalanceUSD || 0).toFixed(2)}</TableCell>
+                              <TableCell className={diffUSD >= 0 ? 'text-green-600' : 'text-red-600'}>
+                                {diffUSD >= 0 ? '+' : ''}{diffUSD.toFixed(2)}
+                              </TableCell>
+                              <TableCell>{parseFloat(rec.systemBalanceLYD || 0).toFixed(2)}</TableCell>
+                              <TableCell>{parseFloat(rec.actualBalanceLYD || 0).toFixed(2)}</TableCell>
+                              <TableCell className={diffLYD >= 0 ? 'text-green-600' : 'text-red-600'}>
+                                {diffLYD >= 0 ? '+' : ''}{diffLYD.toFixed(2)}
+                              </TableCell>
+                              <TableCell>{rec.notes || '-'}</TableCell>
+                            </TableRow>
+                          );
+                        })}
+                      </TableBody>
+                    </Table>
+                  )}
+                </>
+              )}
+            </CardContent>
+          </Card>
         </TabsContent>
       </Tabs>
     </div>
