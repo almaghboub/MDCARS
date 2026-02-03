@@ -6,6 +6,7 @@ import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import { useAuth } from "@/components/auth-provider";
 import { useQuery } from "@tanstack/react-query";
 import { useIsMobile } from "@/hooks/use-mobile";
+import logoPath from "@assets/MD-removebg-preview_1770139105370.png";
 
 const navigationItems = [
   { key: "Dashboard", href: "/dashboard", icon: LayoutDashboard, roles: ["owner", "cashier", "stock_manager"] },
@@ -52,12 +53,9 @@ function SidebarContent({ onNavigate }: SidebarContentProps) {
 
   return (
     <>
-      <div className="p-6 border-b border-border">
+      <div className="p-4 border-b border-slate-800">
         <div className="flex items-center justify-center">
-          <div className="text-center">
-            <h1 className="text-2xl font-bold text-primary">MD CARS</h1>
-            <p className="text-xs text-muted-foreground">Car Accessories</p>
-          </div>
+          <img src={logoPath} alt="MD Cars Logo" className="h-16 w-auto" />
         </div>
       </div>
 
@@ -73,8 +71,8 @@ function SidebarContent({ onNavigate }: SidebarContentProps) {
                   <span
                     className={`flex items-center space-x-3 px-3 py-2 rounded-md transition-colors cursor-pointer ${
                       isActive
-                        ? "bg-primary text-primary-foreground"
-                        : "text-muted-foreground hover:bg-accent hover:text-accent-foreground"
+                        ? "bg-blue-600 text-white"
+                        : "text-slate-400 hover:bg-slate-800 hover:text-white"
                     }`}
                     data-testid={`nav-${item.key.toLowerCase().replace(/\s+/g, '-').replace(/\//g, '')}`}
                   >
@@ -88,8 +86,8 @@ function SidebarContent({ onNavigate }: SidebarContentProps) {
         </ul>
 
         {lowStockCount > 0 && (user?.role === "owner" || user?.role === "stock_manager") && (
-          <div className="mt-4 p-3 bg-destructive/10 border border-destructive/20 rounded-md">
-            <div className="flex items-center gap-2 text-destructive">
+          <div className="mt-4 p-3 bg-red-500/20 border border-red-500/30 rounded-md">
+            <div className="flex items-center gap-2 text-red-400">
               <AlertTriangle className="w-4 h-4" />
               <span className="text-sm font-medium">{lowStockCount} Low Stock Items</span>
             </div>
@@ -97,18 +95,18 @@ function SidebarContent({ onNavigate }: SidebarContentProps) {
         )}
       </nav>
 
-      <div className="p-4 border-t border-border">
+      <div className="p-4 border-t border-slate-800">
         <div className="flex items-center space-x-3">
-          <div className="w-8 h-8 bg-primary rounded-full flex items-center justify-center">
-            <span className="text-sm font-medium text-primary-foreground">
+          <div className="w-8 h-8 bg-blue-600 rounded-full flex items-center justify-center">
+            <span className="text-sm font-medium text-white">
               {user?.firstName?.[0]}{user?.lastName?.[0]}
             </span>
           </div>
           <div className="flex-1 min-w-0">
-            <p className="text-sm font-medium text-foreground">
+            <p className="text-sm font-medium text-white">
               {user?.firstName} {user?.lastName}
             </p>
-            <p className="text-xs text-muted-foreground truncate capitalize">
+            <p className="text-xs text-slate-400 truncate capitalize">
               {user?.role?.replace("_", " ")}
             </p>
           </div>
@@ -116,7 +114,7 @@ function SidebarContent({ onNavigate }: SidebarContentProps) {
             variant="ghost"
             size="sm"
             onClick={handleLogout}
-            className="text-muted-foreground hover:text-foreground"
+            className="text-slate-400 hover:text-white hover:bg-slate-800"
             data-testid="button-logout"
           >
             <LogOut className="w-4 h-4" />
@@ -133,7 +131,7 @@ export function Sidebar() {
 
   if (!isMobile) {
     return (
-      <aside className="w-64 bg-card border-r border-border flex flex-col min-h-screen">
+      <aside className="w-64 bg-slate-950 border-r border-slate-800 flex flex-col min-h-screen text-white">
         <SidebarContent />
       </aside>
     );
@@ -151,7 +149,7 @@ export function Sidebar() {
           <Menu className="h-5 w-5" />
         </Button>
       </SheetTrigger>
-      <SheetContent side="left" className="w-64 p-0 flex flex-col">
+      <SheetContent side="left" className="w-64 p-0 flex flex-col bg-slate-950 text-white border-slate-800">
         <SidebarContent onNavigate={() => setIsOpen(false)} />
       </SheetContent>
     </Sheet>

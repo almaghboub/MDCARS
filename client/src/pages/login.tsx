@@ -8,7 +8,7 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/components/auth-provider";
 import { loginSchema, type LoginCredentials } from "@shared/schema";
-import { Car } from "lucide-react";
+import logoPath from "@assets/MD-removebg-preview_1770139105370.png";
 
 export default function Login() {
   const [, setLocation] = useLocation();
@@ -41,15 +41,13 @@ export default function Login() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-900 to-slate-800">
-      <Card className="w-full max-w-md mx-4">
+    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-950 via-slate-900 to-blue-950">
+      <Card className="w-full max-w-md mx-4 bg-white/95 backdrop-blur">
         <CardHeader className="text-center">
-          <div className="flex justify-center mb-4">
-            <div className="w-16 h-16 bg-primary rounded-full flex items-center justify-center">
-              <Car className="w-8 h-8 text-primary-foreground" />
-            </div>
+          <div className="flex justify-center mb-2">
+            <img src={logoPath} alt="MD Cars Logo" className="h-24 w-auto" />
           </div>
-          <CardTitle className="text-2xl font-bold">MD CARS</CardTitle>
+          <CardTitle className="text-2xl font-bold text-slate-900">Welcome Back</CardTitle>
           <p className="text-muted-foreground">Car Accessories Sales & Inventory</p>
         </CardHeader>
         <CardContent>
