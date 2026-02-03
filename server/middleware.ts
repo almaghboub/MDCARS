@@ -1,15 +1,15 @@
 import { Request, Response, NextFunction } from "express";
-import { User } from "@shared/schema";
 
 declare global {
   namespace Express {
     interface User {
       id: string;
       username: string;
-      role: "owner" | "customer_service" | "receptionist" | "sorter" | "stock_manager" | "shipping_staff";
+      role: "owner" | "cashier" | "stock_manager";
       firstName: string;
       lastName: string;
-      email: string;
+      email: string | null;
+      phone: string | null;
       isActive: boolean;
     }
   }
@@ -27,11 +27,9 @@ export function requireRole(roles: string[]) {
     if (!req.isAuthenticated()) {
       return res.status(401).json({ message: "Authentication required" });
     }
-    
     if (!roles.includes(req.user!.role)) {
       return res.status(403).json({ message: "Insufficient permissions" });
     }
-    
     next();
   };
 }
@@ -40,22 +38,22 @@ export function requireOwner(req: Request, res: Response, next: NextFunction) {
   return requireRole(["owner"])(req, res, next);
 }
 
-export function requireOperational(req: Request, res: Response, next: NextFunction) {
-  return requireRole(["owner", "customer_service", "receptionist"])(req, res, next);
+export function requireCashier(req: Request, res: Response, next: NextFunction) {
+  return requireRole(["owner", "cashier"])(req, res, next);
+}
+
+export function requireStockManager(req: Request, res: Response, next: NextFunction) {
+  return requireRole(["owner", "stock_manager"])(req, res, next);
+}
+
+export function requireSalesAccess(req: Request, res: Response, next: NextFunction) {
+  return requireRole(["owner", "cashier"])(req, res, next);
 }
 
 export function requireInventoryAccess(req: Request, res: Response, next: NextFunction) {
-  return requireRole(["owner", "stock_manager", "sorter"])(req, res, next);
+  return requireRole(["owner", "stock_manager"])(req, res, next);
 }
 
-export function requireDeliveryManager(req: Request, res: Response, next: NextFunction) {
-  return requireRole(["owner", "customer_service", "receptionist"])(req, res, next);
-}
-
-export function requireShippingStaff(req: Request, res: Response, next: NextFunction) {
-  return requireRole(["shipping_staff"])(req, res, next);
-}
-
-export function requireDeliveryAccess(req: Request, res: Response, next: NextFunction) {
-  return requireRole(["owner", "customer_service", "receptionist", "shipping_staff"])(req, res, next);
+export function requireFinanceAccess(req: Request, res: Response, next: NextFunction) {
+  return requireRole(["owner"])(req, res, next);
 }

@@ -1,106 +1,24 @@
 import {
-  type User,
-  type InsertUser,
-  type Customer,
-  type InsertCustomer,
-  type Order,
-  type InsertOrder,
-  type OrderItem,
-  type InsertOrderItem,
-  type OrderImage,
-  type InsertOrderImage,
-  type ShippingRate,
-  type InsertShippingRate,
-  type CommissionRule,
-  type InsertCommissionRule,
-  type Setting,
-  type InsertSetting,
-  type Message,
-  type InsertMessage,
-  type DeliveryTask,
-  type InsertDeliveryTask,
-  type Expense,
-  type InsertExpense,
-  type ExpenseCategory,
-  type InsertExpenseCategory,
-  type SafeReconciliation,
-  type InsertSafeReconciliation,
-  type OwnerAccount,
-  type InsertOwnerAccount,
-  type OwnerAccountTransaction,
-  type InsertOwnerAccountTransaction,
-  type RevenueCategory,
-  type InsertRevenueCategory,
-  type Revenue,
-  type InsertRevenue,
-  type DeliveryTaskWithDetails,
-  type OrderWithCustomer,
-  type CustomerWithOrders,
-  type RevenueAccount,
-  type InsertRevenueAccount,
-  type Safe,
-  type InsertSafe,
-  type SafeTransaction,
-  type InsertSafeTransaction,
-  type Bank,
-  type InsertBank,
-  type BankTransaction,
-  type InsertBankTransaction,
-  type CurrencySettlement,
-  type InsertCurrencySettlement,
-  type Warehouse,
-  type InsertWarehouse,
-  type WarehouseStock,
-  type InsertWarehouseStock,
-  type Supplier,
-  type InsertSupplier,
-  type Receipt,
-  type InsertReceipt,
-  type AccountingEntry,
-  type InsertAccountingEntry,
-  type MainOfficeAccountType,
-  users,
-  customers,
-  orders,
-  orderItems,
-  orderImages,
-  shippingRates,
-  commissionRules,
-  settings,
-  messages,
-  deliveryTasks,
-  expenses,
-  expenseCategories,
-  safeReconciliations,
-  ownerAccounts,
-  ownerAccountTransactions,
-  revenueCategories,
-  revenues,
-  revenueAccounts,
-  safes,
-  safeTransactions,
-  banks,
-  bankTransactions,
-  currencySettlements,
-  warehouses,
-  warehouseStock,
-  suppliers,
-  receipts,
-  accountingEntries,
-  mainOfficeAccount,
+  type User, type InsertUser,
+  type Category, type InsertCategory,
+  type Product, type InsertProduct, type ProductWithCategory,
+  type StockMovement, type InsertStockMovement,
+  type Customer, type InsertCustomer, type CustomerWithSales,
+  type Sale, type InsertSale, type SaleWithDetails,
+  type SaleItem, type InsertSaleItem,
+  type Cashbox, type InsertCashbox,
+  type CashboxTransaction, type InsertCashboxTransaction,
+  type Expense, type InsertExpense,
+  type Revenue, type InsertRevenue,
+  type Setting, type InsertSetting,
+  users, categories, products, stockMovements, customers,
+  sales, saleItems, cashbox, cashboxTransactions, expenses, revenues, settings,
 } from "@shared/schema";
-import { randomUUID } from "crypto";
+import { db } from "./db";
+import { eq, desc, sql, or, ilike, and, gte, lte } from "drizzle-orm";
 import { hashPassword } from "./auth";
-import { drizzle } from "drizzle-orm/node-postgres";
-import pg from "pg";
-import { eq, desc, sql, or, ilike } from "drizzle-orm";
-
-// Database connection
-const pool = new pg.Pool({ connectionString: process.env.DATABASE_URL });
-const db = drizzle(pool);
 
 export interface IStorage {
-  // Users
   getUser(id: string): Promise<User | undefined>;
   getUserByUsername(username: string): Promise<User | undefined>;
   createUser(user: InsertUser): Promise<User>;
@@ -108,1953 +26,598 @@ export interface IStorage {
   deleteUser(id: string): Promise<boolean>;
   getAllUsers(): Promise<User[]>;
 
-  // Customers
+  getAllCategories(): Promise<Category[]>;
+  getCategory(id: string): Promise<Category | undefined>;
+  createCategory(category: InsertCategory): Promise<Category>;
+  updateCategory(id: string, category: Partial<InsertCategory>): Promise<Category | undefined>;
+  deleteCategory(id: string): Promise<boolean>;
+
+  getAllProducts(): Promise<ProductWithCategory[]>;
+  getProduct(id: string): Promise<ProductWithCategory | undefined>;
+  getProductBySku(sku: string): Promise<Product | undefined>;
+  getProductByBarcode(barcode: string): Promise<Product | undefined>;
+  searchProducts(query: string): Promise<ProductWithCategory[]>;
+  getLowStockProducts(): Promise<ProductWithCategory[]>;
+  createProduct(product: InsertProduct): Promise<Product>;
+  updateProduct(id: string, product: Partial<InsertProduct>): Promise<Product | undefined>;
+  deleteProduct(id: string): Promise<boolean>;
+  updateProductStock(id: string, quantity: number): Promise<Product | undefined>;
+
+  getStockMovements(productId?: string): Promise<StockMovement[]>;
+  createStockMovement(movement: InsertStockMovement): Promise<StockMovement>;
+
+  getAllCustomers(): Promise<Customer[]>;
   getCustomer(id: string): Promise<Customer | undefined>;
   getCustomerByPhone(phone: string): Promise<Customer | undefined>;
   searchCustomers(query: string): Promise<Customer[]>;
-  getCustomerWithOrders(id: string): Promise<CustomerWithOrders | undefined>;
+  getCustomerWithSales(id: string): Promise<CustomerWithSales | undefined>;
   createCustomer(customer: InsertCustomer): Promise<Customer>;
   updateCustomer(id: string, customer: Partial<InsertCustomer>): Promise<Customer | undefined>;
   deleteCustomer(id: string): Promise<boolean>;
-  getAllCustomers(): Promise<Customer[]>;
+  updateCustomerBalance(id: string, amount: string, add: boolean): Promise<Customer | undefined>;
 
-  // Orders
-  getOrder(id: string): Promise<Order | undefined>;
-  getOrderWithCustomer(id: string): Promise<OrderWithCustomer | undefined>;
-  getOrdersByCustomerId(customerId: string): Promise<Order[]>;
-  createOrder(order: InsertOrder): Promise<Order>;
-  updateOrder(id: string, order: Partial<InsertOrder>): Promise<Order | undefined>;
-  deleteOrder(id: string): Promise<boolean>;
-  getAllOrders(): Promise<OrderWithCustomer[]>;
+  getAllSales(): Promise<SaleWithDetails[]>;
+  getSale(id: string): Promise<SaleWithDetails | undefined>;
+  getSalesByCustomerId(customerId: string): Promise<Sale[]>;
+  getSalesByDateRange(startDate: Date, endDate: Date): Promise<SaleWithDetails[]>;
+  createSale(sale: InsertSale, items: InsertSaleItem[]): Promise<SaleWithDetails>;
+  updateSaleStatus(id: string, status: string): Promise<Sale | undefined>;
+  deleteSale(id: string): Promise<boolean>;
+  getNextSaleNumber(): Promise<string>;
 
-  // Order Items
-  getOrderItems(orderId: string): Promise<OrderItem[]>;
-  createOrderItem(item: InsertOrderItem): Promise<OrderItem>;
-  updateOrderItem(id: string, item: Partial<InsertOrderItem>): Promise<OrderItem | undefined>;
-  deleteOrderItem(id: string): Promise<boolean>;
+  getCashbox(): Promise<Cashbox | undefined>;
+  createCashbox(cashbox: InsertCashbox): Promise<Cashbox>;
+  updateCashboxBalance(amountUSD: string, amountLYD: string, add: boolean): Promise<Cashbox | undefined>;
+  getCashboxTransactions(): Promise<CashboxTransaction[]>;
+  createCashboxTransaction(transaction: InsertCashboxTransaction): Promise<CashboxTransaction>;
 
-  // Order Images
-  getOrderImages(orderId: string): Promise<OrderImage[]>;
-  createOrderImage(image: InsertOrderImage): Promise<OrderImage>;
-  deleteOrderImage(id: string): Promise<boolean>;
-
-  // Shipping Rates
-  getShippingRate(id: string): Promise<ShippingRate | undefined>;
-  getShippingRateByCountryAndCategory(country: string, category: string): Promise<ShippingRate | undefined>;
-  createShippingRate(rate: InsertShippingRate): Promise<ShippingRate>;
-  updateShippingRate(id: string, rate: Partial<InsertShippingRate>): Promise<ShippingRate | undefined>;
-  deleteShippingRate(id: string): Promise<boolean>;
-  getAllShippingRates(): Promise<ShippingRate[]>;
-
-  // Commission Rules
-  getCommissionRule(id: string): Promise<CommissionRule | undefined>;
-  getCommissionRuleByCountryAndValue(country: string, orderValue: number): Promise<CommissionRule | undefined>;
-  createCommissionRule(rule: InsertCommissionRule): Promise<CommissionRule>;
-  updateCommissionRule(id: string, rule: Partial<InsertCommissionRule>): Promise<CommissionRule | undefined>;
-  deleteCommissionRule(id: string): Promise<boolean>;
-  getAllCommissionRules(): Promise<CommissionRule[]>;
-
-  // Shipping Calculation
-  calculateShipping(country: string, category: string, weight: number, orderValue: number): Promise<{
-    base_shipping: number;
-    commission: number;
-    total: number;
-    currency: string;
-  }>;
-
-  // Settings
-  getSetting(key: string): Promise<Setting | undefined>;
-  createSetting(setting: InsertSetting): Promise<Setting>;
-  updateSetting(key: string, value: string, type?: string): Promise<Setting | undefined>;
-  deleteSetting(key: string): Promise<boolean>;
-  getAllSettings(): Promise<Setting[]>;
-
-  // Analytics
-  getTotalProfit(): Promise<number>;
-  getTotalRevenue(): Promise<number>;
-  getActiveOrdersCount(): Promise<number>;
-
-  // Messages
-  createMessage(message: InsertMessage): Promise<Message>;
-  getMessagesByUserId(userId: string): Promise<Message[]>;
-  getUnreadMessageCount(userId: string): Promise<number>;
-  markMessageAsRead(messageId: string): Promise<Message | undefined>;
-  deleteMessage(messageId: string): Promise<boolean>;
-
-  // Delivery Tasks
-  createDeliveryTask(task: InsertDeliveryTask): Promise<DeliveryTask>;
-  getDeliveryTask(id: string): Promise<DeliveryTaskWithDetails | undefined>;
-  getDeliveryTasksByUserId(userId: string): Promise<DeliveryTaskWithDetails[]>;
-  getAllDeliveryTasks(): Promise<DeliveryTaskWithDetails[]>;
-  updateDeliveryTask(id: string, task: Partial<InsertDeliveryTask>): Promise<DeliveryTask | undefined>;
-  deleteDeliveryTask(id: string): Promise<boolean>;
-  getShippingStaffUsers(): Promise<User[]>;
-
-  // Expenses
-  createExpense(expense: InsertExpense): Promise<Expense>;
   getAllExpenses(): Promise<Expense[]>;
+  getExpensesByDateRange(startDate: Date, endDate: Date): Promise<Expense[]>;
+  createExpense(expense: InsertExpense): Promise<Expense>;
   deleteExpense(id: string): Promise<boolean>;
   getNextExpenseNumber(): Promise<string>;
 
-  // Expense Categories
-  getAllExpenseCategories(): Promise<ExpenseCategory[]>;
-  createExpenseCategory(category: InsertExpenseCategory): Promise<ExpenseCategory>;
-  updateExpenseCategory(id: string, category: Partial<InsertExpenseCategory>): Promise<ExpenseCategory | undefined>;
-  deleteExpenseCategory(id: string): Promise<boolean>;
-
-  // Safe Reconciliations
-  getSafeReconciliations(safeId: string): Promise<SafeReconciliation[]>;
-  createSafeReconciliation(reconciliation: InsertSafeReconciliation): Promise<SafeReconciliation>;
-
-  // Owner Accounts
-  getAllOwnerAccounts(): Promise<OwnerAccount[]>;
-  createOwnerAccount(account: InsertOwnerAccount): Promise<OwnerAccount>;
-  updateOwnerAccount(id: string, account: Partial<InsertOwnerAccount>): Promise<OwnerAccount | undefined>;
-  deleteOwnerAccount(id: string): Promise<boolean>;
-  getOwnerAccountTransactions(accountId: string): Promise<OwnerAccountTransaction[]>;
-  createOwnerAccountTransaction(transaction: InsertOwnerAccountTransaction): Promise<OwnerAccountTransaction>;
-
-  // Revenue Categories
-  getAllRevenueCategories(): Promise<RevenueCategory[]>;
-  createRevenueCategory(category: InsertRevenueCategory): Promise<RevenueCategory>;
-  updateRevenueCategory(id: string, category: Partial<InsertRevenueCategory>): Promise<RevenueCategory | undefined>;
-  deleteRevenueCategory(id: string): Promise<boolean>;
-
-  // Revenues
   getAllRevenues(): Promise<Revenue[]>;
+  getRevenuesByDateRange(startDate: Date, endDate: Date): Promise<Revenue[]>;
   createRevenue(revenue: InsertRevenue): Promise<Revenue>;
   deleteRevenue(id: string): Promise<boolean>;
   getNextRevenueNumber(): Promise<string>;
 
-  // ============ FINANCIAL MODULE METHODS ============
+  getSetting(key: string): Promise<Setting | undefined>;
+  getAllSettings(): Promise<Setting[]>;
+  createSetting(setting: InsertSetting): Promise<Setting>;
+  updateSetting(key: string, value: string): Promise<Setting | undefined>;
 
-  // Revenue Accounts
-  getAllRevenueAccounts(): Promise<RevenueAccount[]>;
-  createRevenueAccount(account: InsertRevenueAccount): Promise<RevenueAccount>;
-  updateRevenueAccount(id: string, account: Partial<InsertRevenueAccount>): Promise<RevenueAccount | undefined>;
-  deleteRevenueAccount(id: string): Promise<boolean>;
-
-  // Safes
-  getAllSafes(): Promise<Safe[]>;
-  createSafe(safe: InsertSafe): Promise<Safe>;
-  updateSafe(id: string, safe: Partial<InsertSafe>): Promise<Safe | undefined>;
-  deleteSafe(id: string): Promise<boolean>;
-  getSafeTransactions(safeId: string): Promise<SafeTransaction[]>;
-  createSafeTransaction(transaction: InsertSafeTransaction): Promise<SafeTransaction>;
-
-  // Banks
-  getAllBanks(): Promise<Bank[]>;
-  createBank(bank: InsertBank): Promise<Bank>;
-  updateBank(id: string, bank: Partial<InsertBank>): Promise<Bank | undefined>;
-  deleteBank(id: string): Promise<boolean>;
-  getBankTransactions(bankId: string): Promise<BankTransaction[]>;
-  createBankTransaction(transaction: InsertBankTransaction): Promise<BankTransaction>;
-
-  // Currency Settlements
-  getAllCurrencySettlements(): Promise<CurrencySettlement[]>;
-  createCurrencySettlement(settlement: InsertCurrencySettlement): Promise<CurrencySettlement>;
-
-  // Warehouses
-  getAllWarehouses(): Promise<Warehouse[]>;
-  createWarehouse(warehouse: InsertWarehouse): Promise<Warehouse>;
-  updateWarehouse(id: string, warehouse: Partial<InsertWarehouse>): Promise<Warehouse | undefined>;
-  deleteWarehouse(id: string): Promise<boolean>;
-  getWarehouseStock(warehouseId: string): Promise<WarehouseStock[]>;
-  addWarehouseStock(stock: InsertWarehouseStock): Promise<WarehouseStock>;
-  updateWarehouseStock(id: string, stock: Partial<InsertWarehouseStock>): Promise<WarehouseStock | undefined>;
-
-  // Suppliers
-  getAllSuppliers(): Promise<Supplier[]>;
-  createSupplier(supplier: InsertSupplier): Promise<Supplier>;
-  updateSupplier(id: string, supplier: Partial<InsertSupplier>): Promise<Supplier | undefined>;
-  deleteSupplier(id: string): Promise<boolean>;
-
-  // Receipts
-  getAllReceipts(): Promise<Receipt[]>;
-  getReceipt(id: string): Promise<Receipt | undefined>;
-  createReceipt(receipt: InsertReceipt): Promise<Receipt>;
-  getNextReceiptNumber(): Promise<string>;
-
-  // Accounting Entries
-  getAllAccountingEntries(): Promise<AccountingEntry[]>;
-  createAccountingEntry(entry: InsertAccountingEntry): Promise<AccountingEntry>;
-
-  // Main Office Account
-  getMainOfficeAccount(): Promise<MainOfficeAccountType | undefined>;
-  updateMainOfficeAccount(account: Partial<MainOfficeAccountType>): Promise<MainOfficeAccountType | undefined>;
-
-  // Financial Summary
-  getFinancialSummary(): Promise<{
-    totalSafeBalanceUSD: number;
-    totalSafeBalanceLYD: number;
-    totalBankBalanceUSD: number;
-    totalBankBalanceLYD: number;
-    totalCustomerDebt: number;
-    totalSupplierDebt: number;
-    recentTransactions: Array<{ type: string; amount: number; date: Date }>;
+  getDashboardStats(): Promise<{
+    todaySales: number;
+    todayRevenue: number;
+    totalProducts: number;
+    lowStockCount: number;
+    totalCustomers: number;
+    cashboxBalanceUSD: number;
+    cashboxBalanceLYD: number;
   }>;
+
+  getBestSellingProducts(limit?: number): Promise<Array<{ productId: string; productName: string; totalSold: number; totalRevenue: number }>>;
+  getDailySalesReport(date: Date): Promise<{ totalSales: number; totalRevenue: number; totalProfit: number }>;
+  getMonthlySalesReport(year: number, month: number): Promise<{ totalSales: number; totalRevenue: number; totalProfit: number }>;
+
+  initializeDefaultData(): Promise<void>;
 }
 
-export class MemStorage implements IStorage {
-  private users: Map<string, User>;
-  private customers: Map<string, Customer>;
-  private orders: Map<string, Order>;
-  private orderItems: Map<string, OrderItem>;
-  private orderImages: Map<string, OrderImage>;
-  private shippingRates: Map<string, ShippingRate>;
-  private commissionRules: Map<string, CommissionRule>;
-  private settings: Map<string, Setting>;
-  private messages: Map<string, Message>;
-  private deliveryTasks: Map<string, DeliveryTask>;
-  private orderCounter: number = 1;
-
-  constructor() {
-    this.users = new Map();
-    this.customers = new Map();
-    this.orders = new Map();
-    this.orderItems = new Map();
-    this.orderImages = new Map();
-    this.shippingRates = new Map();
-    this.commissionRules = new Map();
-    this.settings = new Map();
-    this.messages = new Map();
-    this.deliveryTasks = new Map();
-    
-    // Initialize with default data
-    this.initializeDefaultData();
-  }
-
-  private async initializeDefaultData() {
-    // Create default owner user with hashed password
-    const hashedPassword = await hashPassword("admin");
-    const defaultUser: User = {
-      id: randomUUID(),
-      username: "admin",
-      password: hashedPassword,
-      role: "owner",
-      firstName: "Admin",
-      lastName: "User",
-      email: "admin@lynxly.com",
-      isActive: true,
-      createdAt: new Date(),
-    };
-    this.users.set(defaultUser.id, defaultUser);
-
-    // Create default shipping rates
-    const defaultRates: ShippingRate[] = [
-      {
-        id: randomUUID(),
-        country: "China",
-        category: "normal",
-        pricePerKg: "8.00",
-        currency: "USD",
-        createdAt: new Date(),
-        updatedAt: new Date(),
-      },
-      {
-        id: randomUUID(),
-        country: "China",
-        category: "perfumes",
-        pricePerKg: "12.00",
-        currency: "USD",
-        createdAt: new Date(),
-        updatedAt: new Date(),
-      },
-      {
-        id: randomUUID(),
-        country: "Turkey",
-        category: "normal",
-        pricePerKg: "12.00",
-        currency: "USD",
-        createdAt: new Date(),
-        updatedAt: new Date(),
-      },
-      {
-        id: randomUUID(),
-        country: "UK",
-        category: "normal",
-        pricePerKg: "15.00",
-        currency: "GBP",
-        createdAt: new Date(),
-        updatedAt: new Date(),
-      },
-      {
-        id: randomUUID(),
-        country: "UAE",
-        category: "normal",
-        pricePerKg: "18.00",
-        currency: "USD",
-        createdAt: new Date(),
-        updatedAt: new Date(),
-      },
-    ];
-
-    defaultRates.forEach(rate => this.shippingRates.set(rate.id, rate));
-
-    // Create default commission rules
-    const defaultCommissionRules: CommissionRule[] = [
-      {
-        id: randomUUID(),
-        country: "China",
-        minValue: "0.00",
-        maxValue: "100.00",
-        percentage: "0.1800",
-        fixedFee: "0.00",
-        createdAt: new Date(),
-        updatedAt: new Date(),
-      },
-      {
-        id: randomUUID(),
-        country: "China",
-        minValue: "100.01",
-        maxValue: null,
-        percentage: "0.1500",
-        fixedFee: "1.00",
-        createdAt: new Date(),
-        updatedAt: new Date(),
-      },
-      {
-        id: randomUUID(),
-        country: "Turkey",
-        minValue: "0.00",
-        maxValue: null,
-        percentage: "0.2000",
-        fixedFee: "0.00",
-        createdAt: new Date(),
-        updatedAt: new Date(),
-      },
-      {
-        id: randomUUID(),
-        country: "UK",
-        minValue: "0.00",
-        maxValue: null,
-        percentage: "0.1500",
-        fixedFee: "0.00",
-        createdAt: new Date(),
-        updatedAt: new Date(),
-      },
-      {
-        id: randomUUID(),
-        country: "UAE",
-        minValue: "0.00",
-        maxValue: null,
-        percentage: "0.1200",
-        fixedFee: "0.00",
-        createdAt: new Date(),
-        updatedAt: new Date(),
-      },
-    ];
-
-    defaultCommissionRules.forEach(rule => this.commissionRules.set(rule.id, rule));
-  }
-
-  // Users
+export class DatabaseStorage implements IStorage {
   async getUser(id: string): Promise<User | undefined> {
-    return this.users.get(id);
+    const [user] = await db.select().from(users).where(eq(users.id, id));
+    return user || undefined;
   }
 
   async getUserByUsername(username: string): Promise<User | undefined> {
-    return Array.from(this.users.values()).find(user => user.username === username);
+    const [user] = await db.select().from(users).where(eq(users.username, username));
+    return user || undefined;
   }
 
   async createUser(insertUser: InsertUser): Promise<User> {
-    const id = randomUUID();
-    const user: User = {
-      ...insertUser,
-      id,
-      role: insertUser.role || "customer_service",
-      isActive: insertUser.isActive ?? true,
-      createdAt: new Date(),
-    };
-    this.users.set(id, user);
+    const [user] = await db.insert(users).values(insertUser).returning();
     return user;
   }
 
   async updateUser(id: string, userData: Partial<InsertUser>): Promise<User | undefined> {
-    const user = this.users.get(id);
-    if (!user) return undefined;
-    
-    const updatedUser = { ...user, ...userData };
-    this.users.set(id, updatedUser);
-    return updatedUser;
-  }
-
-  async deleteUser(id: string): Promise<boolean> {
-    return this.users.delete(id);
-  }
-
-  async getAllUsers(): Promise<User[]> {
-    return Array.from(this.users.values());
-  }
-
-  // Customers
-  async getCustomer(id: string): Promise<Customer | undefined> {
-    return this.customers.get(id);
-  }
-
-  async getCustomerByPhone(phone: string): Promise<Customer | undefined> {
-    return Array.from(this.customers.values()).find(customer => customer.phone === phone);
-  }
-
-  async searchCustomers(query: string): Promise<Customer[]> {
-    const lowerQuery = query.toLowerCase();
-    return Array.from(this.customers.values()).filter(customer => 
-      customer.phone.includes(query) ||
-      customer.firstName.toLowerCase().includes(lowerQuery) ||
-      customer.lastName.toLowerCase().includes(lowerQuery) ||
-      (customer.shippingCode && customer.shippingCode.toLowerCase().includes(lowerQuery))
-    );
-  }
-
-  async getCustomerWithOrders(id: string): Promise<CustomerWithOrders | undefined> {
-    const customer = this.customers.get(id);
-    if (!customer) return undefined;
-    
-    const orders = Array.from(this.orders.values()).filter(order => order.customerId === id);
-    return { ...customer, orders };
-  }
-
-  async createCustomer(insertCustomer: InsertCustomer): Promise<Customer> {
-    const id = randomUUID();
-    const customer: Customer = {
-      ...insertCustomer,
-      id,
-      address: insertCustomer.address ?? null,
-      city: insertCustomer.city ?? null,
-      postalCode: insertCustomer.postalCode ?? null,
-      createdAt: new Date(),
-    };
-    this.customers.set(id, customer);
-    return customer;
-  }
-
-  async updateCustomer(id: string, customerData: Partial<InsertCustomer>): Promise<Customer | undefined> {
-    const customer = this.customers.get(id);
-    if (!customer) return undefined;
-    
-    const updatedCustomer = { ...customer, ...customerData };
-    this.customers.set(id, updatedCustomer);
-    return updatedCustomer;
-  }
-
-  async deleteCustomer(id: string): Promise<boolean> {
-    return this.customers.delete(id);
-  }
-
-  async getAllCustomers(): Promise<Customer[]> {
-    return Array.from(this.customers.values());
-  }
-
-  // Orders
-  async getOrder(id: string): Promise<Order | undefined> {
-    return this.orders.get(id);
-  }
-
-  async getOrderWithCustomer(id: string): Promise<OrderWithCustomer | undefined> {
-    const order = this.orders.get(id);
-    if (!order) return undefined;
-    
-    const customer = this.customers.get(order.customerId);
-    if (!customer) return undefined;
-    
-    const items = Array.from(this.orderItems.values()).filter(item => item.orderId === id);
-    const images = Array.from(this.orderImages.values()).filter(image => image.orderId === id);
-    
-    return { ...order, customer, items, images };
-  }
-
-  async getOrdersByCustomerId(customerId: string): Promise<Order[]> {
-    return Array.from(this.orders.values()).filter(order => order.customerId === customerId);
-  }
-
-  async createOrder(insertOrder: InsertOrder): Promise<Order> {
-    const id = randomUUID();
-    // Use provided orderNumber or generate one
-    const orderNumber = insertOrder.orderNumber || `LY-${Date.now()}`;
-    const now = new Date();
-    
-    const order: Order = {
-      ...insertOrder,
-      id,
-      orderNumber,
-      status: insertOrder.status || "pending",
-      shippingCost: insertOrder.shippingCost || "0.00",
-      commission: insertOrder.commission || "0.00",
-      shippingProfit: insertOrder.shippingProfit || "0.00",
-      itemsProfit: insertOrder.itemsProfit || "0.00",
-      totalProfit: insertOrder.totalProfit || "0.00",
-      notes: insertOrder.notes || null,
-      createdAt: now,
-      updatedAt: now,
-    };
-    this.orders.set(id, order);
-    return order;
-  }
-
-  async updateOrder(id: string, orderData: Partial<InsertOrder>): Promise<Order | undefined> {
-    const order = this.orders.get(id);
-    if (!order) return undefined;
-    
-    const updatedOrder = { ...order, ...orderData, updatedAt: new Date() };
-    this.orders.set(id, updatedOrder);
-    return updatedOrder;
-  }
-
-  async deleteOrder(id: string): Promise<boolean> {
-    // Delete associated order items
-    Array.from(this.orderItems.keys())
-      .filter(itemId => this.orderItems.get(itemId)?.orderId === id)
-      .forEach(itemId => this.orderItems.delete(itemId));
-    
-    return this.orders.delete(id);
-  }
-
-  async getAllOrders(): Promise<OrderWithCustomer[]> {
-    const orders: OrderWithCustomer[] = [];
-    
-    for (const order of Array.from(this.orders.values())) {
-      const customer = this.customers.get(order.customerId);
-      if (customer) {
-        const items = Array.from(this.orderItems.values()).filter(item => item.orderId === order.id);
-        const images = Array.from(this.orderImages.values()).filter(image => image.orderId === order.id);
-        orders.push({ ...order, customer, items, images });
-      }
-    }
-    
-    return orders;
-  }
-
-  // Order Items
-  async getOrderItems(orderId: string): Promise<OrderItem[]> {
-    return Array.from(this.orderItems.values()).filter(item => item.orderId === orderId);
-  }
-
-  async createOrderItem(insertOrderItem: InsertOrderItem): Promise<OrderItem> {
-    const id = randomUUID();
-    const item: OrderItem = {
-      ...insertOrderItem,
-      id,
-      productUrl: insertOrderItem.productUrl ?? null,
-      originalPrice: insertOrderItem.originalPrice ?? null,
-      discountedPrice: insertOrderItem.discountedPrice ?? null,
-      markupProfit: insertOrderItem.markupProfit ?? "0.00",
-    };
-    this.orderItems.set(id, item);
-    return item;
-  }
-
-  async updateOrderItem(id: string, itemData: Partial<InsertOrderItem>): Promise<OrderItem | undefined> {
-    const item = this.orderItems.get(id);
-    if (!item) return undefined;
-    
-    const updatedItem = { ...item, ...itemData };
-    this.orderItems.set(id, updatedItem);
-    return updatedItem;
-  }
-
-  async deleteOrderItem(id: string): Promise<boolean> {
-    return this.orderItems.delete(id);
-  }
-
-  // Order Images
-  async getOrderImages(orderId: string): Promise<OrderImage[]> {
-    return Array.from(this.orderImages.values()).filter(image => image.orderId === orderId);
-  }
-
-  async createOrderImage(insertOrderImage: InsertOrderImage): Promise<OrderImage> {
-    const id = randomUUID();
-    const image: OrderImage = {
-      ...insertOrderImage,
-      id,
-      altText: insertOrderImage.altText ?? null,
-      position: insertOrderImage.position ?? 1,
-      createdAt: new Date(),
-    };
-    this.orderImages.set(id, image);
-    return image;
-  }
-
-  async deleteOrderImage(id: string): Promise<boolean> {
-    return this.orderImages.delete(id);
-  }
-
-  // Shipping Rates
-  async getShippingRate(id: string): Promise<ShippingRate | undefined> {
-    return this.shippingRates.get(id);
-  }
-
-  async getShippingRateByCountryAndCategory(country: string, category: string): Promise<ShippingRate | undefined> {
-    return Array.from(this.shippingRates.values()).find(
-      rate => rate.country === country && rate.category === category
-    );
-  }
-
-  async createShippingRate(insertShippingRate: InsertShippingRate): Promise<ShippingRate> {
-    const id = randomUUID();
-    const now = new Date();
-    const rate: ShippingRate = {
-      ...insertShippingRate,
-      id,
-      currency: insertShippingRate.currency ?? "USD",
-      createdAt: now,
-      updatedAt: now,
-    };
-    this.shippingRates.set(id, rate);
-    return rate;
-  }
-
-  async updateShippingRate(id: string, rateData: Partial<InsertShippingRate>): Promise<ShippingRate | undefined> {
-    const rate = this.shippingRates.get(id);
-    if (!rate) return undefined;
-    
-    const updatedRate = { ...rate, ...rateData };
-    this.shippingRates.set(id, updatedRate);
-    return updatedRate;
-  }
-
-  async deleteShippingRate(id: string): Promise<boolean> {
-    return this.shippingRates.delete(id);
-  }
-
-  async getAllShippingRates(): Promise<ShippingRate[]> {
-    return Array.from(this.shippingRates.values());
-  }
-
-  // Commission Rules
-  async getCommissionRule(id: string): Promise<CommissionRule | undefined> {
-    return this.commissionRules.get(id);
-  }
-
-  async getCommissionRuleByCountryAndValue(country: string, orderValue: number): Promise<CommissionRule | undefined> {
-    return Array.from(this.commissionRules.values()).find(rule => {
-      const minValue = parseFloat(rule.minValue);
-      const maxValue = rule.maxValue ? parseFloat(rule.maxValue) : null;
-      return rule.country === country && 
-             minValue <= orderValue && 
-             (maxValue === null || maxValue >= orderValue);
-    });
-  }
-
-  async createCommissionRule(insertCommissionRule: InsertCommissionRule): Promise<CommissionRule> {
-    const id = randomUUID();
-    const now = new Date();
-    const rule: CommissionRule = {
-      ...insertCommissionRule,
-      id,
-      maxValue: insertCommissionRule.maxValue ?? null,
-      fixedFee: insertCommissionRule.fixedFee ?? "0.00",
-      createdAt: now,
-      updatedAt: now,
-    };
-    this.commissionRules.set(id, rule);
-    return rule;
-  }
-
-  async updateCommissionRule(id: string, ruleData: Partial<InsertCommissionRule>): Promise<CommissionRule | undefined> {
-    const rule = this.commissionRules.get(id);
-    if (!rule) return undefined;
-    
-    const updatedRule = { 
-      ...rule, 
-      ...ruleData,
-      updatedAt: new Date(),
-    };
-    this.commissionRules.set(id, updatedRule);
-    return updatedRule;
-  }
-
-  async deleteCommissionRule(id: string): Promise<boolean> {
-    return this.commissionRules.delete(id);
-  }
-
-  async getAllCommissionRules(): Promise<CommissionRule[]> {
-    return Array.from(this.commissionRules.values());
-  }
-
-  // Shipping Calculation
-  async calculateShipping(country: string, category: string, weight: number, orderValue: number): Promise<{
-    base_shipping: number;
-    commission: number;
-    total: number;
-    currency: string;
-  }> {
-    const shippingRate = await this.getShippingRateByCountryAndCategory(country, category);
-    if (!shippingRate) {
-      throw new Error(`No shipping rate found for country: ${country}, category: ${category}`);
-    }
-
-    const baseShipping = weight * parseFloat(shippingRate.pricePerKg);
-
-    const commissionRule = await this.getCommissionRuleByCountryAndValue(country, orderValue);
-    let commission = 0;
-    
-    if (commissionRule) {
-      const percentageCommission = orderValue * parseFloat(commissionRule.percentage);
-      const fixedFee = parseFloat(commissionRule.fixedFee);
-      commission = percentageCommission + fixedFee;
-    }
-
-    return {
-      base_shipping: baseShipping,
-      commission,
-      total: baseShipping + commission,
-      currency: shippingRate.currency,
-    };
-  }
-
-  // Analytics
-  async getTotalProfit(): Promise<number> {
-    const orders = Array.from(this.orders.values());
-    return orders.reduce((total, order) => total + parseFloat(order.totalProfit), 0);
-  }
-
-  async getTotalRevenue(): Promise<number> {
-    const orders = Array.from(this.orders.values());
-    return orders.reduce((total, order) => total + parseFloat(order.totalAmount), 0);
-  }
-
-  async getActiveOrdersCount(): Promise<number> {
-    const orders = Array.from(this.orders.values());
-    return orders.filter(order => order.status !== "delivered" && order.status !== "cancelled").length;
-  }
-
-  // Settings methods
-  async getSetting(key: string): Promise<Setting | undefined> {
-    return this.settings.get(key);
-  }
-
-  async createSetting(insertSetting: InsertSetting): Promise<Setting> {
-    const id = randomUUID();
-    const now = new Date();
-    const setting: Setting = {
-      ...insertSetting,
-      id,
-      type: insertSetting.type ?? "string",
-      description: insertSetting.description ?? null,
-      createdAt: now,
-      updatedAt: now,
-    };
-    this.settings.set(setting.key, setting);
-    return setting;
-  }
-
-  async updateSetting(key: string, value: string, type?: string): Promise<Setting | undefined> {
-    const existing = this.settings.get(key);
-    if (!existing) return undefined;
-
-    const updated: Setting = {
-      ...existing,
-      value,
-      type: type || existing.type,
-      updatedAt: new Date(),
-    };
-    this.settings.set(key, updated);
-    return updated;
-  }
-
-  async deleteSetting(key: string): Promise<boolean> {
-    return this.settings.delete(key);
-  }
-
-  async getAllSettings(): Promise<Setting[]> {
-    return Array.from(this.settings.values());
-  }
-
-  // Messages methods
-  async createMessage(insertMessage: InsertMessage): Promise<Message> {
-    const id = randomUUID();
-    const message: Message = {
-      ...insertMessage,
-      id,
-      isRead: false,
-      createdAt: new Date(),
-    };
-    this.messages.set(id, message);
-    return message;
-  }
-
-  async getMessagesByUserId(userId: string): Promise<Message[]> {
-    return Array.from(this.messages.values())
-      .filter(msg => msg.senderId === userId || msg.recipientId === userId)
-      .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
-  }
-
-  async getUnreadMessageCount(userId: string): Promise<number> {
-    return Array.from(this.messages.values())
-      .filter(msg => msg.recipientId === userId && !msg.isRead)
-      .length;
-  }
-
-  async markMessageAsRead(messageId: string): Promise<Message | undefined> {
-    const message = this.messages.get(messageId);
-    if (!message) return undefined;
-    const updated = { ...message, isRead: true };
-    this.messages.set(messageId, updated);
-    return updated;
-  }
-
-  async deleteMessage(messageId: string): Promise<boolean> {
-    return this.messages.delete(messageId);
-  }
-}
-
-export class PostgreSQLStorage implements IStorage {
-  constructor() {
-    this.initializeDefaultData();
-  }
-
-  private async initializeDefaultData() {
-    try {
-      // Check if admin user exists
-      const existingAdmin = await this.getUserByUsername("admin");
-      if (!existingAdmin) {
-        // Create default owner user
-        const hashedPassword = await hashPassword("admin");
-        await db.insert(users).values({
-          username: "admin",
-          password: hashedPassword,
-          role: "owner",
-          firstName: "Admin",
-          lastName: "User",
-          email: "admin@lynxly.com",
-          isActive: true,
-        });
-      }
-
-      // Check if shipping rates exist
-      const existingRates = await this.getAllShippingRates();
-      if (existingRates.length === 0) {
-        // Create default shipping rates
-        await db.insert(shippingRates).values([
-          {
-            country: "China",
-            category: "normal",
-            pricePerKg: "8.00",
-            currency: "USD",
-          },
-          {
-            country: "China",
-            category: "perfumes",
-            pricePerKg: "12.00",
-            currency: "USD",
-          },
-          {
-            country: "Turkey",
-            category: "normal",
-            pricePerKg: "12.00",
-            currency: "USD",
-          },
-          {
-            country: "UK",
-            category: "normal",
-            pricePerKg: "15.00",
-            currency: "GBP",
-          },
-          {
-            country: "UAE",
-            category: "normal",
-            pricePerKg: "18.00",
-            currency: "USD",
-          },
-        ]);
-      }
-
-      // Check if commission rules exist
-      const existingCommissionRules = await this.getAllCommissionRules();
-      if (existingCommissionRules.length === 0) {
-        // Create default commission rules
-        await db.insert(commissionRules).values([
-          {
-            country: "China",
-            minValue: "0.00",
-            maxValue: "100.00",
-            percentage: "0.1800",
-            fixedFee: "0.00",
-          },
-          {
-            country: "China",
-            minValue: "100.01",
-            maxValue: null, // no max
-            percentage: "0.1500",
-            fixedFee: "1.00",
-          },
-          {
-            country: "Turkey",
-            minValue: "0.00",
-            maxValue: null,
-            percentage: "0.2000",
-            fixedFee: "0.00",
-          },
-          {
-            country: "UK",
-            minValue: "0.00",
-            maxValue: null,
-            percentage: "0.1500",
-            fixedFee: "0.00",
-          },
-          {
-            country: "UAE",
-            minValue: "0.00",
-            maxValue: null,
-            percentage: "0.1200",
-            fixedFee: "0.00",
-          },
-        ]);
-      }
-
-    } catch (error) {
-      console.error("Error initializing default data:", error);
-    }
-  }
-
-  // Users
-  async getUser(id: string): Promise<User | undefined> {
-    const result = await db.select().from(users).where(eq(users.id, id)).limit(1);
-    return result[0];
-  }
-
-  async getUserByUsername(username: string): Promise<User | undefined> {
-    const result = await db.select().from(users).where(eq(users.username, username)).limit(1);
-    return result[0];
-  }
-
-  async createUser(insertUser: InsertUser): Promise<User> {
-    const result = await db.insert(users).values({
-      ...insertUser,
-      role: insertUser.role || "customer_service",
-      isActive: insertUser.isActive ?? true,
-    }).returning();
-    return result[0];
-  }
-
-  async updateUser(id: string, userData: Partial<InsertUser>): Promise<User | undefined> {
-    const result = await db.update(users).set(userData).where(eq(users.id, id)).returning();
-    return result[0];
+    const [user] = await db.update(users).set(userData).where(eq(users.id, id)).returning();
+    return user || undefined;
   }
 
   async deleteUser(id: string): Promise<boolean> {
     const result = await db.delete(users).where(eq(users.id, id));
-    return result.rowCount > 0;
+    return (result.rowCount ?? 0) > 0;
   }
 
   async getAllUsers(): Promise<User[]> {
-    return await db.select().from(users).orderBy(desc(users.createdAt));
+    return db.select().from(users).orderBy(desc(users.createdAt));
   }
 
-  // Customers
+  async getAllCategories(): Promise<Category[]> {
+    return db.select().from(categories).orderBy(categories.name);
+  }
+
+  async getCategory(id: string): Promise<Category | undefined> {
+    const [category] = await db.select().from(categories).where(eq(categories.id, id));
+    return category || undefined;
+  }
+
+  async createCategory(insertCategory: InsertCategory): Promise<Category> {
+    const [category] = await db.insert(categories).values(insertCategory).returning();
+    return category;
+  }
+
+  async updateCategory(id: string, categoryData: Partial<InsertCategory>): Promise<Category | undefined> {
+    const [category] = await db.update(categories).set(categoryData).where(eq(categories.id, id)).returning();
+    return category || undefined;
+  }
+
+  async deleteCategory(id: string): Promise<boolean> {
+    const result = await db.delete(categories).where(eq(categories.id, id));
+    return (result.rowCount ?? 0) > 0;
+  }
+
+  async getAllProducts(): Promise<ProductWithCategory[]> {
+    const result = await db.select().from(products).leftJoin(categories, eq(products.categoryId, categories.id)).orderBy(products.name);
+    return result.map(r => ({ ...r.products, category: r.categories }));
+  }
+
+  async getProduct(id: string): Promise<ProductWithCategory | undefined> {
+    const [result] = await db.select().from(products).leftJoin(categories, eq(products.categoryId, categories.id)).where(eq(products.id, id));
+    if (!result) return undefined;
+    return { ...result.products, category: result.categories };
+  }
+
+  async getProductBySku(sku: string): Promise<Product | undefined> {
+    const [product] = await db.select().from(products).where(eq(products.sku, sku));
+    return product || undefined;
+  }
+
+  async getProductByBarcode(barcode: string): Promise<Product | undefined> {
+    const [product] = await db.select().from(products).where(eq(products.barcode, barcode));
+    return product || undefined;
+  }
+
+  async searchProducts(query: string): Promise<ProductWithCategory[]> {
+    const result = await db.select().from(products)
+      .leftJoin(categories, eq(products.categoryId, categories.id))
+      .where(or(
+        ilike(products.name, `%${query}%`),
+        ilike(products.sku, `%${query}%`),
+        ilike(products.barcode, `%${query}%`)
+      ))
+      .orderBy(products.name);
+    return result.map(r => ({ ...r.products, category: r.categories }));
+  }
+
+  async getLowStockProducts(): Promise<ProductWithCategory[]> {
+    const result = await db.select().from(products)
+      .leftJoin(categories, eq(products.categoryId, categories.id))
+      .where(sql`${products.currentStock} <= ${products.lowStockThreshold}`)
+      .orderBy(products.currentStock);
+    return result.map(r => ({ ...r.products, category: r.categories }));
+  }
+
+  async createProduct(insertProduct: InsertProduct): Promise<Product> {
+    const [product] = await db.insert(products).values(insertProduct).returning();
+    return product;
+  }
+
+  async updateProduct(id: string, productData: Partial<InsertProduct>): Promise<Product | undefined> {
+    const [product] = await db.update(products)
+      .set({ ...productData, updatedAt: new Date() })
+      .where(eq(products.id, id))
+      .returning();
+    return product || undefined;
+  }
+
+  async deleteProduct(id: string): Promise<boolean> {
+    const result = await db.delete(products).where(eq(products.id, id));
+    return (result.rowCount ?? 0) > 0;
+  }
+
+  async updateProductStock(id: string, quantity: number): Promise<Product | undefined> {
+    const [product] = await db.update(products)
+      .set({ currentStock: quantity, updatedAt: new Date() })
+      .where(eq(products.id, id))
+      .returning();
+    return product || undefined;
+  }
+
+  async getStockMovements(productId?: string): Promise<StockMovement[]> {
+    if (productId) {
+      return db.select().from(stockMovements).where(eq(stockMovements.productId, productId)).orderBy(desc(stockMovements.createdAt));
+    }
+    return db.select().from(stockMovements).orderBy(desc(stockMovements.createdAt));
+  }
+
+  async createStockMovement(insertMovement: InsertStockMovement): Promise<StockMovement> {
+    const [movement] = await db.insert(stockMovements).values(insertMovement).returning();
+    return movement;
+  }
+
+  async getAllCustomers(): Promise<Customer[]> {
+    return db.select().from(customers).orderBy(customers.name);
+  }
+
   async getCustomer(id: string): Promise<Customer | undefined> {
-    const result = await db.select().from(customers).where(eq(customers.id, id)).limit(1);
-    return result[0];
+    const [customer] = await db.select().from(customers).where(eq(customers.id, id));
+    return customer || undefined;
   }
 
   async getCustomerByPhone(phone: string): Promise<Customer | undefined> {
-    const result = await db.select().from(customers).where(eq(customers.phone, phone)).limit(1);
-    return result[0];
+    const [customer] = await db.select().from(customers).where(eq(customers.phone, phone));
+    return customer || undefined;
   }
 
   async searchCustomers(query: string): Promise<Customer[]> {
-    const result = await db
-      .select()
-      .from(customers)
-      .where(
-        or(
-          ilike(customers.phone, `%${query}%`),
-          ilike(customers.firstName, `%${query}%`),
-          ilike(customers.lastName, `%${query}%`),
-          ilike(customers.shippingCode, `%${query}%`)
-        )
-      )
-      .orderBy(desc(customers.createdAt));
-    return result;
+    return db.select().from(customers)
+      .where(or(
+        ilike(customers.name, `%${query}%`),
+        ilike(customers.phone, `%${query}%`)
+      ))
+      .orderBy(customers.name);
   }
 
-  async getCustomerWithOrders(id: string): Promise<CustomerWithOrders | undefined> {
-    const customer = await this.getCustomer(id);
+  async getCustomerWithSales(id: string): Promise<CustomerWithSales | undefined> {
+    const [customer] = await db.select().from(customers).where(eq(customers.id, id));
     if (!customer) return undefined;
-    
-    const customerOrders = await db.select().from(orders).where(eq(orders.customerId, id));
-    return { ...customer, orders: customerOrders };
+    const customerSales = await db.select().from(sales).where(eq(sales.customerId, id)).orderBy(desc(sales.createdAt));
+    return { ...customer, sales: customerSales };
   }
 
   async createCustomer(insertCustomer: InsertCustomer): Promise<Customer> {
-    const result = await db.insert(customers).values(insertCustomer).returning();
-    return result[0];
+    const [customer] = await db.insert(customers).values(insertCustomer).returning();
+    return customer;
   }
 
   async updateCustomer(id: string, customerData: Partial<InsertCustomer>): Promise<Customer | undefined> {
-    const result = await db.update(customers).set(customerData).where(eq(customers.id, id)).returning();
-    return result[0];
+    const [customer] = await db.update(customers)
+      .set({ ...customerData, updatedAt: new Date() })
+      .where(eq(customers.id, id))
+      .returning();
+    return customer || undefined;
   }
 
   async deleteCustomer(id: string): Promise<boolean> {
     const result = await db.delete(customers).where(eq(customers.id, id));
-    return result.rowCount > 0;
+    return (result.rowCount ?? 0) > 0;
   }
 
-  async getAllCustomers(): Promise<Customer[]> {
-    return await db.select().from(customers).orderBy(desc(customers.createdAt));
+  async updateCustomerBalance(id: string, amount: string, add: boolean): Promise<Customer | undefined> {
+    const customer = await this.getCustomer(id);
+    if (!customer) return undefined;
+    const currentBalance = parseFloat(customer.balanceOwed);
+    const adjustAmount = parseFloat(amount);
+    const newBalance = add ? currentBalance + adjustAmount : currentBalance - adjustAmount;
+    return this.updateCustomer(id, { balanceOwed: newBalance.toFixed(2) });
   }
 
-  // Orders
-  async getOrder(id: string): Promise<Order | undefined> {
-    const result = await db.select().from(orders).where(eq(orders.id, id)).limit(1);
-    return result[0];
+  async getAllSales(): Promise<SaleWithDetails[]> {
+    const allSales = await db.select().from(sales).orderBy(desc(sales.createdAt));
+    const result: SaleWithDetails[] = [];
+    for (const sale of allSales) {
+      const [customer] = sale.customerId ? await db.select().from(customers).where(eq(customers.id, sale.customerId)) : [null];
+      const items = await db.select().from(saleItems).where(eq(saleItems.saleId, sale.id));
+      const [createdBy] = await db.select().from(users).where(eq(users.id, sale.createdByUserId));
+      result.push({ ...sale, customer, items, createdBy });
+    }
+    return result;
   }
 
-  async getOrderWithCustomer(id: string): Promise<OrderWithCustomer | undefined> {
-    const result = await db
-      .select()
-      .from(orders)
-      .leftJoin(customers, eq(orders.customerId, customers.id))
-      .where(eq(orders.id, id))
-      .limit(1);
-    
-    if (!result[0] || !result[0].orders || !result[0].customers) return undefined;
-    
-    const items = await this.getOrderItems(id);
-    return {
-      ...result[0].orders,
-      customer: result[0].customers,
-      items,
-      images: [],
-    };
+  async getSale(id: string): Promise<SaleWithDetails | undefined> {
+    const [sale] = await db.select().from(sales).where(eq(sales.id, id));
+    if (!sale) return undefined;
+    const [customer] = sale.customerId ? await db.select().from(customers).where(eq(customers.id, sale.customerId)) : [null];
+    const items = await db.select().from(saleItems).where(eq(saleItems.saleId, sale.id));
+    const [createdBy] = await db.select().from(users).where(eq(users.id, sale.createdByUserId));
+    return { ...sale, customer, items, createdBy };
   }
 
-  async getOrdersByCustomerId(customerId: string): Promise<Order[]> {
-    return await db.select().from(orders).where(eq(orders.customerId, customerId));
+  async getSalesByCustomerId(customerId: string): Promise<Sale[]> {
+    return db.select().from(sales).where(eq(sales.customerId, customerId)).orderBy(desc(sales.createdAt));
   }
 
-  async createOrder(insertOrder: InsertOrder): Promise<Order> {
-    // Use provided orderNumber or generate one
-    const orderNumber = insertOrder.orderNumber || `LY-${Date.now()}`;
-    const result = await db.insert(orders).values({
-      ...insertOrder,
-      orderNumber,
-    }).returning();
-    return result[0];
+  async getSalesByDateRange(startDate: Date, endDate: Date): Promise<SaleWithDetails[]> {
+    const allSales = await db.select().from(sales)
+      .where(and(gte(sales.createdAt, startDate), lte(sales.createdAt, endDate)))
+      .orderBy(desc(sales.createdAt));
+    const result: SaleWithDetails[] = [];
+    for (const sale of allSales) {
+      const [customer] = sale.customerId ? await db.select().from(customers).where(eq(customers.id, sale.customerId)) : [null];
+      const items = await db.select().from(saleItems).where(eq(saleItems.saleId, sale.id));
+      const [createdBy] = await db.select().from(users).where(eq(users.id, sale.createdByUserId));
+      result.push({ ...sale, customer, items, createdBy });
+    }
+    return result;
   }
 
-  async updateOrder(id: string, orderData: Partial<InsertOrder>): Promise<Order | undefined> {
-    const updateData = {
-      ...orderData,
-      updatedAt: new Date(),
-    };
-    const result = await db.update(orders).set(updateData).where(eq(orders.id, id)).returning();
-    return result[0];
-  }
-
-  async deleteOrder(id: string): Promise<boolean> {
-    const result = await db.delete(orders).where(eq(orders.id, id));
-    return result.rowCount > 0;
-  }
-
-  async getAllOrders(): Promise<OrderWithCustomer[]> {
-    const result = await db
-      .select()
-      .from(orders)
-      .leftJoin(customers, eq(orders.customerId, customers.id))
-      .orderBy(desc(orders.createdAt));
-    
-    const ordersWithCustomers: OrderWithCustomer[] = [];
-    for (const row of result) {
-      if (row.orders && row.customers) {
-        const items = await this.getOrderItems(row.orders.id);
-        ordersWithCustomers.push({
-          ...row.orders,
-          customer: row.customers,
-          items,
-          images: [],
+  async createSale(insertSale: InsertSale, items: InsertSaleItem[]): Promise<SaleWithDetails> {
+    const [sale] = await db.insert(sales).values(insertSale).returning();
+    const createdItems: SaleItem[] = [];
+    for (const item of items) {
+      const [saleItem] = await db.insert(saleItems).values({ ...item, saleId: sale.id }).returning();
+      createdItems.push(saleItem);
+      const [product] = await db.select().from(products).where(eq(products.id, item.productId));
+      if (product) {
+        const newStock = product.currentStock - item.quantity;
+        await db.update(products).set({ currentStock: newStock, updatedAt: new Date() }).where(eq(products.id, item.productId));
+        await db.insert(stockMovements).values({
+          productId: item.productId,
+          type: "out",
+          quantity: item.quantity,
+          previousStock: product.currentStock,
+          newStock,
+          reason: "Sale",
+          referenceType: "sale",
+          referenceId: sale.id,
+          createdByUserId: sale.createdByUserId,
         });
       }
     }
-    
-    return ordersWithCustomers;
-  }
-
-  // Order Items
-  async getOrderItems(orderId: string): Promise<OrderItem[]> {
-    return await db.select().from(orderItems).where(eq(orderItems.orderId, orderId));
-  }
-
-  async createOrderItem(insertOrderItem: InsertOrderItem): Promise<OrderItem> {
-    const result = await db.insert(orderItems).values(insertOrderItem).returning();
-    return result[0];
-  }
-
-  async updateOrderItem(id: string, itemData: Partial<InsertOrderItem>): Promise<OrderItem | undefined> {
-    const result = await db.update(orderItems).set(itemData).where(eq(orderItems.id, id)).returning();
-    return result[0];
-  }
-
-  async deleteOrderItem(id: string): Promise<boolean> {
-    const result = await db.delete(orderItems).where(eq(orderItems.id, id));
-    return result.rowCount > 0;
-  }
-
-  // Order Images
-  async getOrderImages(orderId: string): Promise<OrderImage[]> {
-    return await db.select().from(orderImages).where(eq(orderImages.orderId, orderId));
-  }
-
-  async createOrderImage(insertOrderImage: InsertOrderImage): Promise<OrderImage> {
-    const result = await db.insert(orderImages).values(insertOrderImage).returning();
-    return result[0];
-  }
-
-  async deleteOrderImage(id: string): Promise<boolean> {
-    const result = await db.delete(orderImages).where(eq(orderImages.id, id));
-    return result.rowCount > 0;
-  }
-
-  // Shipping Rates
-  async getShippingRate(id: string): Promise<ShippingRate | undefined> {
-    const result = await db.select().from(shippingRates).where(eq(shippingRates.id, id)).limit(1);
-    return result[0];
-  }
-
-  async getShippingRateByCountryAndCategory(country: string, category: string): Promise<ShippingRate | undefined> {
-    const result = await db.select().from(shippingRates)
-      .where(sql`${shippingRates.country} = ${country} AND ${shippingRates.category} = ${category}`)
-      .limit(1);
-    return result[0];
-  }
-
-  async createShippingRate(insertShippingRate: InsertShippingRate): Promise<ShippingRate> {
-    const result = await db.insert(shippingRates).values(insertShippingRate).returning();
-    return result[0];
-  }
-
-  async updateShippingRate(id: string, rateData: Partial<InsertShippingRate>): Promise<ShippingRate | undefined> {
-    const result = await db.update(shippingRates).set(rateData).where(eq(shippingRates.id, id)).returning();
-    return result[0];
-  }
-
-  async deleteShippingRate(id: string): Promise<boolean> {
-    const result = await db.delete(shippingRates).where(eq(shippingRates.id, id));
-    return result.rowCount > 0;
-  }
-
-  async getAllShippingRates(): Promise<ShippingRate[]> {
-    return await db.select().from(shippingRates).orderBy(shippingRates.country);
-  }
-
-  // Commission Rules
-  async getCommissionRule(id: string): Promise<CommissionRule | undefined> {
-    const result = await db.select().from(commissionRules).where(eq(commissionRules.id, id)).limit(1);
-    return result[0];
-  }
-
-  async getCommissionRuleByCountryAndValue(country: string, orderValue: number): Promise<CommissionRule | undefined> {
-    const result = await db.select().from(commissionRules)
-      .where(sql`${commissionRules.country} = ${country} 
-                 AND ${commissionRules.minValue} <= ${orderValue}
-                 AND (${commissionRules.maxValue} IS NULL OR ${commissionRules.maxValue} >= ${orderValue})`)
-      .orderBy(commissionRules.minValue)
-      .limit(1);
-    return result[0];
-  }
-
-  async createCommissionRule(insertCommissionRule: InsertCommissionRule): Promise<CommissionRule> {
-    const result = await db.insert(commissionRules).values(insertCommissionRule).returning();
-    return result[0];
-  }
-
-  async updateCommissionRule(id: string, ruleData: Partial<InsertCommissionRule>): Promise<CommissionRule | undefined> {
-    const updateData = {
-      ...ruleData,
-      updatedAt: new Date(),
-    };
-    const result = await db.update(commissionRules).set(updateData).where(eq(commissionRules.id, id)).returning();
-    return result[0];
-  }
-
-  async deleteCommissionRule(id: string): Promise<boolean> {
-    const result = await db.delete(commissionRules).where(eq(commissionRules.id, id));
-    return result.rowCount > 0;
-  }
-
-  async getAllCommissionRules(): Promise<CommissionRule[]> {
-    return await db.select().from(commissionRules).orderBy(commissionRules.country, commissionRules.minValue);
-  }
-
-  // Shipping Calculation
-  async calculateShipping(country: string, category: string, weight: number, orderValue: number): Promise<{
-    base_shipping: number;
-    commission: number;
-    total: number;
-    currency: string;
-  }> {
-    // Get shipping rate for country and category
-    const shippingRate = await this.getShippingRateByCountryAndCategory(country, category);
-    if (!shippingRate) {
-      throw new Error(`No shipping rate found for country: ${country}, category: ${category}`);
-    }
-
-    // Calculate base shipping cost
-    const baseShipping = weight * parseFloat(shippingRate.pricePerKg);
-
-    // Get commission rule for country and order value
-    const commissionRule = await this.getCommissionRuleByCountryAndValue(country, orderValue);
-    let commission = 0;
-    
-    if (commissionRule) {
-      // Calculate commission: percentage + fixed fee
-      const percentageCommission = orderValue * parseFloat(commissionRule.percentage);
-      const fixedFee = parseFloat(commissionRule.fixedFee);
-      commission = percentageCommission + fixedFee;
-    }
-
-    return {
-      base_shipping: baseShipping,
-      commission,
-      total: baseShipping + commission,
-      currency: shippingRate.currency,
-    };
-  }
-
-  // Analytics
-  async getTotalProfit(): Promise<number> {
-    const result = await db.select({
-      total: sql<number>`COALESCE(SUM(CAST(${orders.totalProfit} AS NUMERIC)), 0)`,
-    }).from(orders);
-    return Number(result[0]?.total || 0);
-  }
-
-  async getTotalRevenue(): Promise<number> {
-    const result = await db.select({
-      total: sql<number>`COALESCE(SUM(CAST(${orders.totalAmount} AS NUMERIC)), 0)`,
-    }).from(orders);
-    return Number(result[0]?.total || 0);
-  }
-
-  async getActiveOrdersCount(): Promise<number> {
-    const result = await db.select({
-      count: sql<number>`COUNT(*)`,
-    }).from(orders).where(sql`${orders.status} NOT IN ('delivered', 'cancelled')`);
-    return Number(result[0]?.count || 0);
-  }
-
-  // Settings methods
-  async getSetting(key: string): Promise<Setting | undefined> {
-    const result = await db.select().from(settings).where(eq(settings.key, key)).limit(1);
-    return result[0];
-  }
-
-  async createSetting(insertSetting: InsertSetting): Promise<Setting> {
-    const result = await db.insert(settings).values(insertSetting).returning();
-    return result[0];
-  }
-
-  async updateSetting(key: string, value: string, type?: string): Promise<Setting | undefined> {
-    const updateData: any = { 
-      value, 
-      updatedAt: new Date() 
-    };
-    if (type) {
-      updateData.type = type;
-    }
-    
-    const result = await db.update(settings)
-      .set(updateData)
-      .where(eq(settings.key, key))
-      .returning();
-    return result[0];
-  }
-
-  async deleteSetting(key: string): Promise<boolean> {
-    const result = await db.delete(settings).where(eq(settings.key, key)).returning();
-    return result.length > 0;
-  }
-
-  async getAllSettings(): Promise<Setting[]> {
-    return await db.select().from(settings);
-  }
-
-  // Messages methods
-  async createMessage(insertMessage: InsertMessage): Promise<Message> {
-    const result = await db.insert(messages).values(insertMessage).returning();
-    return result[0];
-  }
-
-  async getMessagesByUserId(userId: string): Promise<Message[]> {
-    return await db.select()
-      .from(messages)
-      .where(or(eq(messages.senderId, userId), eq(messages.recipientId, userId)))
-      .orderBy(desc(messages.createdAt));
-  }
-
-  async getUnreadMessageCount(userId: string): Promise<number> {
-    const result = await db.select({
-      count: sql<number>`COUNT(*)`,
-    })
-      .from(messages)
-      .where(sql`${messages.recipientId} = ${userId} AND ${messages.isRead} = false`);
-    return Number(result[0]?.count || 0);
-  }
-
-  async markMessageAsRead(messageId: string): Promise<Message | undefined> {
-    const result = await db.update(messages)
-      .set({ isRead: true })
-      .where(eq(messages.id, messageId))
-      .returning();
-    return result[0];
-  }
-
-  async deleteMessage(messageId: string): Promise<boolean> {
-    const result = await db.delete(messages).where(eq(messages.id, messageId)).returning();
-    return result.length > 0;
-  }
-
-  // Delivery Tasks methods
-  async createDeliveryTask(insertTask: InsertDeliveryTask): Promise<DeliveryTask> {
-    const result = await db.insert(deliveryTasks).values(insertTask).returning();
-    return result[0];
-  }
-
-  async getDeliveryTask(id: string): Promise<DeliveryTaskWithDetails | undefined> {
-    const result = await db.select()
-      .from(deliveryTasks)
-      .where(eq(deliveryTasks.id, id))
-      .limit(1);
-
-    if (result.length === 0) {
-      return undefined;
-    }
-
-    const task = result[0];
-    const order = await this.getOrderWithCustomer(task.orderId);
-    const assignedTo = await this.getUser(task.assignedToUserId);
-    const assignedBy = await this.getUser(task.assignedByUserId);
-    
-    if (!order || !assignedTo || !assignedBy) {
-      return undefined;
-    }
-
-    return {
-      ...task,
-      order,
-      assignedTo,
-      assignedBy,
-    };
-  }
-
-  async getDeliveryTasksByUserId(userId: string): Promise<DeliveryTaskWithDetails[]> {
-    const tasks = await db.select()
-      .from(deliveryTasks)
-      .where(eq(deliveryTasks.assignedToUserId, userId))
-      .orderBy(desc(deliveryTasks.createdAt));
-
-    const tasksWithDetails = await Promise.all(tasks.map(async (task) => {
-      const order = task.orderId ? await this.getOrderWithCustomer(task.orderId) : undefined;
-      const assignedTo = await this.getUser(task.assignedToUserId);
-      const assignedBy = await this.getUser(task.assignedByUserId);
-      
-      if (!assignedTo || !assignedBy) {
-        throw new Error("Task data incomplete");
+    if (sale.customerId) {
+      await this.updateCustomerBalance(sale.customerId, sale.amountDue, true);
+      const customer = await this.getCustomer(sale.customerId);
+      if (customer) {
+        const newTotal = parseFloat(customer.totalPurchases) + parseFloat(sale.totalAmount);
+        await this.updateCustomer(sale.customerId, { totalPurchases: newTotal.toFixed(2) });
       }
-
-      return {
-        ...task,
-        order,
-        assignedTo,
-        assignedBy,
-      };
-    }));
-
-    return tasksWithDetails;
+    }
+    const [customer] = sale.customerId ? await db.select().from(customers).where(eq(customers.id, sale.customerId)) : [null];
+    const [createdBy] = await db.select().from(users).where(eq(users.id, sale.createdByUserId));
+    return { ...sale, customer, items: createdItems, createdBy };
   }
 
-  async getAllDeliveryTasks(): Promise<DeliveryTaskWithDetails[]> {
-    const tasks = await db.select()
-      .from(deliveryTasks)
-      .orderBy(desc(deliveryTasks.createdAt));
-
-    const tasksWithDetails = await Promise.all(tasks.map(async (task) => {
-      const order = task.orderId ? await this.getOrderWithCustomer(task.orderId) : undefined;
-      const assignedTo = await this.getUser(task.assignedToUserId);
-      const assignedBy = await this.getUser(task.assignedByUserId);
-      
-      if (!assignedTo || !assignedBy) {
-        throw new Error("Task data incomplete");
-      }
-
-      return {
-        ...task,
-        order,
-        assignedTo,
-        assignedBy,
-      };
-    }));
-
-    return tasksWithDetails;
+  async updateSaleStatus(id: string, status: string): Promise<Sale | undefined> {
+    const [sale] = await db.update(sales).set({ status: status as any }).where(eq(sales.id, id)).returning();
+    return sale || undefined;
   }
 
-  async updateDeliveryTask(id: string, updateTask: Partial<InsertDeliveryTask>): Promise<DeliveryTask | undefined> {
-    const result = await db.update(deliveryTasks)
-      .set({ ...updateTask, updatedAt: new Date() })
-      .where(eq(deliveryTasks.id, id))
+  async deleteSale(id: string): Promise<boolean> {
+    const result = await db.delete(sales).where(eq(sales.id, id));
+    return (result.rowCount ?? 0) > 0;
+  }
+
+  async getNextSaleNumber(): Promise<string> {
+    const [result] = await db.select({ count: sql<number>`count(*)` }).from(sales);
+    const count = (result?.count || 0) + 1;
+    const date = new Date();
+    return `MD-${date.getFullYear()}${String(date.getMonth() + 1).padStart(2, '0')}${String(date.getDate()).padStart(2, '0')}-${String(count).padStart(4, '0')}`;
+  }
+
+  async getCashbox(): Promise<Cashbox | undefined> {
+    const [box] = await db.select().from(cashbox);
+    return box || undefined;
+  }
+
+  async createCashbox(insertCashbox: InsertCashbox): Promise<Cashbox> {
+    const [box] = await db.insert(cashbox).values(insertCashbox).returning();
+    return box;
+  }
+
+  async updateCashboxBalance(amountUSD: string, amountLYD: string, add: boolean): Promise<Cashbox | undefined> {
+    const box = await this.getCashbox();
+    if (!box) return undefined;
+    const currentUSD = parseFloat(box.balanceUSD);
+    const currentLYD = parseFloat(box.balanceLYD);
+    const adjustUSD = parseFloat(amountUSD);
+    const adjustLYD = parseFloat(amountLYD);
+    const newUSD = add ? currentUSD + adjustUSD : currentUSD - adjustUSD;
+    const newLYD = add ? currentLYD + adjustLYD : currentLYD - adjustLYD;
+    const [updated] = await db.update(cashbox)
+      .set({ balanceUSD: newUSD.toFixed(2), balanceLYD: newLYD.toFixed(2), updatedAt: new Date() })
+      .where(eq(cashbox.id, box.id))
       .returning();
-    return result[0];
+    return updated || undefined;
   }
 
-  async deleteDeliveryTask(id: string): Promise<boolean> {
-    const result = await db.delete(deliveryTasks).where(eq(deliveryTasks.id, id)).returning();
-    return result.length > 0;
+  async getCashboxTransactions(): Promise<CashboxTransaction[]> {
+    return db.select().from(cashboxTransactions).orderBy(desc(cashboxTransactions.createdAt));
   }
 
-  async getShippingStaffUsers(): Promise<User[]> {
-    return await db.select()
-      .from(users)
-      .where(eq(users.role, "shipping_staff"));
-  }
-
-  // Expenses methods
-  async createExpense(insertExpense: InsertExpense): Promise<Expense> {
-    const result = await db.insert(expenses).values(insertExpense).returning();
-    return result[0];
+  async createCashboxTransaction(insertTransaction: InsertCashboxTransaction): Promise<CashboxTransaction> {
+    const [transaction] = await db.insert(cashboxTransactions).values(insertTransaction).returning();
+    return transaction;
   }
 
   async getAllExpenses(): Promise<Expense[]> {
-    return await db.select().from(expenses).orderBy(desc(expenses.date));
+    return db.select().from(expenses).orderBy(desc(expenses.createdAt));
+  }
+
+  async getExpensesByDateRange(startDate: Date, endDate: Date): Promise<Expense[]> {
+    return db.select().from(expenses)
+      .where(and(gte(expenses.date, startDate), lte(expenses.date, endDate)))
+      .orderBy(desc(expenses.date));
+  }
+
+  async createExpense(insertExpense: InsertExpense): Promise<Expense> {
+    const [expense] = await db.insert(expenses).values(insertExpense).returning();
+    return expense;
   }
 
   async deleteExpense(id: string): Promise<boolean> {
-    const result = await db.delete(expenses).where(eq(expenses.id, id)).returning();
-    return result.length > 0;
+    const result = await db.delete(expenses).where(eq(expenses.id, id));
+    return (result.rowCount ?? 0) > 0;
   }
 
   async getNextExpenseNumber(): Promise<string> {
-    const result = await db.select({ count: sql<number>`count(*)` }).from(expenses);
-    const count = result[0]?.count || 0;
-    return `EXP-${String(Number(count) + 1).padStart(6, '0')}`;
+    const [result] = await db.select({ count: sql<number>`count(*)` }).from(expenses);
+    const count = (result?.count || 0) + 1;
+    return `EXP-${String(count).padStart(5, '0')}`;
   }
 
-  // Expense Categories
-  async getAllExpenseCategories(): Promise<ExpenseCategory[]> {
-    return await db.select().from(expenseCategories).orderBy(expenseCategories.code);
-  }
-
-  async createExpenseCategory(category: InsertExpenseCategory): Promise<ExpenseCategory> {
-    const result = await db.insert(expenseCategories).values(category).returning();
-    return result[0];
-  }
-
-  async updateExpenseCategory(id: string, category: Partial<InsertExpenseCategory>): Promise<ExpenseCategory | undefined> {
-    const result = await db.update(expenseCategories)
-      .set({ ...category, updatedAt: new Date() })
-      .where(eq(expenseCategories.id, id))
-      .returning();
-    return result[0];
-  }
-
-  async deleteExpenseCategory(id: string): Promise<boolean> {
-    const result = await db.delete(expenseCategories).where(eq(expenseCategories.id, id)).returning();
-    return result.length > 0;
-  }
-
-  // Safe Reconciliations
-  async getSafeReconciliations(safeId: string): Promise<SafeReconciliation[]> {
-    return await db.select()
-      .from(safeReconciliations)
-      .where(eq(safeReconciliations.safeId, safeId))
-      .orderBy(desc(safeReconciliations.reconciledAt));
-  }
-
-  async createSafeReconciliation(reconciliation: InsertSafeReconciliation): Promise<SafeReconciliation> {
-    const result = await db.insert(safeReconciliations).values(reconciliation).returning();
-    return result[0];
-  }
-
-  // Owner Accounts
-  async getAllOwnerAccounts(): Promise<OwnerAccount[]> {
-    return await db.select().from(ownerAccounts).orderBy(ownerAccounts.name);
-  }
-
-  async createOwnerAccount(account: InsertOwnerAccount): Promise<OwnerAccount> {
-    const result = await db.insert(ownerAccounts).values(account).returning();
-    return result[0];
-  }
-
-  async updateOwnerAccount(id: string, account: Partial<InsertOwnerAccount>): Promise<OwnerAccount | undefined> {
-    const result = await db.update(ownerAccounts)
-      .set({ ...account, updatedAt: new Date() })
-      .where(eq(ownerAccounts.id, id))
-      .returning();
-    return result[0];
-  }
-
-  async deleteOwnerAccount(id: string): Promise<boolean> {
-    const result = await db.delete(ownerAccounts).where(eq(ownerAccounts.id, id)).returning();
-    return result.length > 0;
-  }
-
-  async getOwnerAccountTransactions(accountId: string): Promise<OwnerAccountTransaction[]> {
-    return await db.select()
-      .from(ownerAccountTransactions)
-      .where(eq(ownerAccountTransactions.ownerAccountId, accountId))
-      .orderBy(desc(ownerAccountTransactions.createdAt));
-  }
-
-  async createOwnerAccountTransaction(transaction: InsertOwnerAccountTransaction): Promise<OwnerAccountTransaction> {
-    const result = await db.insert(ownerAccountTransactions).values(transaction).returning();
-    
-    // Update owner account balance
-    const account = await db.select().from(ownerAccounts).where(eq(ownerAccounts.id, transaction.ownerAccountId)).limit(1);
-    if (account[0]) {
-      const multiplier = transaction.type === 'deposit' ? 1 : -1;
-      const newBalanceUSD = parseFloat(account[0].balanceUSD || "0") + (parseFloat(transaction.amountUSD || "0") * multiplier);
-      const newBalanceLYD = parseFloat(account[0].balanceLYD || "0") + (parseFloat(transaction.amountLYD || "0") * multiplier);
-      
-      await db.update(ownerAccounts)
-        .set({
-          balanceUSD: newBalanceUSD.toString(),
-          balanceLYD: newBalanceLYD.toString(),
-          updatedAt: new Date()
-        })
-        .where(eq(ownerAccounts.id, transaction.ownerAccountId));
-    }
-    
-    return result[0];
-  }
-
-  // Revenue Categories
-  async getAllRevenueCategories(): Promise<RevenueCategory[]> {
-    return await db.select().from(revenueCategories).orderBy(revenueCategories.code);
-  }
-
-  async createRevenueCategory(category: InsertRevenueCategory): Promise<RevenueCategory> {
-    const result = await db.insert(revenueCategories).values(category).returning();
-    return result[0];
-  }
-
-  async updateRevenueCategory(id: string, category: Partial<InsertRevenueCategory>): Promise<RevenueCategory | undefined> {
-    const result = await db.update(revenueCategories)
-      .set({ ...category, updatedAt: new Date() })
-      .where(eq(revenueCategories.id, id))
-      .returning();
-    return result[0];
-  }
-
-  async deleteRevenueCategory(id: string): Promise<boolean> {
-    const result = await db.delete(revenueCategories).where(eq(revenueCategories.id, id)).returning();
-    return result.length > 0;
-  }
-
-  // Revenues
   async getAllRevenues(): Promise<Revenue[]> {
-    return await db.select().from(revenues).orderBy(desc(revenues.date));
+    return db.select().from(revenues).orderBy(desc(revenues.createdAt));
   }
 
-  async createRevenue(revenue: InsertRevenue): Promise<Revenue> {
-    const result = await db.insert(revenues).values(revenue).returning();
-    return result[0];
+  async getRevenuesByDateRange(startDate: Date, endDate: Date): Promise<Revenue[]> {
+    return db.select().from(revenues)
+      .where(and(gte(revenues.date, startDate), lte(revenues.date, endDate)))
+      .orderBy(desc(revenues.date));
+  }
+
+  async createRevenue(insertRevenue: InsertRevenue): Promise<Revenue> {
+    const [revenue] = await db.insert(revenues).values(insertRevenue).returning();
+    return revenue;
   }
 
   async deleteRevenue(id: string): Promise<boolean> {
-    const result = await db.delete(revenues).where(eq(revenues.id, id)).returning();
-    return result.length > 0;
+    const result = await db.delete(revenues).where(eq(revenues.id, id));
+    return (result.rowCount ?? 0) > 0;
   }
 
   async getNextRevenueNumber(): Promise<string> {
-    const result = await db.select({ count: sql<number>`count(*)` }).from(revenues);
-    const count = result[0]?.count || 0;
-    return `REV-${String(Number(count) + 1).padStart(6, '0')}`;
+    const [result] = await db.select({ count: sql<number>`count(*)` }).from(revenues);
+    const count = (result?.count || 0) + 1;
+    return `REV-${String(count).padStart(5, '0')}`;
   }
 
-  // ============ FINANCIAL MODULE IMPLEMENTATIONS ============
-
-  // Revenue Accounts
-  async getAllRevenueAccounts(): Promise<RevenueAccount[]> {
-    return await db.select().from(revenueAccounts).orderBy(revenueAccounts.code);
+  async getSetting(key: string): Promise<Setting | undefined> {
+    const [setting] = await db.select().from(settings).where(eq(settings.key, key));
+    return setting || undefined;
   }
 
-  async createRevenueAccount(account: InsertRevenueAccount): Promise<RevenueAccount> {
-    const result = await db.insert(revenueAccounts).values(account).returning();
-    return result[0];
+  async getAllSettings(): Promise<Setting[]> {
+    return db.select().from(settings).orderBy(settings.key);
   }
 
-  async updateRevenueAccount(id: string, account: Partial<InsertRevenueAccount>): Promise<RevenueAccount | undefined> {
-    const result = await db.update(revenueAccounts)
-      .set({ ...account, updatedAt: new Date() })
-      .where(eq(revenueAccounts.id, id))
+  async createSetting(insertSetting: InsertSetting): Promise<Setting> {
+    const [setting] = await db.insert(settings).values(insertSetting).returning();
+    return setting;
+  }
+
+  async updateSetting(key: string, value: string): Promise<Setting | undefined> {
+    const [setting] = await db.update(settings)
+      .set({ value, updatedAt: new Date() })
+      .where(eq(settings.key, key))
       .returning();
-    return result[0];
+    return setting || undefined;
   }
 
-  async deleteRevenueAccount(id: string): Promise<boolean> {
-    const result = await db.delete(revenueAccounts).where(eq(revenueAccounts.id, id)).returning();
-    return result.length > 0;
-  }
-
-  // Safes
-  async getAllSafes(): Promise<Safe[]> {
-    return await db.select().from(safes).orderBy(safes.code);
-  }
-
-  async createSafe(safe: InsertSafe): Promise<Safe> {
-    const result = await db.insert(safes).values(safe).returning();
-    return result[0];
-  }
-
-  async updateSafe(id: string, safe: Partial<InsertSafe>): Promise<Safe | undefined> {
-    const result = await db.update(safes)
-      .set({ ...safe, updatedAt: new Date() })
-      .where(eq(safes.id, id))
-      .returning();
-    return result[0];
-  }
-
-  async deleteSafe(id: string): Promise<boolean> {
-    const result = await db.delete(safes).where(eq(safes.id, id)).returning();
-    return result.length > 0;
-  }
-
-  async getSafeTransactions(safeId: string): Promise<SafeTransaction[]> {
-    return await db.select()
-      .from(safeTransactions)
-      .where(eq(safeTransactions.safeId, safeId))
-      .orderBy(desc(safeTransactions.createdAt));
-  }
-
-  async createSafeTransaction(transaction: InsertSafeTransaction): Promise<SafeTransaction> {
-    const result = await db.insert(safeTransactions).values(transaction).returning();
-    
-    // Update safe balance based on transaction type
-    const safe = await db.select().from(safes).where(eq(safes.id, transaction.safeId)).limit(1);
-    if (safe[0]) {
-      let multiplier = 0;
-      switch (transaction.type) {
-        case 'deposit':
-        case 'transfer': // Incoming transfer
-          multiplier = 1;
-          break;
-        case 'withdrawal':
-        case 'settlement':
-        case 'currency_adjustment':
-          // For settlement/adjustment, use the sign of the amount to determine direction
-          multiplier = -1;
-          break;
-        default:
-          multiplier = 0;
-      }
-      const newBalanceUSD = Number(safe[0].balanceUSD) + (Number(transaction.amountUSD || 0) * multiplier);
-      const newBalanceLYD = Number(safe[0].balanceLYD) + (Number(transaction.amountLYD || 0) * multiplier);
-      await db.update(safes)
-        .set({ balanceUSD: String(newBalanceUSD), balanceLYD: String(newBalanceLYD), updatedAt: new Date() })
-        .where(eq(safes.id, transaction.safeId));
-    }
-    
-    return result[0];
-  }
-
-  // Banks
-  async getAllBanks(): Promise<Bank[]> {
-    return await db.select().from(banks).orderBy(banks.code);
-  }
-
-  async createBank(bank: InsertBank): Promise<Bank> {
-    const result = await db.insert(banks).values(bank).returning();
-    return result[0];
-  }
-
-  async updateBank(id: string, bank: Partial<InsertBank>): Promise<Bank | undefined> {
-    const result = await db.update(banks)
-      .set({ ...bank, updatedAt: new Date() })
-      .where(eq(banks.id, id))
-      .returning();
-    return result[0];
-  }
-
-  async deleteBank(id: string): Promise<boolean> {
-    const result = await db.delete(banks).where(eq(banks.id, id)).returning();
-    return result.length > 0;
-  }
-
-  async getBankTransactions(bankId: string): Promise<BankTransaction[]> {
-    return await db.select()
-      .from(bankTransactions)
-      .where(eq(bankTransactions.bankId, bankId))
-      .orderBy(desc(bankTransactions.createdAt));
-  }
-
-  async createBankTransaction(transaction: InsertBankTransaction): Promise<BankTransaction> {
-    const result = await db.insert(bankTransactions).values(transaction).returning();
-    
-    // Update bank balance based on transaction type
-    const bank = await db.select().from(banks).where(eq(banks.id, transaction.bankId)).limit(1);
-    if (bank[0]) {
-      let multiplier = 0;
-      switch (transaction.type) {
-        case 'deposit':
-        case 'transfer': // Incoming transfer
-          multiplier = 1;
-          break;
-        case 'withdrawal':
-        case 'settlement':
-        case 'currency_adjustment':
-          multiplier = -1;
-          break;
-        default:
-          multiplier = 0;
-      }
-      const newBalanceUSD = Number(bank[0].balanceUSD) + (Number(transaction.amountUSD || 0) * multiplier);
-      const newBalanceLYD = Number(bank[0].balanceLYD) + (Number(transaction.amountLYD || 0) * multiplier);
-      await db.update(banks)
-        .set({ balanceUSD: String(newBalanceUSD), balanceLYD: String(newBalanceLYD), updatedAt: new Date() })
-        .where(eq(banks.id, transaction.bankId));
-      
-      // Only update linked safe for transfer type (where funds move between bank and safe)
-      // For transfers: bank deposit (+) means safe withdrawal (-), and vice versa
-      if (bank[0].linkedSafeId && transaction.type === 'transfer') {
-        const linkedSafe = await db.select().from(safes).where(eq(safes.id, bank[0].linkedSafeId)).limit(1);
-        if (linkedSafe[0]) {
-          // Opposite sign for linked safe: if bank increases, safe decreases
-          const safeMultiplier = -multiplier;
-          const safeNewBalanceUSD = Number(linkedSafe[0].balanceUSD) + (Number(transaction.amountUSD || 0) * safeMultiplier);
-          const safeNewBalanceLYD = Number(linkedSafe[0].balanceLYD) + (Number(transaction.amountLYD || 0) * safeMultiplier);
-          await db.update(safes)
-            .set({ balanceUSD: String(safeNewBalanceUSD), balanceLYD: String(safeNewBalanceLYD), updatedAt: new Date() })
-            .where(eq(safes.id, bank[0].linkedSafeId));
-        }
-      }
-    }
-    
-    return result[0];
-  }
-
-  // Currency Settlements
-  async getAllCurrencySettlements(): Promise<CurrencySettlement[]> {
-    return await db.select().from(currencySettlements).orderBy(desc(currencySettlements.createdAt));
-  }
-
-  async createCurrencySettlement(settlement: InsertCurrencySettlement): Promise<CurrencySettlement> {
-    const result = await db.insert(currencySettlements).values(settlement).returning();
-    return result[0];
-  }
-
-  // Warehouses
-  async getAllWarehouses(): Promise<Warehouse[]> {
-    return await db.select().from(warehouses).orderBy(warehouses.code);
-  }
-
-  async createWarehouse(warehouse: InsertWarehouse): Promise<Warehouse> {
-    const result = await db.insert(warehouses).values(warehouse).returning();
-    return result[0];
-  }
-
-  async updateWarehouse(id: string, warehouse: Partial<InsertWarehouse>): Promise<Warehouse | undefined> {
-    const result = await db.update(warehouses)
-      .set({ ...warehouse, updatedAt: new Date() })
-      .where(eq(warehouses.id, id))
-      .returning();
-    return result[0];
-  }
-
-  async deleteWarehouse(id: string): Promise<boolean> {
-    const result = await db.delete(warehouses).where(eq(warehouses.id, id)).returning();
-    return result.length > 0;
-  }
-
-  async getWarehouseStock(warehouseId: string): Promise<WarehouseStock[]> {
-    return await db.select()
-      .from(warehouseStock)
-      .where(eq(warehouseStock.warehouseId, warehouseId))
-      .orderBy(warehouseStock.productName);
-  }
-
-  async addWarehouseStock(stock: InsertWarehouseStock): Promise<WarehouseStock> {
-    // Calculate average cost for existing stock
-    const existing = await db.select()
-      .from(warehouseStock)
-      .where(sql`${warehouseStock.warehouseId} = ${stock.warehouseId} AND ${warehouseStock.productCode} = ${stock.productCode}`)
-      .limit(1);
-
-    if (existing[0]) {
-      // Update existing stock with new average cost
-      const currentQty = Number(existing[0].quantity);
-      const currentTotalCost = Number(existing[0].totalCost);
-      const newQty = currentQty + Number(stock.quantity);
-      const newTotalCost = currentTotalCost + Number(stock.totalCost);
-      const newAverageCost = newTotalCost / newQty;
-
-      const result = await db.update(warehouseStock)
-        .set({
-          quantity: newQty,
-          totalCost: String(newTotalCost),
-          averageCost: String(newAverageCost),
-          lastPurchasePrice: stock.lastPurchasePrice,
-          updatedAt: new Date(),
-        })
-        .where(eq(warehouseStock.id, existing[0].id))
-        .returning();
-      return result[0];
-    } else {
-      // Insert new stock item
-      const quantity = Number(stock.quantity);
-      const totalCost = Number(stock.totalCost);
-      const averageCost = quantity > 0 ? totalCost / quantity : 0;
-
-      const result = await db.insert(warehouseStock).values({
-        ...stock,
-        averageCost: String(averageCost),
-      }).returning();
-      return result[0];
-    }
-  }
-
-  async updateWarehouseStock(id: string, stock: Partial<InsertWarehouseStock>): Promise<WarehouseStock | undefined> {
-    const result = await db.update(warehouseStock)
-      .set({ ...stock, updatedAt: new Date() })
-      .where(eq(warehouseStock.id, id))
-      .returning();
-    return result[0];
-  }
-
-  // Suppliers
-  async getAllSuppliers(): Promise<Supplier[]> {
-    return await db.select().from(suppliers).orderBy(suppliers.name);
-  }
-
-  async createSupplier(supplier: InsertSupplier): Promise<Supplier> {
-    const result = await db.insert(suppliers).values(supplier).returning();
-    return result[0];
-  }
-
-  async updateSupplier(id: string, supplier: Partial<InsertSupplier>): Promise<Supplier | undefined> {
-    const result = await db.update(suppliers)
-      .set({ ...supplier, updatedAt: new Date() })
-      .where(eq(suppliers.id, id))
-      .returning();
-    return result[0];
-  }
-
-  async deleteSupplier(id: string): Promise<boolean> {
-    const result = await db.delete(suppliers).where(eq(suppliers.id, id)).returning();
-    return result.length > 0;
-  }
-
-  // Receipts
-  async getAllReceipts(): Promise<Receipt[]> {
-    return await db.select().from(receipts).orderBy(desc(receipts.createdAt));
-  }
-
-  async getReceipt(id: string): Promise<Receipt | undefined> {
-    const result = await db.select().from(receipts).where(eq(receipts.id, id)).limit(1);
-    return result[0];
-  }
-
-  async createReceipt(receipt: InsertReceipt): Promise<Receipt> {
-    const result = await db.insert(receipts).values(receipt).returning();
-    return result[0];
-  }
-
-  async getNextReceiptNumber(): Promise<string> {
-    const allReceipts = await db.select().from(receipts);
-    const nextNum = allReceipts.length + 1;
-    return `RCP-${String(nextNum).padStart(6, '0')}`;
-  }
-
-  // Accounting Entries
-  async getAllAccountingEntries(): Promise<AccountingEntry[]> {
-    return await db.select().from(accountingEntries).orderBy(desc(accountingEntries.date));
-  }
-
-  async createAccountingEntry(entry: InsertAccountingEntry): Promise<AccountingEntry> {
-    const result = await db.insert(accountingEntries).values(entry).returning();
-    return result[0];
-  }
-
-  // Main Office Account
-  async getMainOfficeAccount(): Promise<MainOfficeAccountType | undefined> {
-    const result = await db.select().from(mainOfficeAccount).limit(1);
-    if (result.length === 0) {
-      // Create default account if not exists
-      const created = await db.insert(mainOfficeAccount).values({ name: 'Main Office' }).returning();
-      return created[0];
-    }
-    return result[0];
-  }
-
-  async updateMainOfficeAccount(account: Partial<MainOfficeAccountType>): Promise<MainOfficeAccountType | undefined> {
-    const existing = await this.getMainOfficeAccount();
-    if (!existing) return undefined;
-    
-    const result = await db.update(mainOfficeAccount)
-      .set({ ...account, updatedAt: new Date() })
-      .where(eq(mainOfficeAccount.id, existing.id))
-      .returning();
-    return result[0];
-  }
-
-  // Financial Summary
-  async getFinancialSummary(): Promise<{
-    totalSafeBalanceUSD: number;
-    totalSafeBalanceLYD: number;
-    totalBankBalanceUSD: number;
-    totalBankBalanceLYD: number;
-    totalCustomerDebt: number;
-    totalSupplierDebt: number;
-    recentTransactions: Array<{ type: string; amount: number; date: Date }>;
+  async getDashboardStats(): Promise<{
+    todaySales: number;
+    todayRevenue: number;
+    totalProducts: number;
+    lowStockCount: number;
+    totalCustomers: number;
+    cashboxBalanceUSD: number;
+    cashboxBalanceLYD: number;
   }> {
-    // Get safe totals
-    const safeResults = await db.select({
-      totalUSD: sql<number>`COALESCE(SUM(balance_usd::numeric), 0)`,
-      totalLYD: sql<number>`COALESCE(SUM(balance_lyd::numeric), 0)`,
-    }).from(safes);
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const tomorrow = new Date(today);
+    tomorrow.setDate(tomorrow.getDate() + 1);
 
-    // Get bank totals
-    const bankResults = await db.select({
-      totalUSD: sql<number>`COALESCE(SUM(balance_usd::numeric), 0)`,
-      totalLYD: sql<number>`COALESCE(SUM(balance_lyd::numeric), 0)`,
-    }).from(banks);
-
-    // Get customer debt total (balance_owed)
-    const customerDebtResult = await db.select({
-      total: sql<number>`COALESCE(SUM(balance_owed::numeric), 0)`,
-    }).from(customers);
-
-    // Get supplier debt total
-    const supplierDebtResult = await db.select({
-      total: sql<number>`COALESCE(SUM(balance_owed::numeric), 0)`,
-    }).from(suppliers);
-
-    // Get recent transactions from both safes and banks (last 10)
-    const recentSafeTransactions = await db.select({
-      type: safeTransactions.type,
-      amountUSD: safeTransactions.amountUSD,
-      createdAt: safeTransactions.createdAt,
-    }).from(safeTransactions).orderBy(desc(safeTransactions.createdAt)).limit(5);
-
-    const recentBankTransactions = await db.select({
-      type: bankTransactions.type,
-      amountUSD: bankTransactions.amountUSD,
-      createdAt: bankTransactions.createdAt,
-    }).from(bankTransactions).orderBy(desc(bankTransactions.createdAt)).limit(5);
-
-    // Combine and format recent transactions
-    const recentTransactions = [
-      ...recentSafeTransactions.map(t => ({
-        type: `safe_${t.type}`,
-        amount: Number(t.amountUSD),
-        date: t.createdAt,
-      })),
-      ...recentBankTransactions.map(t => ({
-        type: `bank_${t.type}`,
-        amount: Number(t.amountUSD),
-        date: t.createdAt,
-      })),
-    ].sort((a, b) => b.date.getTime() - a.date.getTime()).slice(0, 10);
+    const todaySalesResult = await db.select({ count: sql<number>`count(*)`, sum: sql<number>`coalesce(sum(${sales.totalAmount}::numeric), 0)` })
+      .from(sales)
+      .where(and(gte(sales.createdAt, today), lte(sales.createdAt, tomorrow)));
+    const [productsResult] = await db.select({ count: sql<number>`count(*)` }).from(products);
+    const lowStockResult = await db.select({ count: sql<number>`count(*)` }).from(products)
+      .where(sql`${products.currentStock} <= ${products.lowStockThreshold}`);
+    const [customersResult] = await db.select({ count: sql<number>`count(*)` }).from(customers);
+    const box = await this.getCashbox();
 
     return {
-      totalSafeBalanceUSD: Number(safeResults[0]?.totalUSD || 0),
-      totalSafeBalanceLYD: Number(safeResults[0]?.totalLYD || 0),
-      totalBankBalanceUSD: Number(bankResults[0]?.totalUSD || 0),
-      totalBankBalanceLYD: Number(bankResults[0]?.totalLYD || 0),
-      totalCustomerDebt: Number(customerDebtResult[0]?.total || 0),
-      totalSupplierDebt: Number(supplierDebtResult[0]?.total || 0),
-      recentTransactions,
+      todaySales: Number(todaySalesResult[0]?.count || 0),
+      todayRevenue: Number(todaySalesResult[0]?.sum || 0),
+      totalProducts: Number(productsResult?.count || 0),
+      lowStockCount: Number(lowStockResult[0]?.count || 0),
+      totalCustomers: Number(customersResult?.count || 0),
+      cashboxBalanceUSD: parseFloat(box?.balanceUSD || "0"),
+      cashboxBalanceLYD: parseFloat(box?.balanceLYD || "0"),
     };
+  }
+
+  async getBestSellingProducts(limit = 10): Promise<Array<{ productId: string; productName: string; totalSold: number; totalRevenue: number }>> {
+    const result = await db.select({
+      productId: saleItems.productId,
+      productName: saleItems.productName,
+      totalSold: sql<number>`sum(${saleItems.quantity})`,
+      totalRevenue: sql<number>`sum(${saleItems.totalPrice}::numeric)`,
+    }).from(saleItems)
+      .groupBy(saleItems.productId, saleItems.productName)
+      .orderBy(sql`sum(${saleItems.quantity}) desc`)
+      .limit(limit);
+    return result.map(r => ({
+      productId: r.productId,
+      productName: r.productName,
+      totalSold: Number(r.totalSold),
+      totalRevenue: Number(r.totalRevenue),
+    }));
+  }
+
+  async getDailySalesReport(date: Date): Promise<{ totalSales: number; totalRevenue: number; totalProfit: number }> {
+    const startOfDay = new Date(date);
+    startOfDay.setHours(0, 0, 0, 0);
+    const endOfDay = new Date(date);
+    endOfDay.setHours(23, 59, 59, 999);
+
+    const [result] = await db.select({
+      totalSales: sql<number>`count(*)`,
+      totalRevenue: sql<number>`coalesce(sum(${sales.totalAmount}::numeric), 0)`,
+    }).from(sales).where(and(gte(sales.createdAt, startOfDay), lte(sales.createdAt, endOfDay)));
+
+    const [profitResult] = await db.select({
+      totalProfit: sql<number>`coalesce(sum(${saleItems.profit}::numeric), 0)`,
+    }).from(saleItems)
+      .innerJoin(sales, eq(saleItems.saleId, sales.id))
+      .where(and(gte(sales.createdAt, startOfDay), lte(sales.createdAt, endOfDay)));
+
+    return {
+      totalSales: Number(result?.totalSales || 0),
+      totalRevenue: Number(result?.totalRevenue || 0),
+      totalProfit: Number(profitResult?.totalProfit || 0),
+    };
+  }
+
+  async getMonthlySalesReport(year: number, month: number): Promise<{ totalSales: number; totalRevenue: number; totalProfit: number }> {
+    const startOfMonth = new Date(year, month - 1, 1);
+    const endOfMonth = new Date(year, month, 0, 23, 59, 59, 999);
+
+    const [result] = await db.select({
+      totalSales: sql<number>`count(*)`,
+      totalRevenue: sql<number>`coalesce(sum(${sales.totalAmount}::numeric), 0)`,
+    }).from(sales).where(and(gte(sales.createdAt, startOfMonth), lte(sales.createdAt, endOfMonth)));
+
+    const [profitResult] = await db.select({
+      totalProfit: sql<number>`coalesce(sum(${saleItems.profit}::numeric), 0)`,
+    }).from(saleItems)
+      .innerJoin(sales, eq(saleItems.saleId, sales.id))
+      .where(and(gte(sales.createdAt, startOfMonth), lte(sales.createdAt, endOfMonth)));
+
+    return {
+      totalSales: Number(result?.totalSales || 0),
+      totalRevenue: Number(result?.totalRevenue || 0),
+      totalProfit: Number(profitResult?.totalProfit || 0),
+    };
+  }
+
+  async initializeDefaultData(): Promise<void> {
+    const existingUser = await this.getUserByUsername("admin");
+    if (!existingUser) {
+      const hashedPassword = await hashPassword("admin123");
+      await this.createUser({
+        username: "admin",
+        password: hashedPassword,
+        role: "owner",
+        firstName: "Admin",
+        lastName: "User",
+        email: "admin@mdcars.ly",
+      });
+    }
+    const existingCashbox = await this.getCashbox();
+    if (!existingCashbox) {
+      await this.createCashbox({ name: "Main Cashbox" });
+    }
+    const existingSettings = await this.getAllSettings();
+    if (existingSettings.length === 0) {
+      await this.createSetting({ key: "store_name", value: "MD CARS", type: "string", description: "Store name" });
+      await this.createSetting({ key: "exchange_rate", value: "4.85", type: "number", description: "USD to LYD exchange rate" });
+      await this.createSetting({ key: "currency_default", value: "LYD", type: "string", description: "Default currency" });
+    }
   }
 }
 
-export const storage = new PostgreSQLStorage();
+export const storage = new DatabaseStorage();
