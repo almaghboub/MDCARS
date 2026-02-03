@@ -30,7 +30,8 @@ export default function Login() {
         title: "Login Successful",
         description: "Welcome to MD CARS",
       });
-      setLocation("/dashboard");
+      // Force page reload to ensure auth state is properly recognized
+      window.location.href = "/dashboard";
     } catch (error) {
       toast({
         title: "Login Failed",
