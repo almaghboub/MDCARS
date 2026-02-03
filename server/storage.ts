@@ -273,6 +273,7 @@ export interface IStorage {
   getAllReceipts(): Promise<Receipt[]>;
   getReceipt(id: string): Promise<Receipt | undefined>;
   createReceipt(receipt: InsertReceipt): Promise<Receipt>;
+  getNextReceiptNumber(): Promise<string>;
 
   // Accounting Entries
   getAllAccountingEntries(): Promise<AccountingEntry[]>;
@@ -1945,6 +1946,12 @@ export class PostgreSQLStorage implements IStorage {
   async createReceipt(receipt: InsertReceipt): Promise<Receipt> {
     const result = await db.insert(receipts).values(receipt).returning();
     return result[0];
+  }
+
+  async getNextReceiptNumber(): Promise<string> {
+    const allReceipts = await db.select().from(receipts);
+    const nextNum = allReceipts.length + 1;
+    return `RCP-${String(nextNum).padStart(6, '0')}`;
   }
 
   // Accounting Entries

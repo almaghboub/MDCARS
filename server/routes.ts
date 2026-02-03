@@ -2073,16 +2073,50 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post("/api/receipts", requireOwner, async (req, res) => {
     try {
-      const result = insertReceiptSchema.safeParse({
+      const receiptNumber = await storage.getNextReceiptNumber();
+      const receiptData = {
         ...req.body,
+        receiptNumber,
         createdByUserId: req.user!.id,
-      });
+      };
+      
+      const result = insertReceiptSchema.safeParse(receiptData);
       if (!result.success) {
         return res.status(400).json({ message: "Invalid receipt data", errors: result.error.errors });
       }
+      
+      // Validate safe exists
+      if (result.data.safeId) {
+        const safes = await storage.getAllSafes();
+        const safe = safes.find(s => s.id === result.data.safeId);
+        if (!safe) {
+          return res.status(400).json({ message: "Invalid safe ID" });
+        }
+      }
+      
       const receipt = await storage.createReceipt(result.data);
+      
+      // Create safe transaction to update balance
+      if (result.data.safeId) {
+        const amountUSD = parseFloat(result.data.amountUSD || '0');
+        const amountLYD = parseFloat(result.data.amountLYD || '0');
+        const isCollection = result.data.type === 'collection';
+        
+        await storage.createSafeTransaction({
+          safeId: result.data.safeId,
+          type: isCollection ? 'deposit' : 'withdrawal',
+          amountUSD: (isCollection ? amountUSD : -amountUSD).toString(),
+          amountLYD: (isCollection ? amountLYD : -amountLYD).toString(),
+          description: `Receipt ${receiptNumber}: ${result.data.description || (isCollection ? 'Collection' : 'Payment')}`,
+          referenceType: 'receipt',
+          referenceId: receipt.id,
+          createdByUserId: req.user!.id,
+        });
+      }
+      
       res.status(201).json(receipt);
     } catch (error) {
+      console.error("Failed to create receipt:", error);
       res.status(500).json({ message: "Failed to create receipt" });
     }
   });

@@ -84,6 +84,122 @@ export default function Finance() {
     queryKey: ["/api/banks"],
   });
 
+  const { data: receipts = [], isLoading: receiptsLoading } = useQuery<any[]>({
+    queryKey: ["/api/receipts"],
+  });
+
+  const { data: customers = [] } = useQuery<any[]>({
+    queryKey: ["/api/customers"],
+  });
+
+  const [newReceiptDialogOpen, setNewReceiptDialogOpen] = useState(false);
+  const [receiptType, setReceiptType] = useState<"payment" | "collection">("collection");
+  const [receiptCustomerId, setReceiptCustomerId] = useState("");
+  const [receiptSafeId, setReceiptSafeId] = useState("");
+  const [receiptAmount, setReceiptAmount] = useState("");
+  const [receiptCurrency, setReceiptCurrency] = useState<"USD" | "LYD">("USD");
+  const [receiptDescription, setReceiptDescription] = useState("");
+
+  const createReceiptMutation = useMutation({
+    mutationFn: async (data: any) => {
+      return await apiRequest("POST", "/api/receipts", data);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/receipts"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/safes"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/financial-summary"] });
+      setNewReceiptDialogOpen(false);
+      setReceiptType("collection");
+      setReceiptCustomerId("");
+      setReceiptSafeId("");
+      setReceiptAmount("");
+      setReceiptCurrency("USD");
+      setReceiptDescription("");
+      toast({ title: isRTL ? "تم إنشاء الإيصال بنجاح" : "Receipt created successfully" });
+    },
+    onError: () => {
+      toast({ title: t("error") || "Error", description: isRTL ? "فشل في إنشاء الإيصال" : "Failed to create receipt", variant: "destructive" });
+    },
+  });
+
+  const handleCreateReceipt = () => {
+    if (!receiptSafeId || !receiptAmount || parseFloat(receiptAmount) <= 0) {
+      toast({ title: isRTL ? "خطأ" : "Error", description: isRTL ? "الرجاء ملء جميع الحقول المطلوبة" : "Please fill all required fields", variant: "destructive" });
+      return;
+    }
+    
+    const amountNum = parseFloat(receiptAmount);
+    const lydRate = parseFloat(settings.find((s: any) => s.key === 'lyd_exchange_rate')?.value || '4.85');
+    
+    createReceiptMutation.mutate({
+      type: receiptType,
+      customerId: receiptCustomerId || undefined,
+      safeId: receiptSafeId,
+      amountUSD: receiptCurrency === 'USD' ? receiptAmount : (amountNum / lydRate).toFixed(2),
+      amountLYD: receiptCurrency === 'LYD' ? receiptAmount : (amountNum * lydRate).toFixed(2),
+      currency: receiptCurrency,
+      exchangeRate: lydRate.toString(),
+      description: receiptDescription || undefined,
+    });
+  };
+
+  const handlePrintReceipt = (receipt: any) => {
+    const customer = customers.find((c: any) => c.id === receipt.customerId);
+    const printWindow = window.open('', '_blank');
+    if (printWindow) {
+      printWindow.document.write(`
+        <html dir="${isRTL ? 'rtl' : 'ltr'}">
+          <head>
+            <title>${isRTL ? 'إيصال' : 'Receipt'} #${receipt.receiptNumber}</title>
+            <style>
+              body { font-family: Arial, sans-serif; padding: 20px; }
+              .header { text-align: center; margin-bottom: 30px; border-bottom: 2px solid #000; padding-bottom: 20px; }
+              .header h1 { margin: 0; font-size: 24px; }
+              .content { margin: 20px 0; }
+              .row { display: flex; justify-content: space-between; padding: 10px 0; border-bottom: 1px solid #eee; }
+              .label { font-weight: bold; }
+              .amount { font-size: 24px; color: #2563eb; text-align: center; margin: 30px 0; }
+              .footer { margin-top: 50px; text-align: center; font-size: 12px; color: #666; }
+              @media print { body { print-color-adjust: exact; -webkit-print-color-adjust: exact; } }
+            </style>
+          </head>
+          <body>
+            <div class="header">
+              <h1>${isRTL ? 'إيصال' : 'Receipt'}</h1>
+              <p>#${receipt.receiptNumber}</p>
+            </div>
+            <div class="content">
+              <div class="row">
+                <span class="label">${isRTL ? 'النوع:' : 'Type:'}</span>
+                <span>${receipt.type === 'collection' ? (isRTL ? 'تحصيل' : 'Collection') : (isRTL ? 'دفع' : 'Payment')}</span>
+              </div>
+              ${customer ? `<div class="row"><span class="label">${isRTL ? 'العميل:' : 'Customer:'}</span><span>${customer.firstName} ${customer.lastName}</span></div>` : ''}
+              <div class="row">
+                <span class="label">${isRTL ? 'التاريخ:' : 'Date:'}</span>
+                <span>${format(new Date(receipt.createdAt), 'dd/MM/yyyy HH:mm')}</span>
+              </div>
+              <div class="amount">
+                ${receiptCurrency === 'USD' ? '$' : ''}${parseFloat(receipt.amountUSD || 0).toFixed(2)} USD
+                <br/>
+                <span style="font-size: 16px; color: #2563eb;">${parseFloat(receipt.amountLYD || 0).toFixed(2)} ${isRTL ? 'د.ل' : 'LYD'}</span>
+              </div>
+              ${receipt.description ? `<div class="row"><span class="label">${isRTL ? 'الوصف:' : 'Description:'}</span><span>${receipt.description}</span></div>` : ''}
+            </div>
+            <div class="footer">
+              <p>${isRTL ? 'تم الطباعة:' : 'Printed:'} ${format(new Date(), 'dd/MM/yyyy HH:mm')}</p>
+            </div>
+          </body>
+        </html>
+      `);
+      printWindow.document.close();
+      printWindow.print();
+    }
+  };
+
+  const { data: settings = [] } = useQuery<any[]>({
+    queryKey: ["/api/settings"],
+  });
+
   const createSafeMutation = useMutation({
     mutationFn: async (data: { name: string; code: string; parentSafeId?: string }) => {
       const response = await apiRequest("POST", "/api/safes", data);
@@ -208,7 +324,7 @@ export default function Finance() {
       </div>
 
       <Tabs value={activeTab} onValueChange={setActiveTab}>
-        <TabsList className="grid w-full grid-cols-3 lg:w-auto lg:inline-grid">
+        <TabsList className="grid w-full grid-cols-4 lg:w-auto lg:inline-grid">
           <TabsTrigger value="overview" data-testid="tab-overview">
             {t("overview") || "Overview"}
           </TabsTrigger>
@@ -217,6 +333,9 @@ export default function Finance() {
           </TabsTrigger>
           <TabsTrigger value="banks" data-testid="tab-banks">
             {t("banks") || "Banks"}
+          </TabsTrigger>
+          <TabsTrigger value="receipts" data-testid="tab-receipts">
+            {isRTL ? "الإيصالات" : "Receipts"}
           </TabsTrigger>
         </TabsList>
 
@@ -773,6 +892,181 @@ export default function Finance() {
               </form>
             </DialogContent>
           </Dialog>
+        </TabsContent>
+
+        {/* Receipts Tab */}
+        <TabsContent value="receipts" className="space-y-6">
+          <div className="flex justify-between items-center">
+            <h3 className="text-lg font-semibold">
+              {isRTL ? "الإيصالات" : "Receipts"}
+            </h3>
+            <Dialog open={newReceiptDialogOpen} onOpenChange={setNewReceiptDialogOpen}>
+              <DialogTrigger asChild>
+                <Button data-testid="button-new-receipt">
+                  <Plus className="h-4 w-4 mr-2" />
+                  {isRTL ? "إيصال جديد" : "New Receipt"}
+                </Button>
+              </DialogTrigger>
+              <DialogContent className="sm:max-w-[500px]">
+                <DialogHeader>
+                  <DialogTitle>{isRTL ? "إنشاء إيصال جديد" : "Create New Receipt"}</DialogTitle>
+                </DialogHeader>
+                <div className="space-y-4">
+                  <div className="space-y-2">
+                    <Label>{isRTL ? "نوع الإيصال" : "Receipt Type"}</Label>
+                    <Select value={receiptType} onValueChange={(v) => setReceiptType(v as "payment" | "collection")}>
+                      <SelectTrigger data-testid="select-receipt-type">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="collection">{isRTL ? "تحصيل" : "Collection"}</SelectItem>
+                        <SelectItem value="payment">{isRTL ? "دفع" : "Payment"}</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-2">
+                    <Label>{isRTL ? "العميل (اختياري)" : "Customer (Optional)"}</Label>
+                    <Select value={receiptCustomerId} onValueChange={setReceiptCustomerId}>
+                      <SelectTrigger data-testid="select-receipt-customer">
+                        <SelectValue placeholder={isRTL ? "اختر العميل" : "Select customer"} />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {customers.map((customer: any) => (
+                          <SelectItem key={customer.id} value={customer.id}>
+                            {customer.firstName} {customer.lastName} - {customer.phone}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-2">
+                    <Label>{isRTL ? "الخزنة" : "Safe"} *</Label>
+                    <Select value={receiptSafeId} onValueChange={setReceiptSafeId}>
+                      <SelectTrigger data-testid="select-receipt-safe">
+                        <SelectValue placeholder={isRTL ? "اختر الخزنة" : "Select safe"} />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {safes.map((safe) => (
+                          <SelectItem key={safe.id} value={safe.id}>
+                            {safe.name} ({safe.code})
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label>{isRTL ? "المبلغ" : "Amount"} *</Label>
+                      <Input 
+                        type="number" 
+                        step="0.01" 
+                        value={receiptAmount} 
+                        onChange={(e) => setReceiptAmount(e.target.value)}
+                        data-testid="input-receipt-amount"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>{isRTL ? "العملة" : "Currency"}</Label>
+                      <Select value={receiptCurrency} onValueChange={(v) => setReceiptCurrency(v as "USD" | "LYD")}>
+                        <SelectTrigger data-testid="select-receipt-currency">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="USD">USD</SelectItem>
+                          <SelectItem value="LYD">{isRTL ? "د.ل" : "LYD"}</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    <Label>{isRTL ? "الوصف" : "Description"}</Label>
+                    <Input 
+                      value={receiptDescription} 
+                      onChange={(e) => setReceiptDescription(e.target.value)}
+                      data-testid="input-receipt-description"
+                    />
+                  </div>
+                </div>
+                <DialogFooter>
+                  <Button 
+                    onClick={handleCreateReceipt} 
+                    disabled={createReceiptMutation.isPending}
+                    data-testid="button-submit-receipt"
+                  >
+                    {createReceiptMutation.isPending ? (isRTL ? "جاري الحفظ..." : "Saving...") : (isRTL ? "حفظ" : "Save")}
+                  </Button>
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
+          </div>
+
+          {receiptsLoading ? (
+            <div className="flex justify-center py-12">
+              <RefreshCw className="h-8 w-8 animate-spin text-muted-foreground" />
+            </div>
+          ) : (
+            <Card>
+              <CardHeader>
+                <CardTitle>{isRTL ? "سجل الإيصالات" : "Receipt History"}</CardTitle>
+              </CardHeader>
+              <CardContent>
+                {receipts.length === 0 ? (
+                  <p className="text-center text-muted-foreground py-8">
+                    {isRTL ? "لا توجد إيصالات" : "No receipts found"}
+                  </p>
+                ) : (
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>{isRTL ? "رقم الإيصال" : "Receipt #"}</TableHead>
+                        <TableHead>{isRTL ? "النوع" : "Type"}</TableHead>
+                        <TableHead>{isRTL ? "العميل" : "Customer"}</TableHead>
+                        <TableHead>{isRTL ? "المبلغ (USD)" : "Amount (USD)"}</TableHead>
+                        <TableHead>{isRTL ? "المبلغ (LYD)" : "Amount (LYD)"}</TableHead>
+                        <TableHead>{isRTL ? "التاريخ" : "Date"}</TableHead>
+                        <TableHead>{isRTL ? "الإجراءات" : "Actions"}</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {receipts.map((receipt: any) => {
+                        const customer = customers.find((c: any) => c.id === receipt.customerId);
+                        return (
+                          <TableRow key={receipt.id}>
+                            <TableCell className="font-mono">{receipt.receiptNumber}</TableCell>
+                            <TableCell>
+                              <Badge variant={receipt.type === 'collection' ? 'default' : 'secondary'}>
+                                {receipt.type === 'collection' ? (isRTL ? 'تحصيل' : 'Collection') : (isRTL ? 'دفع' : 'Payment')}
+                              </Badge>
+                            </TableCell>
+                            <TableCell>
+                              {customer ? `${customer.firstName} ${customer.lastName}` : '-'}
+                            </TableCell>
+                            <TableCell className="font-bold text-green-600">
+                              ${parseFloat(receipt.amountUSD || 0).toFixed(2)}
+                            </TableCell>
+                            <TableCell className="font-bold text-blue-600">
+                              {parseFloat(receipt.amountLYD || 0).toFixed(2)} {isRTL ? 'د.ل' : 'LYD'}
+                            </TableCell>
+                            <TableCell>{format(new Date(receipt.createdAt), 'dd/MM/yyyy HH:mm')}</TableCell>
+                            <TableCell>
+                              <Button 
+                                variant="outline" 
+                                size="sm" 
+                                onClick={() => handlePrintReceipt(receipt)}
+                                data-testid={`button-print-receipt-${receipt.id}`}
+                              >
+                                {isRTL ? "طباعة" : "Print"}
+                              </Button>
+                            </TableCell>
+                          </TableRow>
+                        );
+                      })}
+                    </TableBody>
+                  </Table>
+                )}
+              </CardContent>
+            </Card>
+          )}
         </TabsContent>
       </Tabs>
     </div>
