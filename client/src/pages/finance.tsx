@@ -1,1534 +1,540 @@
 import { useState } from "react";
-import { useTranslation } from "react-i18next";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { queryClient, apiRequest } from "@/lib/queryClient";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { z } from "zod";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Badge } from "@/components/ui/badge";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
+import { Textarea } from "@/components/ui/textarea";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Badge } from "@/components/ui/badge";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
-import { 
-  Wallet, Building2, Landmark, Warehouse, Users, Receipt, BookOpen, 
-  Plus, ArrowUpRight, ArrowDownLeft, RefreshCw, TrendingUp, TrendingDown,
-  DollarSign, Banknote
-} from "lucide-react";
+import { queryClient, apiRequest } from "@/lib/queryClient";
+import { Wallet, Plus, ArrowUpCircle, ArrowDownCircle, DollarSign, TrendingUp, Trash2 } from "lucide-react";
+import type { Cashbox, CashboxTransaction, Expense, Revenue } from "@shared/schema";
 import { format } from "date-fns";
 
-type CurrencyMode = "USD" | "LYD";
+const expenseFormSchema = z.object({
+  category: z.enum(["rent", "utilities", "salaries", "supplies", "maintenance", "marketing", "other"]),
+  amount: z.string().min(1, "Amount is required"),
+  currency: z.enum(["LYD", "USD"]),
+  description: z.string().min(1, "Description is required"),
+  personName: z.string().optional(),
+});
 
-interface RecentTransaction {
-  type: string;
-  amount: number;
-  date: Date | string;
-}
+const revenueFormSchema = z.object({
+  source: z.string().min(1, "Source is required"),
+  amount: z.string().min(1, "Amount is required"),
+  currency: z.enum(["LYD", "USD"]),
+  description: z.string().optional(),
+});
 
-interface FinancialSummary {
-  totalSafeBalanceUSD: number;
-  totalSafeBalanceLYD: number;
-  totalBankBalanceUSD: number;
-  totalBankBalanceLYD: number;
-  totalCustomerDebt: number;
-  totalSupplierDebt: number;
-  recentTransactions: RecentTransaction[];
-}
-
-interface Safe {
-  id: string;
-  name: string;
-  code: string;
-  balanceUSD: number | string;
-  balanceLYD: number | string;
-  parentSafeId: string | null;
-  isActive: boolean;
-}
-
-interface Bank {
-  id: string;
-  name: string;
-  code: string;
-  accountNumber: string | null;
-  balanceUSD: number | string;
-  balanceLYD: number | string;
-  linkedSafeId: string | null;
-  isActive: boolean;
-}
+const transactionFormSchema = z.object({
+  type: z.enum(["deposit", "withdrawal"]),
+  amountUSD: z.string().optional(),
+  amountLYD: z.string().optional(),
+  description: z.string().optional(),
+});
 
 export default function Finance() {
-  const { t, i18n } = useTranslation();
+  const [isExpenseDialogOpen, setIsExpenseDialogOpen] = useState(false);
+  const [isRevenueDialogOpen, setIsRevenueDialogOpen] = useState(false);
+  const [isTransactionDialogOpen, setIsTransactionDialogOpen] = useState(false);
   const { toast } = useToast();
-  const isRTL = i18n.language === "ar";
-  const [currencyMode, setCurrencyMode] = useState<CurrencyMode>("USD");
-  const [activeTab, setActiveTab] = useState("overview");
-  
-  const [newSafeDialogOpen, setNewSafeDialogOpen] = useState(false);
-  const [newBankDialogOpen, setNewBankDialogOpen] = useState(false);
-  const [safeTransactionDialogOpen, setSafeTransactionDialogOpen] = useState(false);
-  const [bankTransactionDialogOpen, setBankTransactionDialogOpen] = useState(false);
-  const [selectedSafe, setSelectedSafe] = useState<Safe | null>(null);
-  const [selectedBank, setSelectedBank] = useState<Bank | null>(null);
 
-  const { data: summary, isLoading: summaryLoading } = useQuery<FinancialSummary>({
-    queryKey: ["/api/financial-summary"],
+  const { data: cashbox } = useQuery<Cashbox>({
+    queryKey: ["/api/cashbox"],
   });
 
-  const { data: safes = [], isLoading: safesLoading } = useQuery<Safe[]>({
-    queryKey: ["/api/safes"],
+  const { data: transactions = [] } = useQuery<CashboxTransaction[]>({
+    queryKey: ["/api/cashbox/transactions"],
   });
 
-  const { data: banks = [], isLoading: banksLoading } = useQuery<Bank[]>({
-    queryKey: ["/api/banks"],
+  const { data: expenses = [] } = useQuery<Expense[]>({
+    queryKey: ["/api/expenses"],
   });
 
-  const { data: receipts = [], isLoading: receiptsLoading } = useQuery<any[]>({
-    queryKey: ["/api/receipts"],
+  const { data: revenues = [] } = useQuery<Revenue[]>({
+    queryKey: ["/api/revenues"],
   });
 
-  const { data: customers = [] } = useQuery<any[]>({
-    queryKey: ["/api/customers"],
+  const expenseForm = useForm<z.infer<typeof expenseFormSchema>>({
+    resolver: zodResolver(expenseFormSchema),
+    defaultValues: { category: "other", amount: "", currency: "LYD", description: "", personName: "" },
   });
 
-  const { data: ownerAccounts = [], isLoading: ownerAccountsLoading } = useQuery<any[]>({
-    queryKey: ["/api/owner-accounts"],
+  const revenueForm = useForm<z.infer<typeof revenueFormSchema>>({
+    resolver: zodResolver(revenueFormSchema),
+    defaultValues: { source: "", amount: "", currency: "LYD", description: "" },
   });
 
-  const [selectedOwnerAccount, setSelectedOwnerAccount] = useState<any>(null);
-  const { data: ownerTransactions = [], isLoading: ownerTransactionsLoading } = useQuery<any[]>({
-    queryKey: ["/api/owner-accounts", selectedOwnerAccount?.id, "transactions"],
-    enabled: !!selectedOwnerAccount,
+  const transactionForm = useForm<z.infer<typeof transactionFormSchema>>({
+    resolver: zodResolver(transactionFormSchema),
+    defaultValues: { type: "deposit", amountUSD: "", amountLYD: "", description: "" },
   });
 
-  const [selectedReconcileSafe, setSelectedReconcileSafe] = useState<string>("");
-  const { data: reconciliations = [], isLoading: reconciliationsLoading } = useQuery<any[]>({
-    queryKey: ["/api/safes", selectedReconcileSafe, "reconciliations"],
-    enabled: !!selectedReconcileSafe,
-  });
-
-  const [newReconcileDialogOpen, setNewReconcileDialogOpen] = useState(false);
-  const [actualBalanceUSD, setActualBalanceUSD] = useState("");
-  const [actualBalanceLYD, setActualBalanceLYD] = useState("");
-  const [reconcileNotes, setReconcileNotes] = useState("");
-
-  const createReconciliationMutation = useMutation({
-    mutationFn: async (data: any) => {
-      return await apiRequest("POST", `/api/safes/${selectedReconcileSafe}/reconciliations`, data);
+  const expenseMutation = useMutation({
+    mutationFn: async (data: z.infer<typeof expenseFormSchema>) => {
+      const res = await apiRequest("POST", "/api/expenses", data);
+      return res.json();
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/safes", selectedReconcileSafe, "reconciliations"] });
-      setNewReconcileDialogOpen(false);
-      setActualBalanceUSD("");
-      setActualBalanceLYD("");
-      setReconcileNotes("");
-      toast({ title: isRTL ? "تمت المطابقة بنجاح" : "Reconciliation recorded" });
+      queryClient.invalidateQueries({ queryKey: ["/api/expenses"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/cashbox"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/cashbox/transactions"] });
+      toast({ title: "Expense recorded successfully" });
+      setIsExpenseDialogOpen(false);
+      expenseForm.reset();
     },
-    onError: () => {
-      toast({ title: t("error") || "Error", description: isRTL ? "فشل في تسجيل المطابقة" : "Failed to record reconciliation", variant: "destructive" });
+    onError: (error: any) => {
+      toast({ title: "Error", description: error.message, variant: "destructive" });
     },
   });
 
-  const [newOwnerAccountDialogOpen, setNewOwnerAccountDialogOpen] = useState(false);
-  const [ownerAccountName, setOwnerAccountName] = useState("");
-  const [ownerAccountType, setOwnerAccountType] = useState("capital");
-
-  const createOwnerAccountMutation = useMutation({
-    mutationFn: async (data: any) => {
-      return await apiRequest("POST", "/api/owner-accounts", data);
+  const revenueMutation = useMutation({
+    mutationFn: async (data: z.infer<typeof revenueFormSchema>) => {
+      const res = await apiRequest("POST", "/api/revenues", data);
+      return res.json();
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/owner-accounts"] });
-      setNewOwnerAccountDialogOpen(false);
-      setOwnerAccountName("");
-      setOwnerAccountType("capital");
-      toast({ title: isRTL ? "تم إنشاء الحساب بنجاح" : "Account created successfully" });
+      queryClient.invalidateQueries({ queryKey: ["/api/revenues"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/cashbox"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/cashbox/transactions"] });
+      toast({ title: "Revenue recorded successfully" });
+      setIsRevenueDialogOpen(false);
+      revenueForm.reset();
     },
-    onError: () => {
-      toast({ title: t("error") || "Error", description: isRTL ? "فشل في إنشاء الحساب" : "Failed to create account", variant: "destructive" });
+    onError: (error: any) => {
+      toast({ title: "Error", description: error.message, variant: "destructive" });
     },
   });
 
-  const [newOwnerTransactionDialogOpen, setNewOwnerTransactionDialogOpen] = useState(false);
-  const [ownerTransactionType, setOwnerTransactionType] = useState<"injection" | "withdrawal">("injection");
-  const [ownerTransactionAmount, setOwnerTransactionAmount] = useState("");
-  const [ownerTransactionCurrency, setOwnerTransactionCurrency] = useState<"USD" | "LYD">("USD");
-  const [ownerTransactionDescription, setOwnerTransactionDescription] = useState("");
-
-  const createOwnerTransactionMutation = useMutation({
-    mutationFn: async (data: any) => {
-      return await apiRequest("POST", `/api/owner-accounts/${selectedOwnerAccount?.id}/transactions`, data);
+  const transactionMutation = useMutation({
+    mutationFn: async (data: z.infer<typeof transactionFormSchema>) => {
+      const res = await apiRequest("POST", "/api/cashbox/transactions", data);
+      return res.json();
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/owner-accounts", selectedOwnerAccount?.id, "transactions"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/owner-accounts"] });
-      setNewOwnerTransactionDialogOpen(false);
-      setOwnerTransactionAmount("");
-      setOwnerTransactionDescription("");
-      toast({ title: isRTL ? "تم تسجيل العملية بنجاح" : "Transaction recorded" });
+      queryClient.invalidateQueries({ queryKey: ["/api/cashbox"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/cashbox/transactions"] });
+      toast({ title: "Transaction recorded successfully" });
+      setIsTransactionDialogOpen(false);
+      transactionForm.reset();
     },
-    onError: () => {
-      toast({ title: t("error") || "Error", description: isRTL ? "فشل في تسجيل العملية" : "Failed to record transaction", variant: "destructive" });
+    onError: (error: any) => {
+      toast({ title: "Error", description: error.message, variant: "destructive" });
     },
   });
 
-  const [newReceiptDialogOpen, setNewReceiptDialogOpen] = useState(false);
-  const [receiptType, setReceiptType] = useState<"payment" | "collection">("collection");
-  const [receiptCustomerId, setReceiptCustomerId] = useState("");
-  const [receiptSafeId, setReceiptSafeId] = useState("");
-  const [receiptAmount, setReceiptAmount] = useState("");
-  const [receiptCurrency, setReceiptCurrency] = useState<"USD" | "LYD">("USD");
-  const [receiptDescription, setReceiptDescription] = useState("");
-
-  const createReceiptMutation = useMutation({
-    mutationFn: async (data: any) => {
-      return await apiRequest("POST", "/api/receipts", data);
+  const deleteExpenseMutation = useMutation({
+    mutationFn: async (id: string) => {
+      await apiRequest("DELETE", `/api/expenses/${id}`);
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/receipts"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/safes"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/financial-summary"] });
-      setNewReceiptDialogOpen(false);
-      setReceiptType("collection");
-      setReceiptCustomerId("");
-      setReceiptSafeId("");
-      setReceiptAmount("");
-      setReceiptCurrency("USD");
-      setReceiptDescription("");
-      toast({ title: isRTL ? "تم إنشاء الإيصال بنجاح" : "Receipt created successfully" });
-    },
-    onError: () => {
-      toast({ title: t("error") || "Error", description: isRTL ? "فشل في إنشاء الإيصال" : "Failed to create receipt", variant: "destructive" });
+      queryClient.invalidateQueries({ queryKey: ["/api/expenses"] });
+      toast({ title: "Expense deleted" });
     },
   });
 
-  const handleCreateReceipt = () => {
-    if (!receiptSafeId || !receiptAmount || parseFloat(receiptAmount) <= 0) {
-      toast({ title: isRTL ? "خطأ" : "Error", description: isRTL ? "الرجاء ملء جميع الحقول المطلوبة" : "Please fill all required fields", variant: "destructive" });
-      return;
-    }
-    
-    const amountNum = parseFloat(receiptAmount);
-    const lydRate = parseFloat(settings.find((s: any) => s.key === 'lyd_exchange_rate')?.value || '4.85');
-    
-    createReceiptMutation.mutate({
-      type: receiptType,
-      customerId: receiptCustomerId || undefined,
-      safeId: receiptSafeId,
-      amountUSD: receiptCurrency === 'USD' ? receiptAmount : (amountNum / lydRate).toFixed(2),
-      amountLYD: receiptCurrency === 'LYD' ? receiptAmount : (amountNum * lydRate).toFixed(2),
-      currency: receiptCurrency,
-      exchangeRate: lydRate.toString(),
-      description: receiptDescription || undefined,
-    });
-  };
-
-  const handlePrintReceipt = (receipt: any) => {
-    const customer = customers.find((c: any) => c.id === receipt.customerId);
-    const printWindow = window.open('', '_blank');
-    if (printWindow) {
-      printWindow.document.write(`
-        <html dir="${isRTL ? 'rtl' : 'ltr'}">
-          <head>
-            <title>${isRTL ? 'إيصال' : 'Receipt'} #${receipt.receiptNumber}</title>
-            <style>
-              body { font-family: Arial, sans-serif; padding: 20px; }
-              .header { text-align: center; margin-bottom: 30px; border-bottom: 2px solid #000; padding-bottom: 20px; }
-              .header h1 { margin: 0; font-size: 24px; }
-              .content { margin: 20px 0; }
-              .row { display: flex; justify-content: space-between; padding: 10px 0; border-bottom: 1px solid #eee; }
-              .label { font-weight: bold; }
-              .amount { font-size: 24px; color: #2563eb; text-align: center; margin: 30px 0; }
-              .footer { margin-top: 50px; text-align: center; font-size: 12px; color: #666; }
-              @media print { body { print-color-adjust: exact; -webkit-print-color-adjust: exact; } }
-            </style>
-          </head>
-          <body>
-            <div class="header">
-              <h1>${isRTL ? 'إيصال' : 'Receipt'}</h1>
-              <p>#${receipt.receiptNumber}</p>
-            </div>
-            <div class="content">
-              <div class="row">
-                <span class="label">${isRTL ? 'النوع:' : 'Type:'}</span>
-                <span>${receipt.type === 'collection' ? (isRTL ? 'تحصيل' : 'Collection') : (isRTL ? 'دفع' : 'Payment')}</span>
-              </div>
-              ${customer ? `<div class="row"><span class="label">${isRTL ? 'العميل:' : 'Customer:'}</span><span>${customer.firstName} ${customer.lastName}</span></div>` : ''}
-              <div class="row">
-                <span class="label">${isRTL ? 'التاريخ:' : 'Date:'}</span>
-                <span>${format(new Date(receipt.createdAt), 'dd/MM/yyyy HH:mm')}</span>
-              </div>
-              <div class="amount">
-                ${receiptCurrency === 'USD' ? '$' : ''}${parseFloat(receipt.amountUSD || 0).toFixed(2)} USD
-                <br/>
-                <span style="font-size: 16px; color: #2563eb;">${parseFloat(receipt.amountLYD || 0).toFixed(2)} ${isRTL ? 'د.ل' : 'LYD'}</span>
-              </div>
-              ${receipt.description ? `<div class="row"><span class="label">${isRTL ? 'الوصف:' : 'Description:'}</span><span>${receipt.description}</span></div>` : ''}
-            </div>
-            <div class="footer">
-              <p>${isRTL ? 'تم الطباعة:' : 'Printed:'} ${format(new Date(), 'dd/MM/yyyy HH:mm')}</p>
-            </div>
-          </body>
-        </html>
-      `);
-      printWindow.document.close();
-      printWindow.print();
-    }
-  };
-
-  const { data: settings = [] } = useQuery<any[]>({
-    queryKey: ["/api/settings"],
-  });
-
-  const createSafeMutation = useMutation({
-    mutationFn: async (data: { name: string; code: string; parentSafeId?: string }) => {
-      const response = await apiRequest("POST", "/api/safes", data);
-      return response.json();
+  const deleteRevenueMutation = useMutation({
+    mutationFn: async (id: string) => {
+      await apiRequest("DELETE", `/api/revenues/${id}`);
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/safes"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/financial-summary"] });
-      setNewSafeDialogOpen(false);
-      toast({ title: t("safeCreated") || "Safe created successfully" });
-    },
-    onError: () => {
-      toast({ title: t("error") || "Error", description: t("failedToCreateSafe") || "Failed to create safe", variant: "destructive" });
+      queryClient.invalidateQueries({ queryKey: ["/api/revenues"] });
+      toast({ title: "Revenue deleted" });
     },
   });
 
-  const createBankMutation = useMutation({
-    mutationFn: async (data: { name: string; code: string; accountNumber?: string; linkedSafeId?: string }) => {
-      const response = await apiRequest("POST", "/api/banks", data);
-      return response.json();
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/banks"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/financial-summary"] });
-      setNewBankDialogOpen(false);
-      toast({ title: t("bankCreated") || "Bank created successfully" });
-    },
-    onError: () => {
-      toast({ title: t("error") || "Error", description: t("failedToCreateBank") || "Failed to create bank", variant: "destructive" });
-    },
-  });
-
-  const createSafeTransactionMutation = useMutation({
-    mutationFn: async (data: { safeId: string; type: string; amountUSD?: string; amountLYD?: string; description?: string }) => {
-      const { safeId, ...transactionData } = data;
-      const response = await apiRequest("POST", `/api/safes/${safeId}/transactions`, transactionData);
-      return response.json();
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/safes"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/financial-summary"] });
-      setSafeTransactionDialogOpen(false);
-      setSelectedSafe(null);
-      toast({ title: t("transactionCreated") || "Transaction recorded successfully" });
-    },
-    onError: () => {
-      toast({ title: t("error") || "Error", description: t("failedToCreateTransaction") || "Failed to record transaction", variant: "destructive" });
-    },
-  });
-
-  const createBankTransactionMutation = useMutation({
-    mutationFn: async (data: { bankId: string; type: string; amountUSD?: string; amountLYD?: string; description?: string }) => {
-      const { bankId, ...transactionData } = data;
-      const response = await apiRequest("POST", `/api/banks/${bankId}/transactions`, transactionData);
-      return response.json();
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/banks"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/financial-summary"] });
-      setBankTransactionDialogOpen(false);
-      setSelectedBank(null);
-      toast({ title: t("transactionCreated") || "Transaction recorded successfully" });
-    },
-    onError: () => {
-      toast({ title: t("error") || "Error", description: t("failedToCreateTransaction") || "Failed to record transaction", variant: "destructive" });
-    },
-  });
-
-  const formatCurrency = (amount: number | string, currency: CurrencyMode = currencyMode) => {
-    const num = typeof amount === "string" ? parseFloat(amount) : amount;
-    if (isNaN(num)) return currency === "USD" ? "$0.00" : "0.00 LYD";
-    return currency === "USD" 
-      ? `$${num.toFixed(2)}` 
-      : `${num.toFixed(2)} ${isRTL ? "د.ل" : "LYD"}`;
-  };
-
-  const getTransactionIcon = (type: string) => {
-    if (type.includes("deposit")) return <ArrowDownLeft className="h-4 w-4 text-green-500" />;
-    if (type.includes("withdrawal")) return <ArrowUpRight className="h-4 w-4 text-red-500" />;
-    if (type.includes("transfer")) return <RefreshCw className="h-4 w-4 text-blue-500" />;
-    return <DollarSign className="h-4 w-4" />;
-  };
-
-  const getTransactionBadgeVariant = (type: string): "default" | "secondary" | "destructive" | "outline" => {
-    if (type.includes("deposit")) return "default";
-    if (type.includes("withdrawal")) return "destructive";
-    if (type.includes("transfer")) return "secondary";
-    return "outline";
-  };
+  const totalExpenses = expenses.reduce((sum, e) => sum + parseFloat(e.amount), 0);
+  const totalRevenues = revenues.reduce((sum, r) => sum + parseFloat(r.amount), 0);
 
   return (
-    <div className="p-4 md:p-6 space-y-6" dir={isRTL ? "rtl" : "ltr"}>
-      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+    <div className="p-6 space-y-6">
+      <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold" data-testid="text-finance-title">
-            {t("financeManagement") || "Finance Management"}
-          </h1>
-          <p className="text-muted-foreground">
-            {t("financeDescription") || "Manage safes, banks, and financial transactions"}
-          </p>
-        </div>
-        <div className="flex items-center gap-2">
-          <Button
-            variant={currencyMode === "USD" ? "default" : "outline"}
-            size="sm"
-            onClick={() => setCurrencyMode("USD")}
-            data-testid="button-currency-usd"
-          >
-            <DollarSign className="h-4 w-4 mr-1" />
-            USD
-          </Button>
-          <Button
-            variant={currencyMode === "LYD" ? "default" : "outline"}
-            size="sm"
-            onClick={() => setCurrencyMode("LYD")}
-            data-testid="button-currency-lyd"
-          >
-            <Banknote className="h-4 w-4 mr-1" />
-            {isRTL ? "د.ل" : "LYD"}
-          </Button>
+          <h1 className="text-2xl font-bold" data-testid="text-finance-title">Financial Management</h1>
+          <p className="text-muted-foreground">Manage cashbox, expenses, and revenues</p>
         </div>
       </div>
 
-      <Tabs value={activeTab} onValueChange={setActiveTab}>
-        <TabsList className="grid w-full grid-cols-3 sm:grid-cols-6 lg:w-auto lg:inline-grid gap-1">
-          <TabsTrigger value="overview" data-testid="tab-overview">
-            {t("overview") || "Overview"}
-          </TabsTrigger>
-          <TabsTrigger value="safes" data-testid="tab-safes">
-            {t("safes") || "Safes"}
-          </TabsTrigger>
-          <TabsTrigger value="banks" data-testid="tab-banks">
-            {t("banks") || "Banks"}
-          </TabsTrigger>
-          <TabsTrigger value="receipts" data-testid="tab-receipts">
-            {isRTL ? "الإيصالات" : "Receipts"}
-          </TabsTrigger>
-          <TabsTrigger value="capital" data-testid="tab-capital">
-            {isRTL ? "رأس المال" : "Capital"}
-          </TabsTrigger>
-          <TabsTrigger value="reconciliation" data-testid="tab-reconciliation">
-            {isRTL ? "المطابقة" : "Reconcile"}
-          </TabsTrigger>
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <Card>
+          <CardContent className="p-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-muted-foreground">Cashbox LYD</p>
+                <p className="text-2xl font-bold" data-testid="text-cashbox-lyd">{cashbox?.balanceLYD || "0.00"} LYD</p>
+              </div>
+              <Wallet className="w-8 h-8 text-primary" />
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardContent className="p-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-muted-foreground">Cashbox USD</p>
+                <p className="text-2xl font-bold" data-testid="text-cashbox-usd">${cashbox?.balanceUSD || "0.00"}</p>
+              </div>
+              <DollarSign className="w-8 h-8 text-green-500" />
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardContent className="p-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-muted-foreground">Net (Rev - Exp)</p>
+                <p className={`text-2xl font-bold ${totalRevenues - totalExpenses >= 0 ? 'text-green-500' : 'text-destructive'}`} data-testid="text-net">
+                  {(totalRevenues - totalExpenses).toFixed(2)} LYD
+                </p>
+              </div>
+              <TrendingUp className="w-8 h-8 text-blue-500" />
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      <Tabs defaultValue="cashbox" className="space-y-4">
+        <TabsList>
+          <TabsTrigger value="cashbox">Cashbox</TabsTrigger>
+          <TabsTrigger value="expenses">Expenses ({expenses.length})</TabsTrigger>
+          <TabsTrigger value="revenues">Revenues ({revenues.length})</TabsTrigger>
         </TabsList>
 
-        <TabsContent value="overview" className="space-y-6">
-          {summaryLoading ? (
-            <div className="flex justify-center py-12">
-              <RefreshCw className="h-8 w-8 animate-spin text-muted-foreground" />
-            </div>
-          ) : (
-          <>
-          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-            <Card data-testid="card-safe-balance">
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">
-                  {t("totalSafeBalance") || "Total Safe Balance"}
-                </CardTitle>
-                <Wallet className="h-4 w-4 text-muted-foreground" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold text-primary">
-                  {formatCurrency(currencyMode === "USD" ? summary?.totalSafeBalanceUSD || 0 : summary?.totalSafeBalanceLYD || 0)}
-                </div>
-                <p className="text-xs text-muted-foreground mt-1">
-                  {currencyMode === "USD" 
-                    ? formatCurrency(summary?.totalSafeBalanceLYD || 0, "LYD")
-                    : formatCurrency(summary?.totalSafeBalanceUSD || 0, "USD")}
-                </p>
-              </CardContent>
-            </Card>
-
-            <Card data-testid="card-bank-balance">
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">
-                  {t("totalBankBalance") || "Total Bank Balance"}
-                </CardTitle>
-                <Landmark className="h-4 w-4 text-muted-foreground" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold text-blue-600">
-                  {formatCurrency(currencyMode === "USD" ? summary?.totalBankBalanceUSD || 0 : summary?.totalBankBalanceLYD || 0)}
-                </div>
-                <p className="text-xs text-muted-foreground mt-1">
-                  {currencyMode === "USD" 
-                    ? formatCurrency(summary?.totalBankBalanceLYD || 0, "LYD")
-                    : formatCurrency(summary?.totalBankBalanceUSD || 0, "USD")}
-                </p>
-              </CardContent>
-            </Card>
-
-            <Card data-testid="card-customer-debt">
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">
-                  {t("customerDebt") || "Customer Receivables"}
-                </CardTitle>
-                <TrendingUp className="h-4 w-4 text-green-500" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold text-green-600">
-                  {formatCurrency(summary?.totalCustomerDebt || 0, "USD")}
-                </div>
-                <p className="text-xs text-muted-foreground mt-1">
-                  {t("amountOwedByCustomers") || "Amount owed by customers"}
-                </p>
-              </CardContent>
-            </Card>
-
-            <Card data-testid="card-supplier-debt">
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">
-                  {t("supplierDebt") || "Supplier Payables"}
-                </CardTitle>
-                <TrendingDown className="h-4 w-4 text-red-500" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold text-red-600">
-                  {formatCurrency(summary?.totalSupplierDebt || 0, "USD")}
-                </div>
-                <p className="text-xs text-muted-foreground mt-1">
-                  {t("amountOwedToSuppliers") || "Amount owed to suppliers"}
-                </p>
-              </CardContent>
-            </Card>
-          </div>
-
-          <div className="grid gap-4 md:grid-cols-2">
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Wallet className="h-5 w-5" />
-                  {t("safes") || "Safes"}
-                </CardTitle>
-                <CardDescription>{t("activeSafes") || "Active safes and their balances"}</CardDescription>
-              </CardHeader>
-              <CardContent>
-                {safesLoading ? (
-                  <div className="flex justify-center py-4">
-                    <RefreshCw className="h-6 w-6 animate-spin" />
-                  </div>
-                ) : safes.length === 0 ? (
-                  <p className="text-muted-foreground text-center py-4">{t("noSafes") || "No safes created yet"}</p>
-                ) : (
-                  <div className="space-y-3">
-                    {safes.slice(0, 5).map((safe) => (
-                      <div key={safe.id} className="flex items-center justify-between p-3 bg-muted/50 rounded-lg" data-testid={`safe-item-${safe.id}`}>
-                        <div>
-                          <p className="font-medium">{safe.name}</p>
-                          <p className="text-xs text-muted-foreground">{safe.code}</p>
-                        </div>
-                        <div className="text-right">
-                          <p className="font-bold text-primary">{formatCurrency(safe.balanceUSD, "USD")}</p>
-                          <p className="text-xs text-blue-600 font-medium">{formatCurrency(safe.balanceLYD, "LYD")}</p>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Landmark className="h-5 w-5" />
-                  {t("banks") || "Banks"}
-                </CardTitle>
-                <CardDescription>{t("activeBanks") || "Active banks and their balances"}</CardDescription>
-              </CardHeader>
-              <CardContent>
-                {banksLoading ? (
-                  <div className="flex justify-center py-4">
-                    <RefreshCw className="h-6 w-6 animate-spin" />
-                  </div>
-                ) : banks.length === 0 ? (
-                  <p className="text-muted-foreground text-center py-4">{t("noBanks") || "No banks created yet"}</p>
-                ) : (
-                  <div className="space-y-3">
-                    {banks.slice(0, 5).map((bank) => (
-                      <div key={bank.id} className="flex items-center justify-between p-3 bg-muted/50 rounded-lg" data-testid={`bank-item-${bank.id}`}>
-                        <div>
-                          <p className="font-medium">{bank.name}</p>
-                          <p className="text-xs text-muted-foreground">{bank.code}</p>
-                        </div>
-                        <div className="text-right">
-                          <p className="font-bold text-blue-600">{formatCurrency(bank.balanceUSD, "USD")}</p>
-                          <p className="text-xs text-blue-600 font-medium">{formatCurrency(bank.balanceLYD, "LYD")}</p>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-          </div>
-
-          {summary?.recentTransactions && summary.recentTransactions.length > 0 && (
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Receipt className="h-5 w-5" />
-                  {t("recentTransactions") || "Recent Transactions"}
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>{t("type") || "Type"}</TableHead>
-                      <TableHead>{t("amount") || "Amount"}</TableHead>
-                      <TableHead>{t("date") || "Date"}</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {summary.recentTransactions.map((tx, index) => (
-                      <TableRow key={index} data-testid={`transaction-row-${index}`}>
-                        <TableCell>
-                          <div className="flex items-center gap-2">
-                            {getTransactionIcon(tx.type)}
-                            <Badge variant={getTransactionBadgeVariant(tx.type)}>
-                              {tx.type.replace("_", " ")}
-                            </Badge>
-                          </div>
-                        </TableCell>
-                        <TableCell className="font-medium">
-                          {formatCurrency(tx.amount, "USD")}
-                        </TableCell>
-                        <TableCell className="text-muted-foreground">
-                          {format(new Date(tx.date), "MMM d, yyyy")}
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </CardContent>
-            </Card>
-          )}
-          </>
-          )}
-        </TabsContent>
-
-        <TabsContent value="safes" className="space-y-4">
-          <div className="flex justify-between items-center">
-            <h2 className="text-xl font-semibold">{t("safeManagement") || "Safe Management"}</h2>
-            <Dialog open={newSafeDialogOpen} onOpenChange={setNewSafeDialogOpen}>
-              <DialogTrigger asChild>
-                <Button data-testid="button-add-safe">
-                  <Plus className="h-4 w-4 mr-2" />
-                  {t("addSafe") || "Add Safe"}
-                </Button>
-              </DialogTrigger>
-              <DialogContent>
-                <DialogHeader>
-                  <DialogTitle>{t("createNewSafe") || "Create New Safe"}</DialogTitle>
-                </DialogHeader>
-                <form
-                  onSubmit={(e) => {
-                    e.preventDefault();
-                    const formData = new FormData(e.currentTarget);
-                    createSafeMutation.mutate({
-                      name: formData.get("name") as string,
-                      code: formData.get("code") as string,
-                      parentSafeId: formData.get("parentSafeId") as string || undefined,
-                    });
-                  }}
-                  className="space-y-4"
-                >
-                  <div className="space-y-2">
-                    <Label htmlFor="name">{t("safeName") || "Safe Name"}</Label>
-                    <Input id="name" name="name" required data-testid="input-safe-name" />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="code">{t("safeCode") || "Safe Code"}</Label>
-                    <Input id="code" name="code" required data-testid="input-safe-code" />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="parentSafeId">{t("parentSafe") || "Parent Safe (Optional)"}</Label>
-                    <Select name="parentSafeId">
-                      <SelectTrigger data-testid="select-parent-safe">
-                        <SelectValue placeholder={t("selectParentSafe") || "Select parent safe"} />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="none">{t("noParent") || "No Parent"}</SelectItem>
-                        {safes.map((safe) => (
-                          <SelectItem key={safe.id} value={safe.id}>{safe.name}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <DialogFooter>
-                    <Button type="submit" disabled={createSafeMutation.isPending} data-testid="button-submit-safe">
-                      {createSafeMutation.isPending ? t("creating") || "Creating..." : t("create") || "Create"}
-                    </Button>
-                  </DialogFooter>
-                </form>
-              </DialogContent>
-            </Dialog>
-          </div>
-
-          <Card>
-            <CardContent className="pt-6">
-              {safesLoading ? (
-                <div className="flex justify-center py-8">
-                  <RefreshCw className="h-8 w-8 animate-spin" />
-                </div>
-              ) : safes.length === 0 ? (
-                <div className="text-center py-8">
-                  <Wallet className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
-                  <p className="text-muted-foreground">{t("noSafesYet") || "No safes created yet. Click 'Add Safe' to create one."}</p>
-                </div>
-              ) : (
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>{t("name") || "Name"}</TableHead>
-                      <TableHead>{t("code") || "Code"}</TableHead>
-                      <TableHead>{t("balanceUSD") || "Balance (USD)"}</TableHead>
-                      <TableHead>{t("balanceLYD") || "Balance (LYD)"}</TableHead>
-                      <TableHead>{t("status") || "Status"}</TableHead>
-                      <TableHead>{t("actions") || "Actions"}</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {safes.map((safe) => (
-                      <TableRow key={safe.id} data-testid={`safe-row-${safe.id}`}>
-                        <TableCell className="font-medium">{safe.name}</TableCell>
-                        <TableCell>{safe.code}</TableCell>
-                        <TableCell className="font-bold text-primary">{formatCurrency(safe.balanceUSD, "USD")}</TableCell>
-                        <TableCell className="font-bold text-blue-600">{formatCurrency(safe.balanceLYD, "LYD")}</TableCell>
-                        <TableCell>
-                          <Badge variant={safe.isActive ? "default" : "secondary"}>
-                            {safe.isActive ? t("active") || "Active" : t("inactive") || "Inactive"}
-                          </Badge>
-                        </TableCell>
-                        <TableCell>
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={() => {
-                              setSelectedSafe(safe);
-                              setSafeTransactionDialogOpen(true);
-                            }}
-                            data-testid={`button-add-transaction-${safe.id}`}
-                          >
-                            <Plus className="h-4 w-4 mr-1" />
-                            {t("transaction") || "Transaction"}
-                          </Button>
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              )}
-            </CardContent>
-          </Card>
-
-          <Dialog open={safeTransactionDialogOpen} onOpenChange={setSafeTransactionDialogOpen}>
-            <DialogContent>
-              <DialogHeader>
-                <DialogTitle>
-                  {t("addTransaction") || "Add Transaction"} - {selectedSafe?.name}
-                </DialogTitle>
-              </DialogHeader>
-              <form
-                onSubmit={(e) => {
-                  e.preventDefault();
-                  const formData = new FormData(e.currentTarget);
-                  if (selectedSafe) {
-                    createSafeTransactionMutation.mutate({
-                      safeId: selectedSafe.id,
-                      type: formData.get("type") as string,
-                      amountUSD: formData.get("amountUSD") as string || undefined,
-                      amountLYD: formData.get("amountLYD") as string || undefined,
-                      description: formData.get("description") as string || undefined,
-                    });
-                  }
-                }}
-                className="space-y-4"
-              >
-                <div className="space-y-2">
-                  <Label htmlFor="type">{t("transactionType") || "Transaction Type"}</Label>
-                  <Select name="type" required>
-                    <SelectTrigger data-testid="select-transaction-type">
-                      <SelectValue placeholder={t("selectType") || "Select type"} />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="deposit">{t("deposit") || "Deposit"}</SelectItem>
-                      <SelectItem value="withdrawal">{t("withdrawal") || "Withdrawal"}</SelectItem>
-                      <SelectItem value="transfer">{t("transfer") || "Transfer"}</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="amountUSD">{t("amountUSD") || "Amount (USD)"}</Label>
-                    <Input id="amountUSD" name="amountUSD" type="number" step="0.01" data-testid="input-amount-usd" />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="amountLYD">{t("amountLYD") || "Amount (LYD)"}</Label>
-                    <Input id="amountLYD" name="amountLYD" type="number" step="0.01" data-testid="input-amount-lyd" />
-                  </div>
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="description">{t("description") || "Description"}</Label>
-                  <Input id="description" name="description" data-testid="input-description" />
-                </div>
-                <DialogFooter>
-                  <Button type="submit" disabled={createSafeTransactionMutation.isPending} data-testid="button-submit-transaction">
-                    {createSafeTransactionMutation.isPending ? t("saving") || "Saving..." : t("save") || "Save"}
-                  </Button>
-                </DialogFooter>
-              </form>
-            </DialogContent>
-          </Dialog>
-        </TabsContent>
-
-        <TabsContent value="banks" className="space-y-4">
-          <div className="flex justify-between items-center">
-            <h2 className="text-xl font-semibold">{t("bankManagement") || "Bank Management"}</h2>
-            <Dialog open={newBankDialogOpen} onOpenChange={setNewBankDialogOpen}>
-              <DialogTrigger asChild>
-                <Button data-testid="button-add-bank">
-                  <Plus className="h-4 w-4 mr-2" />
-                  {t("addBank") || "Add Bank"}
-                </Button>
-              </DialogTrigger>
-              <DialogContent>
-                <DialogHeader>
-                  <DialogTitle>{t("createNewBank") || "Create New Bank"}</DialogTitle>
-                </DialogHeader>
-                <form
-                  onSubmit={(e) => {
-                    e.preventDefault();
-                    const formData = new FormData(e.currentTarget);
-                    createBankMutation.mutate({
-                      name: formData.get("name") as string,
-                      code: formData.get("code") as string,
-                      accountNumber: formData.get("accountNumber") as string || undefined,
-                      linkedSafeId: formData.get("linkedSafeId") as string || undefined,
-                    });
-                  }}
-                  className="space-y-4"
-                >
-                  <div className="space-y-2">
-                    <Label htmlFor="bankName">{t("bankName") || "Bank Name"}</Label>
-                    <Input id="bankName" name="name" required data-testid="input-bank-name" />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="bankCode">{t("bankCode") || "Bank Code"}</Label>
-                    <Input id="bankCode" name="code" required data-testid="input-bank-code" />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="accountNumber">{t("accountNumber") || "Account Number"}</Label>
-                    <Input id="accountNumber" name="accountNumber" data-testid="input-account-number" />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="linkedSafeId">{t("linkedSafe") || "Linked Safe (Optional)"}</Label>
-                    <Select name="linkedSafeId">
-                      <SelectTrigger data-testid="select-linked-safe">
-                        <SelectValue placeholder={t("selectLinkedSafe") || "Select linked safe"} />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="none">{t("noLinkedSafe") || "No Linked Safe"}</SelectItem>
-                        {safes.map((safe) => (
-                          <SelectItem key={safe.id} value={safe.id}>{safe.name}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <DialogFooter>
-                    <Button type="submit" disabled={createBankMutation.isPending} data-testid="button-submit-bank">
-                      {createBankMutation.isPending ? t("creating") || "Creating..." : t("create") || "Create"}
-                    </Button>
-                  </DialogFooter>
-                </form>
-              </DialogContent>
-            </Dialog>
-          </div>
-
-          <Card>
-            <CardContent className="pt-6">
-              {banksLoading ? (
-                <div className="flex justify-center py-8">
-                  <RefreshCw className="h-8 w-8 animate-spin" />
-                </div>
-              ) : banks.length === 0 ? (
-                <div className="text-center py-8">
-                  <Landmark className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
-                  <p className="text-muted-foreground">{t("noBanksYet") || "No banks created yet. Click 'Add Bank' to create one."}</p>
-                </div>
-              ) : (
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>{t("name") || "Name"}</TableHead>
-                      <TableHead>{t("code") || "Code"}</TableHead>
-                      <TableHead>{t("accountNumber") || "Account #"}</TableHead>
-                      <TableHead>{t("balanceUSD") || "Balance (USD)"}</TableHead>
-                      <TableHead>{t("balanceLYD") || "Balance (LYD)"}</TableHead>
-                      <TableHead>{t("linkedSafe") || "Linked Safe"}</TableHead>
-                      <TableHead>{t("actions") || "Actions"}</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {banks.map((bank) => (
-                      <TableRow key={bank.id} data-testid={`bank-row-${bank.id}`}>
-                        <TableCell className="font-medium">{bank.name}</TableCell>
-                        <TableCell>{bank.code}</TableCell>
-                        <TableCell>{bank.accountNumber || "-"}</TableCell>
-                        <TableCell className="font-bold text-primary">{formatCurrency(bank.balanceUSD, "USD")}</TableCell>
-                        <TableCell className="font-bold text-blue-600">{formatCurrency(bank.balanceLYD, "LYD")}</TableCell>
-                        <TableCell>
-                          {bank.linkedSafeId ? (
-                            <Badge variant="outline">
-                              {safes.find(s => s.id === bank.linkedSafeId)?.name || "Linked"}
-                            </Badge>
-                          ) : "-"}
-                        </TableCell>
-                        <TableCell>
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={() => {
-                              setSelectedBank(bank);
-                              setBankTransactionDialogOpen(true);
-                            }}
-                            data-testid={`button-add-bank-transaction-${bank.id}`}
-                          >
-                            <Plus className="h-4 w-4 mr-1" />
-                            {t("transaction") || "Transaction"}
-                          </Button>
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              )}
-            </CardContent>
-          </Card>
-
-          <Dialog open={bankTransactionDialogOpen} onOpenChange={setBankTransactionDialogOpen}>
-            <DialogContent>
-              <DialogHeader>
-                <DialogTitle>
-                  {t("addTransaction") || "Add Transaction"} - {selectedBank?.name}
-                </DialogTitle>
-              </DialogHeader>
-              <form
-                onSubmit={(e) => {
-                  e.preventDefault();
-                  const formData = new FormData(e.currentTarget);
-                  if (selectedBank) {
-                    createBankTransactionMutation.mutate({
-                      bankId: selectedBank.id,
-                      type: formData.get("type") as string,
-                      amountUSD: formData.get("amountUSD") as string || undefined,
-                      amountLYD: formData.get("amountLYD") as string || undefined,
-                      description: formData.get("description") as string || undefined,
-                    });
-                  }
-                }}
-                className="space-y-4"
-              >
-                <div className="space-y-2">
-                  <Label htmlFor="bankTxType">{t("transactionType") || "Transaction Type"}</Label>
-                  <Select name="type" required>
-                    <SelectTrigger data-testid="select-bank-transaction-type">
-                      <SelectValue placeholder={t("selectType") || "Select type"} />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="deposit">{t("deposit") || "Deposit"}</SelectItem>
-                      <SelectItem value="withdrawal">{t("withdrawal") || "Withdrawal"}</SelectItem>
-                      <SelectItem value="transfer">{t("transfer") || "Transfer"}</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="bankAmountUSD">{t("amountUSD") || "Amount (USD)"}</Label>
-                    <Input id="bankAmountUSD" name="amountUSD" type="number" step="0.01" data-testid="input-bank-amount-usd" />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="bankAmountLYD">{t("amountLYD") || "Amount (LYD)"}</Label>
-                    <Input id="bankAmountLYD" name="amountLYD" type="number" step="0.01" data-testid="input-bank-amount-lyd" />
-                  </div>
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="bankDescription">{t("description") || "Description"}</Label>
-                  <Input id="bankDescription" name="description" data-testid="input-bank-description" />
-                </div>
-                <DialogFooter>
-                  <Button type="submit" disabled={createBankTransactionMutation.isPending} data-testid="button-submit-bank-transaction">
-                    {createBankTransactionMutation.isPending ? t("saving") || "Saving..." : t("save") || "Save"}
-                  </Button>
-                </DialogFooter>
-              </form>
-            </DialogContent>
-          </Dialog>
-        </TabsContent>
-
-        {/* Receipts Tab */}
-        <TabsContent value="receipts" className="space-y-6">
-          <div className="flex justify-between items-center">
-            <h3 className="text-lg font-semibold">
-              {isRTL ? "الإيصالات" : "Receipts"}
-            </h3>
-            <Dialog open={newReceiptDialogOpen} onOpenChange={setNewReceiptDialogOpen}>
-              <DialogTrigger asChild>
-                <Button data-testid="button-new-receipt">
-                  <Plus className="h-4 w-4 mr-2" />
-                  {isRTL ? "إيصال جديد" : "New Receipt"}
-                </Button>
-              </DialogTrigger>
-              <DialogContent className="sm:max-w-[500px]">
-                <DialogHeader>
-                  <DialogTitle>{isRTL ? "إنشاء إيصال جديد" : "Create New Receipt"}</DialogTitle>
-                </DialogHeader>
-                <div className="space-y-4">
-                  <div className="space-y-2">
-                    <Label>{isRTL ? "نوع الإيصال" : "Receipt Type"}</Label>
-                    <Select value={receiptType} onValueChange={(v) => setReceiptType(v as "payment" | "collection")}>
-                      <SelectTrigger data-testid="select-receipt-type">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="collection">{isRTL ? "تحصيل" : "Collection"}</SelectItem>
-                        <SelectItem value="payment">{isRTL ? "دفع" : "Payment"}</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div className="space-y-2">
-                    <Label>{isRTL ? "العميل (اختياري)" : "Customer (Optional)"}</Label>
-                    <Select value={receiptCustomerId} onValueChange={setReceiptCustomerId}>
-                      <SelectTrigger data-testid="select-receipt-customer">
-                        <SelectValue placeholder={isRTL ? "اختر العميل" : "Select customer"} />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {customers.map((customer: any) => (
-                          <SelectItem key={customer.id} value={customer.id}>
-                            {customer.firstName} {customer.lastName} - {customer.phone}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div className="space-y-2">
-                    <Label>{isRTL ? "الخزنة" : "Safe"} *</Label>
-                    <Select value={receiptSafeId} onValueChange={setReceiptSafeId}>
-                      <SelectTrigger data-testid="select-receipt-safe">
-                        <SelectValue placeholder={isRTL ? "اختر الخزنة" : "Select safe"} />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {safes.map((safe) => (
-                          <SelectItem key={safe.id} value={safe.id}>
-                            {safe.name} ({safe.code})
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                      <Label>{isRTL ? "المبلغ" : "Amount"} *</Label>
-                      <Input 
-                        type="number" 
-                        step="0.01" 
-                        value={receiptAmount} 
-                        onChange={(e) => setReceiptAmount(e.target.value)}
-                        data-testid="input-receipt-amount"
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label>{isRTL ? "العملة" : "Currency"}</Label>
-                      <Select value={receiptCurrency} onValueChange={(v) => setReceiptCurrency(v as "USD" | "LYD")}>
-                        <SelectTrigger data-testid="select-receipt-currency">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="USD">USD</SelectItem>
-                          <SelectItem value="LYD">{isRTL ? "د.ل" : "LYD"}</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-                  </div>
-                  <div className="space-y-2">
-                    <Label>{isRTL ? "الوصف" : "Description"}</Label>
-                    <Input 
-                      value={receiptDescription} 
-                      onChange={(e) => setReceiptDescription(e.target.value)}
-                      data-testid="input-receipt-description"
-                    />
-                  </div>
-                </div>
-                <DialogFooter>
-                  <Button 
-                    onClick={handleCreateReceipt} 
-                    disabled={createReceiptMutation.isPending}
-                    data-testid="button-submit-receipt"
-                  >
-                    {createReceiptMutation.isPending ? (isRTL ? "جاري الحفظ..." : "Saving...") : (isRTL ? "حفظ" : "Save")}
-                  </Button>
-                </DialogFooter>
-              </DialogContent>
-            </Dialog>
-          </div>
-
-          {receiptsLoading ? (
-            <div className="flex justify-center py-12">
-              <RefreshCw className="h-8 w-8 animate-spin text-muted-foreground" />
-            </div>
-          ) : (
-            <Card>
-              <CardHeader>
-                <CardTitle>{isRTL ? "سجل الإيصالات" : "Receipt History"}</CardTitle>
-              </CardHeader>
-              <CardContent>
-                {receipts.length === 0 ? (
-                  <p className="text-center text-muted-foreground py-8">
-                    {isRTL ? "لا توجد إيصالات" : "No receipts found"}
-                  </p>
-                ) : (
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>{isRTL ? "رقم الإيصال" : "Receipt #"}</TableHead>
-                        <TableHead>{isRTL ? "النوع" : "Type"}</TableHead>
-                        <TableHead>{isRTL ? "العميل" : "Customer"}</TableHead>
-                        <TableHead>{isRTL ? "المبلغ (USD)" : "Amount (USD)"}</TableHead>
-                        <TableHead>{isRTL ? "المبلغ (LYD)" : "Amount (LYD)"}</TableHead>
-                        <TableHead>{isRTL ? "التاريخ" : "Date"}</TableHead>
-                        <TableHead>{isRTL ? "الإجراءات" : "Actions"}</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {receipts.map((receipt: any) => {
-                        const customer = customers.find((c: any) => c.id === receipt.customerId);
-                        return (
-                          <TableRow key={receipt.id}>
-                            <TableCell className="font-mono">{receipt.receiptNumber}</TableCell>
-                            <TableCell>
-                              <Badge variant={receipt.type === 'collection' ? 'default' : 'secondary'}>
-                                {receipt.type === 'collection' ? (isRTL ? 'تحصيل' : 'Collection') : (isRTL ? 'دفع' : 'Payment')}
-                              </Badge>
-                            </TableCell>
-                            <TableCell>
-                              {customer ? `${customer.firstName} ${customer.lastName}` : '-'}
-                            </TableCell>
-                            <TableCell className="font-bold text-green-600">
-                              ${parseFloat(receipt.amountUSD || 0).toFixed(2)}
-                            </TableCell>
-                            <TableCell className="font-bold text-blue-600">
-                              {parseFloat(receipt.amountLYD || 0).toFixed(2)} {isRTL ? 'د.ل' : 'LYD'}
-                            </TableCell>
-                            <TableCell>{format(new Date(receipt.createdAt), 'dd/MM/yyyy HH:mm')}</TableCell>
-                            <TableCell>
-                              <Button 
-                                variant="outline" 
-                                size="sm" 
-                                onClick={() => handlePrintReceipt(receipt)}
-                                data-testid={`button-print-receipt-${receipt.id}`}
-                              >
-                                {isRTL ? "طباعة" : "Print"}
-                              </Button>
-                            </TableCell>
-                          </TableRow>
-                        );
-                      })}
-                    </TableBody>
-                  </Table>
-                )}
-              </CardContent>
-            </Card>
-          )}
-        </TabsContent>
-
-        {/* Owner Capital Tab */}
-        <TabsContent value="capital" className="space-y-6">
-          <div className="flex justify-between items-center">
-            <h3 className="text-lg font-semibold">
-              {isRTL ? "حسابات الملاك ورأس المال" : "Owner Accounts & Capital"}
-            </h3>
-            <Dialog open={newOwnerAccountDialogOpen} onOpenChange={setNewOwnerAccountDialogOpen}>
-              <DialogTrigger asChild>
-                <Button data-testid="button-new-owner-account">
-                  <Plus className="h-4 w-4 mr-2" />
-                  {isRTL ? "حساب جديد" : "New Account"}
-                </Button>
-              </DialogTrigger>
-              <DialogContent className="sm:max-w-[400px]">
-                <DialogHeader>
-                  <DialogTitle>{isRTL ? "إنشاء حساب مالك جديد" : "Create Owner Account"}</DialogTitle>
-                </DialogHeader>
-                <div className="space-y-4">
-                  <div className="space-y-2">
-                    <Label>{isRTL ? "اسم الحساب" : "Account Name"}</Label>
-                    <Input 
-                      value={ownerAccountName}
-                      onChange={(e) => setOwnerAccountName(e.target.value)}
-                      data-testid="input-owner-account-name"
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label>{isRTL ? "نوع الحساب" : "Account Type"}</Label>
-                    <Select value={ownerAccountType} onValueChange={setOwnerAccountType}>
-                      <SelectTrigger data-testid="select-owner-account-type">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="capital">{isRTL ? "رأس المال" : "Capital"}</SelectItem>
-                        <SelectItem value="personal">{isRTL ? "شخصي" : "Personal"}</SelectItem>
-                        <SelectItem value="loan">{isRTL ? "قرض" : "Loan"}</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                </div>
-                <DialogFooter>
-                  <Button 
-                    onClick={() => createOwnerAccountMutation.mutate({ name: ownerAccountName, type: ownerAccountType })}
-                    disabled={createOwnerAccountMutation.isPending || !ownerAccountName}
-                    data-testid="button-submit-owner-account"
-                  >
-                    {createOwnerAccountMutation.isPending ? (isRTL ? "جاري الحفظ..." : "Saving...") : (isRTL ? "حفظ" : "Save")}
-                  </Button>
-                </DialogFooter>
-              </DialogContent>
-            </Dialog>
-          </div>
-
-          {ownerAccountsLoading ? (
-            <div className="flex justify-center py-12">
-              <RefreshCw className="h-8 w-8 animate-spin text-muted-foreground" />
-            </div>
-          ) : (
-            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-              {ownerAccounts.map((account: any) => (
-                <Card 
-                  key={account.id} 
-                  className={`cursor-pointer transition-all ${selectedOwnerAccount?.id === account.id ? 'ring-2 ring-primary' : ''}`}
-                  onClick={() => setSelectedOwnerAccount(account)}
-                  data-testid={`card-owner-account-${account.id}`}
-                >
-                  <CardHeader className="pb-2">
-                    <CardTitle className="text-lg">{account.name}</CardTitle>
-                    <CardDescription>
-                      <Badge variant="outline">
-                        {account.type === 'capital' ? (isRTL ? 'رأس المال' : 'Capital') : 
-                         account.type === 'personal' ? (isRTL ? 'شخصي' : 'Personal') : 
-                         (isRTL ? 'قرض' : 'Loan')}
-                      </Badge>
-                    </CardDescription>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="text-2xl font-bold text-green-600">
-                      ${parseFloat(account.balanceUSD || 0).toFixed(2)}
-                    </div>
-                    <div className="text-sm text-blue-600">
-                      {parseFloat(account.balanceLYD || 0).toFixed(2)} {isRTL ? 'د.ل' : 'LYD'}
-                    </div>
-                  </CardContent>
-                </Card>
-              ))}
-            </div>
-          )}
-
-          {selectedOwnerAccount && (
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between">
-                <div>
-                  <CardTitle>{selectedOwnerAccount.name}</CardTitle>
-                  <CardDescription>{isRTL ? "سجل العمليات" : "Transaction History"}</CardDescription>
-                </div>
-                <Dialog open={newOwnerTransactionDialogOpen} onOpenChange={setNewOwnerTransactionDialogOpen}>
-                  <DialogTrigger asChild>
-                    <Button size="sm" data-testid="button-new-owner-transaction">
-                      <Plus className="h-4 w-4 mr-2" />
-                      {isRTL ? "عملية جديدة" : "New Transaction"}
-                    </Button>
-                  </DialogTrigger>
-                  <DialogContent className="sm:max-w-[400px]">
-                    <DialogHeader>
-                      <DialogTitle>{isRTL ? "تسجيل عملية" : "Record Transaction"}</DialogTitle>
-                    </DialogHeader>
-                    <div className="space-y-4">
-                      <div className="space-y-2">
-                        <Label>{isRTL ? "نوع العملية" : "Transaction Type"}</Label>
-                        <Select value={ownerTransactionType} onValueChange={(v) => setOwnerTransactionType(v as "injection" | "withdrawal")}>
-                          <SelectTrigger data-testid="select-owner-transaction-type">
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="injection">{isRTL ? "إيداع / ضخ رأس مال" : "Injection / Deposit"}</SelectItem>
-                            <SelectItem value="withdrawal">{isRTL ? "سحب" : "Withdrawal"}</SelectItem>
-                          </SelectContent>
-                        </Select>
-                      </div>
-                      <div className="grid grid-cols-2 gap-4">
-                        <div className="space-y-2">
-                          <Label>{isRTL ? "المبلغ" : "Amount"}</Label>
-                          <Input 
-                            type="number" 
-                            step="0.01" 
-                            value={ownerTransactionAmount}
-                            onChange={(e) => setOwnerTransactionAmount(e.target.value)}
-                            data-testid="input-owner-transaction-amount"
-                          />
-                        </div>
-                        <div className="space-y-2">
-                          <Label>{isRTL ? "العملة" : "Currency"}</Label>
-                          <Select value={ownerTransactionCurrency} onValueChange={(v) => setOwnerTransactionCurrency(v as "USD" | "LYD")}>
-                            <SelectTrigger data-testid="select-owner-transaction-currency">
-                              <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="USD">USD</SelectItem>
-                              <SelectItem value="LYD">{isRTL ? "د.ل" : "LYD"}</SelectItem>
-                            </SelectContent>
-                          </Select>
-                        </div>
-                      </div>
-                      <div className="space-y-2">
-                        <Label>{isRTL ? "الوصف" : "Description"}</Label>
-                        <Input 
-                          value={ownerTransactionDescription}
-                          onChange={(e) => setOwnerTransactionDescription(e.target.value)}
-                          data-testid="input-owner-transaction-description"
-                        />
-                      </div>
-                    </div>
-                    <DialogFooter>
-                      <Button 
-                        onClick={() => {
-                          const amountNum = parseFloat(ownerTransactionAmount);
-                          createOwnerTransactionMutation.mutate({
-                            type: ownerTransactionType,
-                            amountUSD: ownerTransactionCurrency === 'USD' ? ownerTransactionAmount : '0',
-                            amountLYD: ownerTransactionCurrency === 'LYD' ? ownerTransactionAmount : '0',
-                            description: ownerTransactionDescription,
-                          });
-                        }}
-                        disabled={createOwnerTransactionMutation.isPending || !ownerTransactionAmount}
-                        data-testid="button-submit-owner-transaction"
-                      >
-                        {createOwnerTransactionMutation.isPending ? (isRTL ? "جاري الحفظ..." : "Saving...") : (isRTL ? "حفظ" : "Save")}
-                      </Button>
-                    </DialogFooter>
-                  </DialogContent>
-                </Dialog>
-              </CardHeader>
-              <CardContent>
-                {ownerTransactionsLoading ? (
-                  <div className="flex justify-center py-8">
-                    <RefreshCw className="h-6 w-6 animate-spin text-muted-foreground" />
-                  </div>
-                ) : ownerTransactions.length === 0 ? (
-                  <p className="text-center text-muted-foreground py-8">
-                    {isRTL ? "لا توجد عمليات" : "No transactions"}
-                  </p>
-                ) : (
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>{isRTL ? "النوع" : "Type"}</TableHead>
-                        <TableHead>{isRTL ? "المبلغ (USD)" : "Amount (USD)"}</TableHead>
-                        <TableHead>{isRTL ? "المبلغ (LYD)" : "Amount (LYD)"}</TableHead>
-                        <TableHead>{isRTL ? "الوصف" : "Description"}</TableHead>
-                        <TableHead>{isRTL ? "التاريخ" : "Date"}</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {ownerTransactions.map((tx: any) => (
-                        <TableRow key={tx.id}>
-                          <TableCell>
-                            <Badge variant={tx.type === 'injection' ? 'default' : 'destructive'}>
-                              {tx.type === 'injection' ? (isRTL ? 'إيداع' : 'Injection') : (isRTL ? 'سحب' : 'Withdrawal')}
-                            </Badge>
-                          </TableCell>
-                          <TableCell className={tx.type === 'injection' ? 'text-green-600' : 'text-red-600'}>
-                            {tx.type === 'injection' ? '+' : '-'}${parseFloat(tx.amountUSD || 0).toFixed(2)}
-                          </TableCell>
-                          <TableCell className={tx.type === 'injection' ? 'text-green-600' : 'text-red-600'}>
-                            {tx.type === 'injection' ? '+' : '-'}{parseFloat(tx.amountLYD || 0).toFixed(2)} {isRTL ? 'د.ل' : 'LYD'}
-                          </TableCell>
-                          <TableCell>{tx.description || '-'}</TableCell>
-                          <TableCell>{format(new Date(tx.createdAt), 'dd/MM/yyyy')}</TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                )}
-              </CardContent>
-            </Card>
-          )}
-        </TabsContent>
-
-        {/* Reconciliation Tab */}
-        <TabsContent value="reconciliation" className="space-y-6">
-          <div className="flex justify-between items-center">
-            <h3 className="text-lg font-semibold">
-              {isRTL ? "مطابقة الخزنة" : "Safe Reconciliation"}
-            </h3>
-          </div>
-
+        <TabsContent value="cashbox" className="space-y-4">
           <Card>
             <CardHeader>
-              <CardTitle>{isRTL ? "اختر الخزنة للمطابقة" : "Select Safe to Reconcile"}</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <Select value={selectedReconcileSafe} onValueChange={setSelectedReconcileSafe}>
-                <SelectTrigger data-testid="select-reconcile-safe">
-                  <SelectValue placeholder={isRTL ? "اختر الخزنة" : "Select safe"} />
-                </SelectTrigger>
-                <SelectContent>
-                  {safes.map((safe) => (
-                    <SelectItem key={safe.id} value={safe.id}>
-                      {safe.name} ({safe.code})
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-
-              {selectedReconcileSafe && (
-                <>
-                  {(() => {
-                    const selectedSafe = safes.find(s => s.id === selectedReconcileSafe);
-                    return selectedSafe ? (
-                      <div className="p-4 bg-muted rounded-lg">
-                        <p className="text-sm text-muted-foreground mb-2">{isRTL ? "الرصيد الحالي في النظام:" : "Current System Balance:"}</p>
-                        <div className="flex gap-4">
-                          <div className="text-xl font-bold text-green-600">
-                            ${parseFloat(String(selectedSafe.balanceUSD) || '0').toFixed(2)} USD
-                          </div>
-                          <div className="text-xl font-bold text-blue-600">
-                            {parseFloat(String(selectedSafe.balanceLYD) || '0').toFixed(2)} {isRTL ? 'د.ل' : 'LYD'}
-                          </div>
+              <div className="flex items-center justify-between">
+                <CardTitle className="flex items-center gap-2">
+                  <Wallet className="w-5 h-5" />
+                  Cashbox Transactions
+                </CardTitle>
+                <Dialog open={isTransactionDialogOpen} onOpenChange={setIsTransactionDialogOpen}>
+                  <DialogTrigger asChild>
+                    <Button data-testid="button-add-transaction">
+                      <Plus className="w-4 h-4 mr-2" />
+                      Add Transaction
+                    </Button>
+                  </DialogTrigger>
+                  <DialogContent>
+                    <DialogHeader>
+                      <DialogTitle>Add Cashbox Transaction</DialogTitle>
+                    </DialogHeader>
+                    <Form {...transactionForm}>
+                      <form onSubmit={transactionForm.handleSubmit((data) => transactionMutation.mutate(data))} className="space-y-4">
+                        <FormField control={transactionForm.control} name="type" render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Type</FormLabel>
+                            <Select onValueChange={field.onChange} value={field.value}>
+                              <FormControl><SelectTrigger><SelectValue /></SelectTrigger></FormControl>
+                              <SelectContent>
+                                <SelectItem value="deposit">Deposit</SelectItem>
+                                <SelectItem value="withdrawal">Withdrawal</SelectItem>
+                              </SelectContent>
+                            </Select>
+                            <FormMessage />
+                          </FormItem>
+                        )} />
+                        <div className="grid grid-cols-2 gap-4">
+                          <FormField control={transactionForm.control} name="amountLYD" render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>Amount LYD</FormLabel>
+                              <FormControl><Input type="number" step="0.01" {...field} /></FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )} />
+                          <FormField control={transactionForm.control} name="amountUSD" render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>Amount USD</FormLabel>
+                              <FormControl><Input type="number" step="0.01" {...field} /></FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )} />
                         </div>
-                      </div>
-                    ) : null;
-                  })()}
-
-                  <Dialog open={newReconcileDialogOpen} onOpenChange={setNewReconcileDialogOpen}>
-                    <DialogTrigger asChild>
-                      <Button data-testid="button-new-reconciliation">
-                        <Plus className="h-4 w-4 mr-2" />
-                        {isRTL ? "تسجيل مطابقة جديدة" : "Record Reconciliation"}
-                      </Button>
-                    </DialogTrigger>
-                    <DialogContent className="sm:max-w-[400px]">
-                      <DialogHeader>
-                        <DialogTitle>{isRTL ? "تسجيل مطابقة الخزنة" : "Record Safe Reconciliation"}</DialogTitle>
-                      </DialogHeader>
-                      <div className="space-y-4">
-                        <div className="space-y-2">
-                          <Label>{isRTL ? "الرصيد الفعلي (USD)" : "Actual Balance (USD)"}</Label>
-                          <Input 
-                            type="number" 
-                            step="0.01" 
-                            value={actualBalanceUSD}
-                            onChange={(e) => setActualBalanceUSD(e.target.value)}
-                            data-testid="input-actual-balance-usd"
-                          />
-                        </div>
-                        <div className="space-y-2">
-                          <Label>{isRTL ? "الرصيد الفعلي (LYD)" : "Actual Balance (LYD)"}</Label>
-                          <Input 
-                            type="number" 
-                            step="0.01" 
-                            value={actualBalanceLYD}
-                            onChange={(e) => setActualBalanceLYD(e.target.value)}
-                            data-testid="input-actual-balance-lyd"
-                          />
-                        </div>
-                        <div className="space-y-2">
-                          <Label>{isRTL ? "ملاحظات" : "Notes"}</Label>
-                          <Input 
-                            value={reconcileNotes}
-                            onChange={(e) => setReconcileNotes(e.target.value)}
-                            data-testid="input-reconcile-notes"
-                          />
-                        </div>
-                      </div>
-                      <DialogFooter>
-                        <Button 
-                          onClick={() => {
-                            const selectedSafe = safes.find(s => s.id === selectedReconcileSafe);
-                            createReconciliationMutation.mutate({
-                              systemBalanceUSD: selectedSafe?.balanceUSD || '0',
-                              systemBalanceLYD: selectedSafe?.balanceLYD || '0',
-                              actualBalanceUSD: actualBalanceUSD || '0',
-                              actualBalanceLYD: actualBalanceLYD || '0',
-                              notes: reconcileNotes,
-                            });
-                          }}
-                          disabled={createReconciliationMutation.isPending}
-                          data-testid="button-submit-reconciliation"
-                        >
-                          {createReconciliationMutation.isPending ? (isRTL ? "جاري الحفظ..." : "Saving...") : (isRTL ? "حفظ" : "Save")}
+                        <FormField control={transactionForm.control} name="description" render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Description</FormLabel>
+                            <FormControl><Textarea {...field} /></FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )} />
+                        <Button type="submit" className="w-full" disabled={transactionMutation.isPending}>
+                          {transactionMutation.isPending ? "Saving..." : "Add Transaction"}
                         </Button>
-                      </DialogFooter>
-                    </DialogContent>
-                  </Dialog>
+                      </form>
+                    </Form>
+                  </DialogContent>
+                </Dialog>
+              </div>
+            </CardHeader>
+            <CardContent>
+              {transactions.length === 0 ? (
+                <p className="text-center py-8 text-muted-foreground">No transactions yet</p>
+              ) : (
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Date</TableHead>
+                      <TableHead>Type</TableHead>
+                      <TableHead>Amount LYD</TableHead>
+                      <TableHead>Amount USD</TableHead>
+                      <TableHead>Description</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {transactions.slice(0, 20).map((tx) => (
+                      <TableRow key={tx.id}>
+                        <TableCell>{format(new Date(tx.createdAt), "PPp")}</TableCell>
+                        <TableCell>
+                          <Badge variant={tx.type === "deposit" || tx.type === "sale" ? "default" : "destructive"}>
+                            {tx.type === "deposit" || tx.type === "sale" ? (
+                              <ArrowUpCircle className="w-3 h-3 mr-1" />
+                            ) : (
+                              <ArrowDownCircle className="w-3 h-3 mr-1" />
+                            )}
+                            {tx.type}
+                          </Badge>
+                        </TableCell>
+                        <TableCell>{tx.amountLYD} LYD</TableCell>
+                        <TableCell>${tx.amountUSD}</TableCell>
+                        <TableCell>{tx.description || "-"}</TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
 
-                  {reconciliationsLoading ? (
-                    <div className="flex justify-center py-8">
-                      <RefreshCw className="h-6 w-6 animate-spin text-muted-foreground" />
-                    </div>
-                  ) : reconciliations.length === 0 ? (
-                    <p className="text-center text-muted-foreground py-8">
-                      {isRTL ? "لا توجد سجلات مطابقة" : "No reconciliation records"}
-                    </p>
-                  ) : (
-                    <Table>
-                      <TableHeader>
-                        <TableRow>
-                          <TableHead>{isRTL ? "التاريخ" : "Date"}</TableHead>
-                          <TableHead>{isRTL ? "رصيد النظام (USD)" : "System (USD)"}</TableHead>
-                          <TableHead>{isRTL ? "الرصيد الفعلي (USD)" : "Actual (USD)"}</TableHead>
-                          <TableHead>{isRTL ? "الفرق (USD)" : "Diff (USD)"}</TableHead>
-                          <TableHead>{isRTL ? "رصيد النظام (LYD)" : "System (LYD)"}</TableHead>
-                          <TableHead>{isRTL ? "الرصيد الفعلي (LYD)" : "Actual (LYD)"}</TableHead>
-                          <TableHead>{isRTL ? "الفرق (LYD)" : "Diff (LYD)"}</TableHead>
-                          <TableHead>{isRTL ? "ملاحظات" : "Notes"}</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {reconciliations.map((rec: any) => {
-                          const diffUSD = parseFloat(rec.actualBalanceUSD || 0) - parseFloat(rec.systemBalanceUSD || 0);
-                          const diffLYD = parseFloat(rec.actualBalanceLYD || 0) - parseFloat(rec.systemBalanceLYD || 0);
-                          return (
-                            <TableRow key={rec.id}>
-                              <TableCell>{format(new Date(rec.createdAt), 'dd/MM/yyyy HH:mm')}</TableCell>
-                              <TableCell>${parseFloat(rec.systemBalanceUSD || 0).toFixed(2)}</TableCell>
-                              <TableCell>${parseFloat(rec.actualBalanceUSD || 0).toFixed(2)}</TableCell>
-                              <TableCell className={diffUSD >= 0 ? 'text-green-600' : 'text-red-600'}>
-                                {diffUSD >= 0 ? '+' : ''}{diffUSD.toFixed(2)}
-                              </TableCell>
-                              <TableCell>{parseFloat(rec.systemBalanceLYD || 0).toFixed(2)}</TableCell>
-                              <TableCell>{parseFloat(rec.actualBalanceLYD || 0).toFixed(2)}</TableCell>
-                              <TableCell className={diffLYD >= 0 ? 'text-green-600' : 'text-red-600'}>
-                                {diffLYD >= 0 ? '+' : ''}{diffLYD.toFixed(2)}
-                              </TableCell>
-                              <TableCell>{rec.notes || '-'}</TableCell>
-                            </TableRow>
-                          );
-                        })}
-                      </TableBody>
-                    </Table>
-                  )}
-                </>
+        <TabsContent value="expenses" className="space-y-4">
+          <Card>
+            <CardHeader>
+              <div className="flex items-center justify-between">
+                <CardTitle className="flex items-center gap-2">
+                  <ArrowDownCircle className="w-5 h-5 text-destructive" />
+                  Expenses (Total: {totalExpenses.toFixed(2)} LYD)
+                </CardTitle>
+                <Dialog open={isExpenseDialogOpen} onOpenChange={setIsExpenseDialogOpen}>
+                  <DialogTrigger asChild>
+                    <Button variant="destructive" data-testid="button-add-expense">
+                      <Plus className="w-4 h-4 mr-2" />
+                      Add Expense
+                    </Button>
+                  </DialogTrigger>
+                  <DialogContent>
+                    <DialogHeader>
+                      <DialogTitle>Add Expense</DialogTitle>
+                    </DialogHeader>
+                    <Form {...expenseForm}>
+                      <form onSubmit={expenseForm.handleSubmit((data) => expenseMutation.mutate(data))} className="space-y-4">
+                        <FormField control={expenseForm.control} name="category" render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Category</FormLabel>
+                            <Select onValueChange={field.onChange} value={field.value}>
+                              <FormControl><SelectTrigger><SelectValue /></SelectTrigger></FormControl>
+                              <SelectContent>
+                                <SelectItem value="rent">Rent</SelectItem>
+                                <SelectItem value="utilities">Utilities</SelectItem>
+                                <SelectItem value="salaries">Salaries</SelectItem>
+                                <SelectItem value="supplies">Supplies</SelectItem>
+                                <SelectItem value="maintenance">Maintenance</SelectItem>
+                                <SelectItem value="marketing">Marketing</SelectItem>
+                                <SelectItem value="other">Other</SelectItem>
+                              </SelectContent>
+                            </Select>
+                            <FormMessage />
+                          </FormItem>
+                        )} />
+                        <div className="grid grid-cols-2 gap-4">
+                          <FormField control={expenseForm.control} name="amount" render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>Amount</FormLabel>
+                              <FormControl><Input type="number" step="0.01" {...field} /></FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )} />
+                          <FormField control={expenseForm.control} name="currency" render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>Currency</FormLabel>
+                              <Select onValueChange={field.onChange} value={field.value}>
+                                <FormControl><SelectTrigger><SelectValue /></SelectTrigger></FormControl>
+                                <SelectContent>
+                                  <SelectItem value="LYD">LYD</SelectItem>
+                                  <SelectItem value="USD">USD</SelectItem>
+                                </SelectContent>
+                              </Select>
+                              <FormMessage />
+                            </FormItem>
+                          )} />
+                        </div>
+                        <FormField control={expenseForm.control} name="description" render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Description</FormLabel>
+                            <FormControl><Textarea {...field} /></FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )} />
+                        <FormField control={expenseForm.control} name="personName" render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Paid To (Optional)</FormLabel>
+                            <FormControl><Input {...field} /></FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )} />
+                        <Button type="submit" className="w-full" disabled={expenseMutation.isPending}>
+                          {expenseMutation.isPending ? "Saving..." : "Add Expense"}
+                        </Button>
+                      </form>
+                    </Form>
+                  </DialogContent>
+                </Dialog>
+              </div>
+            </CardHeader>
+            <CardContent>
+              {expenses.length === 0 ? (
+                <p className="text-center py-8 text-muted-foreground">No expenses recorded yet</p>
+              ) : (
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Date</TableHead>
+                      <TableHead>Number</TableHead>
+                      <TableHead>Category</TableHead>
+                      <TableHead>Description</TableHead>
+                      <TableHead>Amount</TableHead>
+                      <TableHead>Actions</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {expenses.map((expense) => (
+                      <TableRow key={expense.id}>
+                        <TableCell>{format(new Date(expense.date), "PP")}</TableCell>
+                        <TableCell>{expense.expenseNumber}</TableCell>
+                        <TableCell><Badge variant="outline">{expense.category}</Badge></TableCell>
+                        <TableCell>{expense.description}</TableCell>
+                        <TableCell className="font-bold text-destructive">{expense.amount} {expense.currency}</TableCell>
+                        <TableCell>
+                          <Button variant="ghost" size="sm" onClick={() => deleteExpenseMutation.mutate(expense.id)}>
+                            <Trash2 className="w-4 h-4 text-destructive" />
+                          </Button>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="revenues" className="space-y-4">
+          <Card>
+            <CardHeader>
+              <div className="flex items-center justify-between">
+                <CardTitle className="flex items-center gap-2">
+                  <ArrowUpCircle className="w-5 h-5 text-green-500" />
+                  Revenues (Total: {totalRevenues.toFixed(2)} LYD)
+                </CardTitle>
+                <Dialog open={isRevenueDialogOpen} onOpenChange={setIsRevenueDialogOpen}>
+                  <DialogTrigger asChild>
+                    <Button className="bg-green-600 hover:bg-green-700" data-testid="button-add-revenue">
+                      <Plus className="w-4 h-4 mr-2" />
+                      Add Revenue
+                    </Button>
+                  </DialogTrigger>
+                  <DialogContent>
+                    <DialogHeader>
+                      <DialogTitle>Add Revenue</DialogTitle>
+                    </DialogHeader>
+                    <Form {...revenueForm}>
+                      <form onSubmit={revenueForm.handleSubmit((data) => revenueMutation.mutate(data))} className="space-y-4">
+                        <FormField control={revenueForm.control} name="source" render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Source</FormLabel>
+                            <FormControl><Input {...field} placeholder="e.g., Interest, Investment, etc." /></FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )} />
+                        <div className="grid grid-cols-2 gap-4">
+                          <FormField control={revenueForm.control} name="amount" render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>Amount</FormLabel>
+                              <FormControl><Input type="number" step="0.01" {...field} /></FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )} />
+                          <FormField control={revenueForm.control} name="currency" render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>Currency</FormLabel>
+                              <Select onValueChange={field.onChange} value={field.value}>
+                                <FormControl><SelectTrigger><SelectValue /></SelectTrigger></FormControl>
+                                <SelectContent>
+                                  <SelectItem value="LYD">LYD</SelectItem>
+                                  <SelectItem value="USD">USD</SelectItem>
+                                </SelectContent>
+                              </Select>
+                              <FormMessage />
+                            </FormItem>
+                          )} />
+                        </div>
+                        <FormField control={revenueForm.control} name="description" render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Description</FormLabel>
+                            <FormControl><Textarea {...field} /></FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )} />
+                        <Button type="submit" className="w-full" disabled={revenueMutation.isPending}>
+                          {revenueMutation.isPending ? "Saving..." : "Add Revenue"}
+                        </Button>
+                      </form>
+                    </Form>
+                  </DialogContent>
+                </Dialog>
+              </div>
+            </CardHeader>
+            <CardContent>
+              {revenues.length === 0 ? (
+                <p className="text-center py-8 text-muted-foreground">No revenues recorded yet</p>
+              ) : (
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Date</TableHead>
+                      <TableHead>Number</TableHead>
+                      <TableHead>Source</TableHead>
+                      <TableHead>Description</TableHead>
+                      <TableHead>Amount</TableHead>
+                      <TableHead>Actions</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {revenues.map((revenue) => (
+                      <TableRow key={revenue.id}>
+                        <TableCell>{format(new Date(revenue.date), "PP")}</TableCell>
+                        <TableCell>{revenue.revenueNumber}</TableCell>
+                        <TableCell><Badge variant="secondary">{revenue.source}</Badge></TableCell>
+                        <TableCell>{revenue.description || "-"}</TableCell>
+                        <TableCell className="font-bold text-green-600">{revenue.amount} {revenue.currency}</TableCell>
+                        <TableCell>
+                          <Button variant="ghost" size="sm" onClick={() => deleteRevenueMutation.mutate(revenue.id)}>
+                            <Trash2 className="w-4 h-4 text-destructive" />
+                          </Button>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
               )}
             </CardContent>
           </Card>

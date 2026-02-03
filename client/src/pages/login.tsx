@@ -1,23 +1,19 @@
-import { useState } from "react";
 import { useLocation } from "wouter";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { useTranslation } from "react-i18next";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/components/auth-provider";
-import { apiRequest } from "@/lib/queryClient";
 import { loginSchema, type LoginCredentials } from "@shared/schema";
-import logoPath from "@assets/tajway_logo_1_-removebg-preview_1760403020566.png";
+import { Car } from "lucide-react";
 
 export default function Login() {
   const [, setLocation] = useLocation();
   const { login, isLoading } = useAuth();
   const { toast } = useToast();
-  const { t } = useTranslation();
   
   const form = useForm<LoginCredentials>({
     resolver: zodResolver(loginSchema),
@@ -30,50 +26,31 @@ export default function Login() {
   const onSubmit = async (data: LoginCredentials) => {
     try {
       await login(data.username, data.password);
-      
-      // Check for unread messages
-      try {
-        const response = await apiRequest("GET", "/api/messages/unread-count");
-        const unreadData = await response.json() as { count: number };
-        
-        if (unreadData.count > 0) {
-          toast({
-            title: t('loginSuccessful'),
-            description: `${t('welcomeToLynx')} You have ${unreadData.count} unread message${unreadData.count > 1 ? 's' : ''}. Check the Messages page.`,
-          });
-        } else {
-          toast({
-            title: t('loginSuccessful'),
-            description: t('welcomeToLynx'),
-          });
-        }
-      } catch {
-        // If checking unread messages fails, just show regular login message
-        toast({
-          title: t('loginSuccessful'),
-          description: t('welcomeToLynx'),
-        });
-      }
-      
+      toast({
+        title: "Login Successful",
+        description: "Welcome to MD CARS",
+      });
       setLocation("/dashboard");
     } catch (error) {
       toast({
-        title: t('loginFailed'),
-        description: t('invalidCredentials'),
+        title: "Login Failed",
+        description: "Invalid username or password",
         variant: "destructive",
       });
     }
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-muted/20">
+    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-900 to-slate-800">
       <Card className="w-full max-w-md mx-4">
         <CardHeader className="text-center">
-          <div className="flex justify-center mb-4 mt-6">
-            <img src={logoPath} alt="TajWay Logo" className="h-24 w-auto" style={{ objectFit: 'cover', objectPosition: 'top', maxHeight: '96px', clipPath: 'inset(0 0 50% 0)' }} />
+          <div className="flex justify-center mb-4">
+            <div className="w-16 h-16 bg-primary rounded-full flex items-center justify-center">
+              <Car className="w-8 h-8 text-primary-foreground" />
+            </div>
           </div>
-          <CardTitle className="text-2xl font-bold">TajWay</CardTitle>
-          <p className="text-muted-foreground">{t('logisticsManagementSystem')}</p>
+          <CardTitle className="text-2xl font-bold">MD CARS</CardTitle>
+          <p className="text-muted-foreground">Car Accessories Sales & Inventory</p>
         </CardHeader>
         <CardContent>
           <Form {...form}>
@@ -83,10 +60,10 @@ export default function Login() {
                 name="username"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>{t('username')}</FormLabel>
+                    <FormLabel>Username</FormLabel>
                     <FormControl>
                       <Input
-                        placeholder={t('enterUsername')}
+                        placeholder="Enter username"
                         data-testid="input-username"
                         {...field}
                       />
@@ -101,11 +78,11 @@ export default function Login() {
                 name="password"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>{t('password')}</FormLabel>
+                    <FormLabel>Password</FormLabel>
                     <FormControl>
                       <Input
                         type="password"
-                        placeholder={t('enterPassword')}
+                        placeholder="Enter password"
                         data-testid="input-password"
                         {...field}
                       />
@@ -121,10 +98,13 @@ export default function Login() {
                 disabled={isLoading}
                 data-testid="button-login"
               >
-                {isLoading ? t('signingIn') : t('signIn')}
+                {isLoading ? "Signing in..." : "Sign In"}
               </Button>
             </form>
           </Form>
+          <div className="mt-4 text-center text-sm text-muted-foreground">
+            <p>Default: admin / admin123</p>
+          </div>
         </CardContent>
       </Card>
     </div>

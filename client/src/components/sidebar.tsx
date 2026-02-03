@@ -1,31 +1,21 @@
 import { useState } from "react";
 import { Link, useLocation } from "wouter";
-import { useTranslation } from "react-i18next";
-import { Truck, LayoutDashboard, Package, Users, Box, TrendingUp, DollarSign, Users2, Settings, LogOut, MessageSquare, ClipboardList, UserCog, History, Menu, ShoppingCart, Wallet } from "lucide-react";
+import { LayoutDashboard, Package, Users, ShoppingCart, Wallet, BarChart3, Settings, LogOut, Menu, Boxes, AlertTriangle } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import { useAuth } from "@/components/auth-provider";
 import { useQuery } from "@tanstack/react-query";
-import { apiRequest } from "@/lib/queryClient";
 import { useIsMobile } from "@/hooks/use-mobile";
-import logoPath from "@assets/tajway_logo_1_-removebg-preview_1760403020566.png";
 
 const navigationItems = [
-  { key: "dashboard", href: "/dashboard", icon: LayoutDashboard, roles: ["owner", "customer_service", "receptionist", "sorter", "stock_manager"] },
-  { key: "orders", href: "/orders", icon: Package, roles: ["owner", "customer_service", "receptionist", "sorter", "stock_manager"] },
-  { key: "readyToBuy", href: "/ready-to-buy", icon: ShoppingCart, roles: ["owner", "customer_service", "receptionist"] },
-  { key: "customers", href: "/customers", icon: Users, roles: ["owner", "customer_service", "receptionist"] },
-  { key: "deliveryTasks", href: "/delivery-tasks", icon: ClipboardList, roles: ["shipping_staff"] },
-  { key: "taskAssignment", href: "/task-assignment", icon: UserCog, roles: ["owner", "customer_service", "receptionist"] },
-  { key: "taskHistory", href: "/task-history", icon: History, roles: ["owner", "customer_service", "receptionist"] },
-  { key: "darbAssabil", href: "/darb-assabil", icon: Truck, roles: ["owner", "customer_service", "receptionist"] },
-  { key: "finance", href: "/finance", icon: Wallet, roles: ["owner"] },
-  { key: "profitReports", href: "/profits", icon: TrendingUp, roles: ["owner"] },
-  { key: "expenses", href: "/expenses", icon: DollarSign, roles: ["owner"] },
-  { key: "userManagement", href: "/users", icon: Users2, roles: ["owner"] },
-  { key: "messages", href: "/messages", icon: MessageSquare, roles: ["owner", "customer_service", "receptionist", "sorter", "stock_manager", "shipping_staff"], showBadge: true },
-  { key: "settings", href: "/settings", icon: Settings, roles: ["owner", "customer_service", "receptionist", "sorter", "stock_manager", "shipping_staff"] },
+  { key: "Dashboard", href: "/dashboard", icon: LayoutDashboard, roles: ["owner", "cashier", "stock_manager"] },
+  { key: "POS / Sales", href: "/pos", icon: ShoppingCart, roles: ["owner", "cashier"] },
+  { key: "Products", href: "/products", icon: Package, roles: ["owner", "cashier", "stock_manager"] },
+  { key: "Inventory", href: "/inventory", icon: Boxes, roles: ["owner", "stock_manager"] },
+  { key: "Customers", href: "/customers", icon: Users, roles: ["owner", "cashier"] },
+  { key: "Finance", href: "/finance", icon: Wallet, roles: ["owner"] },
+  { key: "Reports", href: "/reports", icon: BarChart3, roles: ["owner"] },
+  { key: "Settings", href: "/settings", icon: Settings, roles: ["owner"] },
 ];
 
 interface SidebarContentProps {
@@ -35,19 +25,13 @@ interface SidebarContentProps {
 function SidebarContent({ onNavigate }: SidebarContentProps) {
   const [location] = useLocation();
   const { user, logout } = useAuth();
-  const { t } = useTranslation();
 
-  const { data: unreadCountData } = useQuery({
-    queryKey: ["/api/messages/unread-count"],
-    queryFn: async () => {
-      const response = await apiRequest("GET", "/api/messages/unread-count");
-      return response.json() as Promise<{ count: number }>;
-    },
-    enabled: !!user,
-    refetchInterval: 30000,
+  const { data: lowStockData } = useQuery<Array<any>>({
+    queryKey: ["/api/products/low-stock"],
+    enabled: !!user && (user.role === "owner" || user.role === "stock_manager"),
   });
 
-  const unreadCount = unreadCountData?.count || 0;
+  const lowStockCount = lowStockData?.length || 0;
 
   const handleLogout = async () => {
     try {
@@ -68,14 +52,15 @@ function SidebarContent({ onNavigate }: SidebarContentProps) {
 
   return (
     <>
-      {/* Logo and branding */}
       <div className="p-6 border-b border-border">
         <div className="flex items-center justify-center">
-          <img src={logoPath} alt="TajWay Logo" className="h-24 w-auto" style={{ objectFit: 'cover', objectPosition: 'top', maxHeight: '96px', clipPath: 'inset(0 0 50% 0)' }} />
+          <div className="text-center">
+            <h1 className="text-2xl font-bold text-primary">MD CARS</h1>
+            <p className="text-xs text-muted-foreground">Car Accessories</p>
+          </div>
         </div>
       </div>
 
-      {/* Navigation */}
       <nav className="flex-1 p-4 overflow-y-auto">
         <ul className="space-y-2">
           {filteredNavigation.map((item) => {
@@ -86,35 +71,34 @@ function SidebarContent({ onNavigate }: SidebarContentProps) {
               <li key={item.key}>
                 <Link href={item.href} onClick={handleNavClick}>
                   <span
-                    className={`flex items-center space-x-3 rtl:space-x-reverse px-3 py-2 rounded-md transition-colors cursor-pointer ${
+                    className={`flex items-center space-x-3 px-3 py-2 rounded-md transition-colors cursor-pointer ${
                       isActive
                         ? "bg-primary text-primary-foreground"
                         : "text-muted-foreground hover:bg-accent hover:text-accent-foreground"
                     }`}
-                    data-testid={`nav-${item.key.toLowerCase().replace(/([A-Z])/g, '-$1').toLowerCase()}`}
+                    data-testid={`nav-${item.key.toLowerCase().replace(/\s+/g, '-').replace(/\//g, '')}`}
                   >
                     <Icon className="w-4 h-4" />
-                    <span className={`flex-1 ${isActive ? "font-medium" : ""}`}>{t(item.key)}</span>
-                    {item.showBadge && unreadCount > 0 && (
-                      <Badge 
-                        variant="destructive" 
-                        className="ltr:ml-auto rtl:mr-auto"
-                        data-testid="badge-unread-messages"
-                      >
-                        {unreadCount}
-                      </Badge>
-                    )}
+                    <span className={`flex-1 ${isActive ? "font-medium" : ""}`}>{item.key}</span>
                   </span>
                 </Link>
               </li>
             );
           })}
         </ul>
+
+        {lowStockCount > 0 && (user?.role === "owner" || user?.role === "stock_manager") && (
+          <div className="mt-4 p-3 bg-destructive/10 border border-destructive/20 rounded-md">
+            <div className="flex items-center gap-2 text-destructive">
+              <AlertTriangle className="w-4 h-4" />
+              <span className="text-sm font-medium">{lowStockCount} Low Stock Items</span>
+            </div>
+          </div>
+        )}
       </nav>
 
-      {/* User profile */}
       <div className="p-4 border-t border-border">
-        <div className="flex items-center space-x-3 rtl:space-x-reverse">
+        <div className="flex items-center space-x-3">
           <div className="w-8 h-8 bg-primary rounded-full flex items-center justify-center">
             <span className="text-sm font-medium text-primary-foreground">
               {user?.firstName?.[0]}{user?.lastName?.[0]}
@@ -147,7 +131,6 @@ export function Sidebar() {
   const isMobile = useIsMobile();
   const [isOpen, setIsOpen] = useState(false);
 
-  // On desktop, render as fixed sidebar
   if (!isMobile) {
     return (
       <aside className="w-64 bg-card border-r border-border flex flex-col min-h-screen">
@@ -156,14 +139,13 @@ export function Sidebar() {
     );
   }
 
-  // On mobile, render as hamburger menu with sheet
   return (
     <Sheet open={isOpen} onOpenChange={setIsOpen}>
       <SheetTrigger asChild>
         <Button 
           variant="ghost" 
           size="sm" 
-          className="fixed top-4 start-4 z-50 bg-card border border-border md:hidden"
+          className="fixed top-4 left-4 z-50 bg-card border border-border md:hidden"
           data-testid="button-hamburger-menu"
         >
           <Menu className="h-5 w-5" />

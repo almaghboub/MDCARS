@@ -10,19 +10,13 @@ import { useIsMobile } from "@/hooks/use-mobile";
 import NotFound from "@/pages/not-found";
 import Login from "@/pages/login";
 import Dashboard from "@/pages/dashboard";
-import Orders from "@/pages/orders";
+import Products from "@/pages/products";
+import POS from "@/pages/pos";
+import Inventory from "@/pages/inventory";
 import Customers from "@/pages/customers";
-import Profits from "@/pages/profits";
-import Expenses from "@/pages/expenses";
-import Users from "@/pages/users";
-import Messages from "@/pages/messages";
-import Settings from "@/pages/settings";
-import DeliveryTasks from "@/pages/delivery-tasks";
-import TaskAssignment from "@/pages/task-assignment";
-import TaskHistory from "@/pages/task-history";
-import DarbAssabil from "@/pages/darb-assabil";
-import ReadyToBuy from "@/pages/ready-to-buy";
 import Finance from "@/pages/finance";
+import Reports from "@/pages/reports";
+import Settings from "@/pages/settings";
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { isAuthenticated, isLoading } = useAuth();
@@ -42,13 +36,8 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
 
   return (
     <div className="min-h-screen flex bg-background">
-      {/* Desktop sidebar - hidden on mobile */}
       {!isMobile && <Sidebar />}
-      
-      {/* Mobile sidebar (hamburger menu) - rendered by Sidebar component itself */}
       {isMobile && <Sidebar />}
-      
-      {/* Main content */}
       <main className="flex-1 overflow-x-hidden">
         {children}
       </main>
@@ -78,13 +67,8 @@ function RoleProtectedRoute({ children, allowedRoles }: { children: React.ReactN
 
   return (
     <div className="min-h-screen flex bg-background">
-      {/* Desktop sidebar - hidden on mobile */}
       {!isMobile && <Sidebar />}
-      
-      {/* Mobile sidebar (hamburger menu) - rendered by Sidebar component itself */}
       {isMobile && <Sidebar />}
-      
-      {/* Main content */}
       <main className="flex-1 overflow-x-hidden">
         {children}
       </main>
@@ -113,94 +97,43 @@ function PublicRoute({ children }: { children: React.ReactNode }) {
 function Router() {
   return (
     <Switch>
-      {/* Public routes */}
       <Route path="/login">
         <PublicRoute>
           <Login />
         </PublicRoute>
       </Route>
 
-      {/* Root redirect */}
       <Route path="/">
         {() => <Redirect to="/dashboard" />}
       </Route>
 
-      {/* Protected routes */}
       <Route path="/dashboard">
         <ProtectedRoute>
           <Dashboard />
         </ProtectedRoute>
       </Route>
 
-      <Route path="/orders">
+      <Route path="/pos">
+        <RoleProtectedRoute allowedRoles={["owner", "cashier"]}>
+          <POS />
+        </RoleProtectedRoute>
+      </Route>
+
+      <Route path="/products">
         <ProtectedRoute>
-          <Orders />
+          <Products />
         </ProtectedRoute>
+      </Route>
+
+      <Route path="/inventory">
+        <RoleProtectedRoute allowedRoles={["owner", "stock_manager"]}>
+          <Inventory />
+        </RoleProtectedRoute>
       </Route>
 
       <Route path="/customers">
-        <ProtectedRoute>
+        <RoleProtectedRoute allowedRoles={["owner", "cashier"]}>
           <Customers />
-        </ProtectedRoute>
-      </Route>
-
-      <Route path="/profits">
-        <ProtectedRoute>
-          <Profits />
-        </ProtectedRoute>
-      </Route>
-
-      <Route path="/expenses">
-        <ProtectedRoute>
-          <Expenses />
-        </ProtectedRoute>
-      </Route>
-
-      <Route path="/users">
-        <ProtectedRoute>
-          <Users />
-        </ProtectedRoute>
-      </Route>
-
-      <Route path="/messages">
-        <ProtectedRoute>
-          <Messages />
-        </ProtectedRoute>
-      </Route>
-
-      <Route path="/settings">
-        <ProtectedRoute>
-          <Settings />
-        </ProtectedRoute>
-      </Route>
-
-      <Route path="/delivery-tasks">
-        <RoleProtectedRoute allowedRoles={["shipping_staff"]}>
-          <DeliveryTasks />
-        </RoleProtectedRoute>
-      </Route>
-
-      <Route path="/task-assignment">
-        <RoleProtectedRoute allowedRoles={["owner", "customer_service", "receptionist"]}>
-          <TaskAssignment />
-        </RoleProtectedRoute>
-      </Route>
-
-      <Route path="/task-history">
-        <RoleProtectedRoute allowedRoles={["owner", "customer_service", "receptionist"]}>
-          <TaskHistory />
-        </RoleProtectedRoute>
-      </Route>
-
-      <Route path="/darb-assabil">
-        <RoleProtectedRoute allowedRoles={["owner", "customer_service", "receptionist"]}>
-          <DarbAssabil />
-        </RoleProtectedRoute>
-      </Route>
-
-      <Route path="/ready-to-buy">
-        <RoleProtectedRoute allowedRoles={["owner", "customer_service", "receptionist"]}>
-          <ReadyToBuy />
         </RoleProtectedRoute>
       </Route>
 
@@ -210,7 +143,18 @@ function Router() {
         </RoleProtectedRoute>
       </Route>
 
-      {/* Fallback to 404 */}
+      <Route path="/reports">
+        <RoleProtectedRoute allowedRoles={["owner"]}>
+          <Reports />
+        </RoleProtectedRoute>
+      </Route>
+
+      <Route path="/settings">
+        <RoleProtectedRoute allowedRoles={["owner"]}>
+          <Settings />
+        </RoleProtectedRoute>
+      </Route>
+
       <Route>
         <NotFound />
       </Route>

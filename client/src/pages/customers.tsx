@@ -1,937 +1,416 @@
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
-import { useTranslation } from "react-i18next";
-import { Plus, Users, Search, Filter, X, Trash2 } from "lucide-react";
-import { useLydExchangeRate } from "@/hooks/use-lyd-exchange-rate";
+import { useQuery, useMutation } from "@tanstack/react-query";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { z } from "zod";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
-import { Label } from "@/components/ui/label";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
-import { Calendar } from "@/components/ui/calendar";
-import { Header } from "@/components/header";
 import { useToast } from "@/hooks/use-toast";
-import { apiRequest } from "@/lib/queryClient";
-import type { Customer, InsertCustomer, OrderWithCustomer } from "@shared/schema";
+import { queryClient, apiRequest } from "@/lib/queryClient";
+import { Plus, Pencil, Trash2, Search, Users, Phone, Mail, DollarSign, Eye } from "lucide-react";
+import type { Customer, CustomerWithSales, Sale } from "@shared/schema";
+import { format } from "date-fns";
+
+const customerFormSchema = z.object({
+  name: z.string().min(1, "Name is required"),
+  phone: z.string().min(1, "Phone is required"),
+  email: z.string().email().optional().or(z.literal("")),
+  address: z.string().optional(),
+  notes: z.string().optional(),
+});
+
+type CustomerFormData = z.infer<typeof customerFormSchema>;
 
 export default function Customers() {
-  const { t } = useTranslation();
-  const [searchTerm, setSearchTerm] = useState("");
-  const [isModalOpen, setIsModalOpen] = useState(false);
-  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
-  const [isViewModalOpen, setIsViewModalOpen] = useState(false);
-  const [isFilterOpen, setIsFilterOpen] = useState(false);
-  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [isViewDialogOpen, setIsViewDialogOpen] = useState(false);
+  const [isPaymentDialogOpen, setIsPaymentDialogOpen] = useState(false);
   const [editingCustomer, setEditingCustomer] = useState<Customer | null>(null);
-  const [viewingCustomer, setViewingCustomer] = useState<Customer | null>(null);
-  const [deletingCustomer, setDeletingCustomer] = useState<Customer | null>(null);
-  const [countryFilters, setCountryFilters] = useState<string[]>([]);
-  const [dateFrom, setDateFrom] = useState<Date | undefined>(undefined);
-  const [dateTo, setDateTo] = useState<Date | undefined>(undefined);
-  const [formData, setFormData] = useState<InsertCustomer>({
-    firstName: "",
-    lastName: "",
-    email: "",
-    phone: "",
-    address: "",
-    city: "",
-    country: "",
-    postalCode: "",
-    shippingCode: "",
-  });
-  const [editFormData, setEditFormData] = useState<InsertCustomer>({
-    firstName: "",
-    lastName: "",
-    email: "",
-    phone: "",
-    address: "",
-    city: "",
-    country: "",
-    postalCode: "",
-    shippingCode: "",
-  });
-  const [editingTotalDownPayment, setEditingTotalDownPayment] = useState<number>(0);
-  const [editingTotalAmount, setEditingTotalAmount] = useState<number>(0);
-
+  const [viewingCustomer, setViewingCustomer] = useState<CustomerWithSales | null>(null);
+  const [paymentAmount, setPaymentAmount] = useState("");
   const { toast } = useToast();
-  const queryClient = useQueryClient();
 
-  const { data: customers = [], isLoading } = useQuery({
+  const { data: customers = [], isLoading } = useQuery<Customer[]>({
     queryKey: ["/api/customers"],
-    queryFn: async () => {
-      const response = await apiRequest("GET", "/api/customers");
-      return response.json() as Promise<Customer[]>;
+  });
+
+  const form = useForm<CustomerFormData>({
+    resolver: zodResolver(customerFormSchema),
+    defaultValues: {
+      name: "",
+      phone: "",
+      email: "",
+      address: "",
+      notes: "",
     },
   });
 
-  const { data: orders = [] } = useQuery({
-    queryKey: ["/api/orders"],
-    queryFn: async () => {
-      const response = await apiRequest("GET", "/api/orders");
-      return response.json() as Promise<OrderWithCustomer[]>;
-    },
-  });
-
-  const { data: settings = [] } = useQuery<Array<{ id: string; key: string; value: string }>>({
-    queryKey: ["/api/settings"],
-  });
-
-  const lydExchangeRate = parseFloat(settings.find(s => s.key === 'lyd_exchange_rate')?.value || '0');
-
-  const createCustomerMutation = useMutation({
-    mutationFn: async (customerData: InsertCustomer) => {
-      const response = await apiRequest("POST", "/api/customers", customerData);
-      if (!response.ok) {
-        throw new Error(t("failedCreateCustomer"));
-      }
-      return response.json();
+  const createMutation = useMutation({
+    mutationFn: async (data: CustomerFormData) => {
+      const res = await apiRequest("POST", "/api/customers", data);
+      return res.json();
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/customers"] });
-      toast({
-        title: t("success"),
-        description: t("customerCreatedSuccess"),
-      });
-      setIsModalOpen(false);
-      setFormData({
-        firstName: "",
-        lastName: "",
-        email: "",
-        phone: "",
-        address: "",
-        city: "",
-        country: "",
-        postalCode: "",
-        shippingCode: "",
-      });
+      toast({ title: "Customer created successfully" });
+      setIsDialogOpen(false);
+      form.reset();
     },
-    onError: (error) => {
-      toast({
-        title: t("error"),
-        description: t("failedCreateCustomer"),
-        variant: "destructive",
-      });
+    onError: (error: any) => {
+      toast({ title: "Error", description: error.message, variant: "destructive" });
     },
   });
 
-  const updateCustomerMutation = useMutation({
-    mutationFn: async ({ id, customerData }: { id: string; customerData: InsertCustomer }) => {
-      const response = await apiRequest("PUT", `/api/customers/${id}`, customerData);
-      if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.message || t("failedUpdateCustomer"));
-      }
-      return response.json();
+  const updateMutation = useMutation({
+    mutationFn: async ({ id, data }: { id: string; data: Partial<CustomerFormData> }) => {
+      const res = await apiRequest("PATCH", `/api/customers/${id}`, data);
+      return res.json();
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/customers"] });
-      toast({
-        title: t("success"),
-        description: t("customerUpdatedSuccess"),
-      });
-      setIsEditModalOpen(false);
+      toast({ title: "Customer updated successfully" });
+      setIsDialogOpen(false);
       setEditingCustomer(null);
-      setEditFormData({
-        firstName: "",
-        lastName: "",
-        email: "",
-        phone: "",
-        address: "",
-        city: "",
-        country: "",
-        postalCode: "",
-        shippingCode: "",
-      });
+      form.reset();
     },
-    onError: (error: Error) => {
-      toast({
-        title: t("error"),
-        description: error.message,
-        variant: "destructive",
-      });
+    onError: (error: any) => {
+      toast({ title: "Error", description: error.message, variant: "destructive" });
     },
   });
 
-  const deleteCustomerMutation = useMutation({
+  const deleteMutation = useMutation({
     mutationFn: async (id: string) => {
-      const response = await apiRequest("DELETE", `/api/customers/${id}`);
-      if (!response.ok) {
-        throw new Error(t("failedDeleteCustomer"));
-      }
-      return response.json();
+      await apiRequest("DELETE", `/api/customers/${id}`);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/customers"] });
-      toast({
-        title: t("success"),
-        description: t("customerDeletedSuccess"),
-      });
-      setIsDeleteDialogOpen(false);
-      setDeletingCustomer(null);
+      toast({ title: "Customer deleted successfully" });
     },
-    onError: () => {
-      toast({
-        title: t("error"),
-        description: t("failedDeleteCustomer"),
-        variant: "destructive",
-      });
+    onError: (error: any) => {
+      toast({ title: "Error", description: error.message, variant: "destructive" });
     },
   });
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    createCustomerMutation.mutate(formData);
-  };
-
-  const handleEditSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!editingCustomer) return;
-    
-    try {
-      const response = await apiRequest("PUT", `/api/customers/${editingCustomer.id}/update-with-payment`, {
-        customerData: editFormData,
-        totalDownPayment: editingTotalDownPayment
-      });
-      
-      if (!response.ok) {
-        throw new Error(t("failedUpdateCustomer"));
-      }
-      
+  const paymentMutation = useMutation({
+    mutationFn: async ({ id, amount }: { id: string; amount: string }) => {
+      const res = await apiRequest("POST", `/api/customers/${id}/payment`, { amount });
+      return res.json();
+    },
+    onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/customers"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/orders"] });
-      toast({
-        title: t("success"),
-        description: t("customerPaymentUpdatedSuccess"),
-      });
-      setIsEditModalOpen(false);
-      setEditingCustomer(null);
-    } catch (error) {
-      toast({
-        title: t("error"),
-        description: t("failedUpdateCustomer"),
-        variant: "destructive",
-      });
-    }
-  };
-
-  const openEditModal = (customer: Customer) => {
-    setEditingCustomer(customer);
-    setEditFormData({
-      firstName: customer.firstName,
-      lastName: customer.lastName,
-      email: customer.email,
-      phone: customer.phone || "",
-      address: customer.address || "",
-      city: customer.city || "",
-      country: customer.country || "",
-      postalCode: customer.postalCode || "",
-      shippingCode: customer.shippingCode || "",
-    });
-    
-    const customerOrders = orders.filter(order => order.customerId === customer.id);
-    const totalAmount = customerOrders.reduce((sum, order) => sum + parseFloat(order.totalAmount || "0"), 0);
-    const totalDownPayment = customerOrders.reduce((sum, order) => sum + parseFloat(order.downPayment || "0"), 0);
-    
-    setEditingTotalAmount(totalAmount);
-    setEditingTotalDownPayment(totalDownPayment);
-    setIsEditModalOpen(true);
-  };
-
-  const openViewModal = (customer: Customer) => {
-    setViewingCustomer(customer);
-    setIsViewModalOpen(true);
-  };
-
-  const openDeleteDialog = (customer: Customer) => {
-    setDeletingCustomer(customer);
-    setIsDeleteDialogOpen(true);
-  };
-
-  const handleDelete = () => {
-    if (!deletingCustomer) return;
-    deleteCustomerMutation.mutate(deletingCustomer.id);
-  };
-
-  const toggleCountryFilter = (country: string) => {
-    setCountryFilters(prev =>
-      prev.includes(country)
-        ? prev.filter(c => c !== country)
-        : [...prev, country]
-    );
-  };
-
-  const uniqueCountries = Array.from(new Set(customers.map(c => c.country).filter(Boolean))) as string[];
-
-  const filteredCustomers = customers.filter(customer => {
-    const matchesSearch = `${customer.firstName} ${customer.lastName}`.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (customer.email?.toLowerCase() || "").includes(searchTerm.toLowerCase());
-    const matchesCountry = countryFilters.length === 0 || countryFilters.includes(customer.country || "");
-    
-    // Date filtering
-    let matchesDate = true;
-    if (dateFrom || dateTo) {
-      const customerDate = new Date(customer.createdAt);
-      if (dateFrom && dateTo) {
-        const fromDate = new Date(dateFrom);
-        fromDate.setHours(0, 0, 0, 0);
-        const toDate = new Date(dateTo);
-        toDate.setHours(23, 59, 59, 999);
-        matchesDate = customerDate >= fromDate && customerDate <= toDate;
-      } else if (dateFrom) {
-        const fromDate = new Date(dateFrom);
-        fromDate.setHours(0, 0, 0, 0);
-        matchesDate = customerDate >= fromDate;
-      } else if (dateTo) {
-        const toDate = new Date(dateTo);
-        toDate.setHours(23, 59, 59, 999);
-        matchesDate = customerDate <= toDate;
-      }
-    }
-    
-    return matchesSearch && matchesCountry && matchesDate;
+      toast({ title: "Payment recorded successfully" });
+      setIsPaymentDialogOpen(false);
+      setPaymentAmount("");
+      setViewingCustomer(null);
+    },
+    onError: (error: any) => {
+      toast({ title: "Error", description: error.message, variant: "destructive" });
+    },
   });
+
+  const handleEdit = (customer: Customer) => {
+    setEditingCustomer(customer);
+    form.reset({
+      name: customer.name,
+      phone: customer.phone,
+      email: customer.email || "",
+      address: customer.address || "",
+      notes: customer.notes || "",
+    });
+    setIsDialogOpen(true);
+  };
+
+  const handleView = async (customer: Customer) => {
+    try {
+      const res = await apiRequest("GET", `/api/customers/${customer.id}`);
+      const data = await res.json();
+      setViewingCustomer(data);
+      setIsViewDialogOpen(true);
+    } catch (error) {
+      toast({ title: "Error loading customer details", variant: "destructive" });
+    }
+  };
+
+  const onSubmit = (data: CustomerFormData) => {
+    if (editingCustomer) {
+      updateMutation.mutate({ id: editingCustomer.id, data });
+    } else {
+      createMutation.mutate(data);
+    }
+  };
+
+  const filteredCustomers = customers.filter(c =>
+    c.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    c.phone.includes(searchQuery)
+  );
 
   return (
-    <div className="flex-1 flex flex-col">
-      <Header 
-        title={t("customers")} 
-        description={t("customersDescription")} 
-      />
-      
-      <div className="flex-1 p-6 space-y-6">
-        {/* Actions and Search */}
-        <div className="flex items-center justify-between">
-          <div className="flex items-center space-x-4">
-            <div className="relative">
+    <div className="p-6 space-y-6">
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-bold" data-testid="text-customers-title">Customers</h1>
+          <p className="text-muted-foreground">Manage your customer database</p>
+        </div>
+        <Dialog open={isDialogOpen} onOpenChange={(open) => {
+          setIsDialogOpen(open);
+          if (!open) {
+            setEditingCustomer(null);
+            form.reset();
+          }
+        }}>
+          <DialogTrigger asChild>
+            <Button data-testid="button-add-customer">
+              <Plus className="w-4 h-4 mr-2" />
+              Add Customer
+            </Button>
+          </DialogTrigger>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>{editingCustomer ? "Edit Customer" : "Add Customer"}</DialogTitle>
+            </DialogHeader>
+            <Form {...form}>
+              <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+                <FormField control={form.control} name="name" render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Name</FormLabel>
+                    <FormControl><Input {...field} data-testid="input-customer-name" /></FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )} />
+                <FormField control={form.control} name="phone" render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Phone</FormLabel>
+                    <FormControl><Input {...field} data-testid="input-customer-phone" /></FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )} />
+                <FormField control={form.control} name="email" render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Email (Optional)</FormLabel>
+                    <FormControl><Input type="email" {...field} data-testid="input-customer-email" /></FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )} />
+                <FormField control={form.control} name="address" render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Address (Optional)</FormLabel>
+                    <FormControl><Textarea {...field} data-testid="input-customer-address" /></FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )} />
+                <FormField control={form.control} name="notes" render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Notes (Optional)</FormLabel>
+                    <FormControl><Textarea {...field} data-testid="input-customer-notes" /></FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )} />
+                <Button type="submit" className="w-full" disabled={createMutation.isPending || updateMutation.isPending} data-testid="button-save-customer">
+                  {createMutation.isPending || updateMutation.isPending ? "Saving..." : editingCustomer ? "Update Customer" : "Add Customer"}
+                </Button>
+              </form>
+            </Form>
+          </DialogContent>
+        </Dialog>
+      </div>
+
+      <Card>
+        <CardHeader>
+          <div className="flex items-center justify-between">
+            <CardTitle className="flex items-center gap-2">
+              <Users className="w-5 h-5" />
+              Customers ({filteredCustomers.length})
+            </CardTitle>
+            <div className="relative w-64">
               <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-muted-foreground" />
               <Input
-                placeholder={t("searchCustomers")}
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="pl-10 w-64"
+                placeholder="Search customers..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="pl-10"
                 data-testid="input-search-customers"
               />
             </div>
-            <Popover open={isFilterOpen} onOpenChange={setIsFilterOpen}>
-              <PopoverTrigger asChild>
-                <Button variant="outline" data-testid="button-filter-customers">
-                  <Filter className="w-4 h-4 mr-2" />
-                  {t("filter")}
-                  {(countryFilters.length > 0 || dateFrom || dateTo) && (
-                    <Badge variant="secondary" className="ml-2">
-                      {countryFilters.length + (dateFrom ? 1 : 0) + (dateTo ? 1 : 0)}
-                    </Badge>
-                  )}
-                </Button>
-              </PopoverTrigger>
-              <PopoverContent className="w-64" data-testid="popover-filter-customers">
-                <div className="space-y-4">
-                  <div>
-                    <h4 className="font-semibold mb-3">{t("filterByCountry")}</h4>
-                    <div className="space-y-2 max-h-64 overflow-y-auto">
-                      {uniqueCountries.length > 0 ? (
-                        uniqueCountries.map((country) => (
-                          <div key={country} className="flex items-center space-x-2">
-                            <Checkbox
-                              id={`filter-${country}`}
-                              checked={countryFilters.includes(country)}
-                              onCheckedChange={() => toggleCountryFilter(country)}
-                              data-testid={`checkbox-filter-${country}`}
-                            />
-                            <Label
-                              htmlFor={`filter-${country}`}
-                              className="text-sm font-normal cursor-pointer"
-                            >
-                              {country}
-                            </Label>
-                          </div>
-                        ))
-                      ) : (
-                        <p className="text-sm text-muted-foreground">{t("noCountriesAvailable")}</p>
-                      )}
-                    </div>
-                  </div>
-                  
-                  <div className="border-t pt-4">
-                    <h4 className="font-semibold mb-3">{t("filterByDate")}</h4>
-                    {(dateFrom || dateTo) && (
-                      <div className="mb-3 p-2 bg-blue-50 rounded text-sm">
-                        {dateFrom && <div>From: {dateFrom.toLocaleDateString()}</div>}
-                        {dateTo && <div>To: {dateTo.toLocaleDateString()}</div>}
-                      </div>
-                    )}
-                    <div className="space-y-3">
-                      <div>
-                        <Label className="text-xs mb-1 block">{t("fromDate")}</Label>
-                        <Calendar
-                          mode="single"
-                          selected={dateFrom}
-                          onSelect={setDateFrom}
-                          className="rounded-md border"
-                          data-testid="calendar-from-date-customers"
-                        />
-                      </div>
-                      <div>
-                        <Label className="text-xs mb-1 block">{t("toDate")}</Label>
-                        <Calendar
-                          mode="single"
-                          selected={dateTo}
-                          onSelect={setDateTo}
-                          className="rounded-md border"
-                          data-testid="calendar-to-date-customers"
-                        />
-                      </div>
-                    </div>
-                  </div>
-                  
-                  <div className="flex justify-between pt-2 border-t">
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => {
-                        setCountryFilters([]);
-                        setDateFrom(undefined);
-                        setDateTo(undefined);
-                      }}
-                      data-testid="button-reset-filters"
-                    >
-                      {t("reset")}
-                    </Button>
-                    <Button
-                      size="sm"
-                      onClick={() => setIsFilterOpen(false)}
-                      data-testid="button-apply-filters"
-                    >
-                      {t("apply")}
-                    </Button>
-                  </div>
-                </div>
-              </PopoverContent>
-            </Popover>
           </div>
-          <Button onClick={() => setIsModalOpen(true)} data-testid="button-new-customer">
-            <Plus className="w-4 h-4 sm:ltr:mr-2 sm:rtl:ml-2" />
-            <span className="hidden sm:inline">{t("addCustomer")}</span>
-          </Button>
-        </div>
+        </CardHeader>
+        <CardContent>
+          {isLoading ? (
+            <p>Loading...</p>
+          ) : filteredCustomers.length === 0 ? (
+            <p className="text-center py-8 text-muted-foreground">No customers found. Add your first customer!</p>
+          ) : (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Name</TableHead>
+                  <TableHead>Phone</TableHead>
+                  <TableHead>Email</TableHead>
+                  <TableHead>Total Purchases</TableHead>
+                  <TableHead>Balance Owed</TableHead>
+                  <TableHead>Actions</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {filteredCustomers.map((customer) => (
+                  <TableRow key={customer.id} data-testid={`customer-row-${customer.id}`}>
+                    <TableCell className="font-medium">{customer.name}</TableCell>
+                    <TableCell>
+                      <div className="flex items-center gap-1">
+                        <Phone className="w-3 h-3" />
+                        {customer.phone}
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      {customer.email ? (
+                        <div className="flex items-center gap-1">
+                          <Mail className="w-3 h-3" />
+                          {customer.email}
+                        </div>
+                      ) : "-"}
+                    </TableCell>
+                    <TableCell>{customer.totalPurchases} LYD</TableCell>
+                    <TableCell>
+                      {parseFloat(customer.balanceOwed) > 0 ? (
+                        <Badge variant="destructive" className="flex items-center gap-1 w-fit">
+                          <DollarSign className="w-3 h-3" />
+                          {customer.balanceOwed} LYD
+                        </Badge>
+                      ) : (
+                        <Badge variant="secondary">Paid</Badge>
+                      )}
+                    </TableCell>
+                    <TableCell>
+                      <div className="flex gap-2">
+                        <Button variant="ghost" size="sm" onClick={() => handleView(customer)} data-testid={`button-view-${customer.id}`}>
+                          <Eye className="w-4 h-4" />
+                        </Button>
+                        <Button variant="ghost" size="sm" onClick={() => handleEdit(customer)} data-testid={`button-edit-${customer.id}`}>
+                          <Pencil className="w-4 h-4" />
+                        </Button>
+                        <Button variant="ghost" size="sm" onClick={() => deleteMutation.mutate(customer.id)} data-testid={`button-delete-${customer.id}`}>
+                          <Trash2 className="w-4 h-4 text-destructive" />
+                        </Button>
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          )}
+        </CardContent>
+      </Card>
 
-        {/* Customers Table */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center">
-              <Users className="w-5 h-5 mr-2" />
-              {t("customersCount")} ({filteredCustomers.length})
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            {isLoading ? (
-              <div className="text-center py-8">
-                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto"></div>
-                <p className="text-muted-foreground mt-2">{t("loadingCustomers")}</p>
+      <Dialog open={isViewDialogOpen} onOpenChange={setIsViewDialogOpen}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Customer Details</DialogTitle>
+          </DialogHeader>
+          {viewingCustomer && (
+            <div className="space-y-6">
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <p className="text-sm text-muted-foreground">Name</p>
+                  <p className="font-medium">{viewingCustomer.name}</p>
+                </div>
+                <div>
+                  <p className="text-sm text-muted-foreground">Phone</p>
+                  <p className="font-medium">{viewingCustomer.phone}</p>
+                </div>
+                <div>
+                  <p className="text-sm text-muted-foreground">Email</p>
+                  <p className="font-medium">{viewingCustomer.email || "-"}</p>
+                </div>
+                <div>
+                  <p className="text-sm text-muted-foreground">Address</p>
+                  <p className="font-medium">{viewingCustomer.address || "-"}</p>
+                </div>
               </div>
-            ) : filteredCustomers.length === 0 ? (
-              <div className="text-center py-8">
-                <Users className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
-                <h3 className="text-lg font-medium text-foreground mb-2">{t("noCustomersFound")}</h3>
-                <p className="text-muted-foreground">
-                  {searchTerm ? t("noCustomersMatch") : t("getStartedFirstCustomer")}
-                </p>
-                {!searchTerm && (
-                  <Button className="mt-4" onClick={() => setIsModalOpen(true)} data-testid="button-add-first-customer">
-                    <Plus className="w-4 h-4 mr-2" />
-                    {t("addFirstCustomer")}
+
+              <div className="flex justify-between items-center p-4 bg-muted rounded-lg">
+                <div>
+                  <p className="text-sm text-muted-foreground">Total Purchases</p>
+                  <p className="text-xl font-bold">{viewingCustomer.totalPurchases} LYD</p>
+                </div>
+                <div>
+                  <p className="text-sm text-muted-foreground">Balance Owed</p>
+                  <p className={`text-xl font-bold ${parseFloat(viewingCustomer.balanceOwed) > 0 ? 'text-destructive' : ''}`}>
+                    {viewingCustomer.balanceOwed} LYD
+                  </p>
+                </div>
+                {parseFloat(viewingCustomer.balanceOwed) > 0 && (
+                  <Button onClick={() => setIsPaymentDialogOpen(true)} data-testid="button-record-payment">
+                    Record Payment
                   </Button>
                 )}
               </div>
-            ) : (
-              <div className="overflow-x-auto">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>{t("name")}</TableHead>
-                      <TableHead>{t('shippingCodeLabel')}</TableHead>
-                      <TableHead>{t('totalAmountLabel')}</TableHead>
-                      <TableHead>{t('downPaymentLabel')}</TableHead>
-                      <TableHead>{t("phone")}</TableHead>
-                      <TableHead>{t("country")}</TableHead>
-                      <TableHead>{t("customerCreated")}</TableHead>
-                      <TableHead>{t("actions")}</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                <TableBody>
-                  {filteredCustomers.map((customer) => {
-                    const customerOrders = orders.filter(order => order.customerId === customer.id);
-                    const totalAmount = customerOrders.reduce((sum, order) => sum + parseFloat(order.totalAmount || "0"), 0);
-                    const totalDownPayment = customerOrders.reduce((sum, order) => sum + parseFloat(order.downPayment || "0"), 0);
-                    
-                    return (
-                      <TableRow key={customer.id} data-testid={`row-customer-${customer.id}`}>
-                        <TableCell className="font-medium" data-testid={`text-name-${customer.id}`}>
-                          {customer.firstName} {customer.lastName}
-                        </TableCell>
-                        <TableCell data-testid={`text-customer-code-${customer.id}`}>
-                          <span className="font-semibold text-primary">{customer.shippingCode || "-"}</span>
-                        </TableCell>
-                        <TableCell data-testid={`text-total-amount-${customer.id}`}>
-                          {lydExchangeRate > 0 ? (
-                            <div>
-                              <div className="font-bold text-blue-600">
-                                {(totalAmount * lydExchangeRate).toFixed(2)} LYD
-                              </div>
-                              <div className="text-xs text-muted-foreground">
-                                ${totalAmount.toFixed(2)}
-                              </div>
-                            </div>
-                          ) : (
-                            <span className="font-semibold">${totalAmount.toFixed(2)}</span>
-                          )}
-                        </TableCell>
-                        <TableCell data-testid={`text-down-payment-${customer.id}`}>
-                          {lydExchangeRate > 0 ? (
-                            <div>
-                              <div className="font-bold text-green-600">
-                                {(totalDownPayment * lydExchangeRate).toFixed(2)} LYD
-                              </div>
-                              <div className="text-xs text-muted-foreground">
-                                ${totalDownPayment.toFixed(2)}
-                              </div>
-                            </div>
-                          ) : (
-                            <span className="font-semibold text-green-600">${totalDownPayment.toFixed(2)}</span>
-                          )}
-                        </TableCell>
-                        <TableCell data-testid={`text-phone-${customer.id}`}>
-                          {customer.phone || t("emptyPhone")}
-                        </TableCell>
-                        <TableCell data-testid={`text-country-${customer.id}`}>
-                          {customer.country}
-                        </TableCell>
-                        <TableCell data-testid={`text-created-${customer.id}`}>
-                          {new Date(customer.createdAt).toLocaleDateString()}
-                        </TableCell>
-                        <TableCell>
-                          <div className="flex items-center gap-2">
-                            <Button variant="outline" size="sm" onClick={() => openEditModal(customer)} data-testid={`button-edit-customer-${customer.id}`}>
-                              {t("edit")}
-                            </Button>
-                            <Button 
-                              variant="outline" 
-                              size="sm" 
-                              onClick={() => openViewModal(customer)}
-                              data-testid={`button-view-customer-${customer.id}`}
-                            >
-                              {t("view")}
-                            </Button>
-                            <Button 
-                              variant="destructive" 
-                              size="sm" 
-                              onClick={() => openDeleteDialog(customer)}
-                              data-testid={`button-delete-customer-${customer.id}`}
-                            >
-                              <Trash2 className="w-4 h-4" />
-                            </Button>
-                          </div>
-                        </TableCell>
-                      </TableRow>
-                    );
-                  })}
-                </TableBody>
-              </Table>
-            </div>
-            )}
-          </CardContent>
-        </Card>
-
-        {/* Customer Creation Modal */}
-        <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
-          <DialogContent className="max-w-md" data-testid="modal-create-customer">
-            <DialogHeader>
-              <DialogTitle>{t("addNewCustomer")}</DialogTitle>
-            </DialogHeader>
-            <form onSubmit={handleSubmit} className="space-y-4">
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <Label htmlFor="firstName">{t('firstNameRequired')}</Label>
-                  <Input
-                    id="firstName"
-                    value={formData.firstName}
-                    onChange={(e) => setFormData(prev => ({ ...prev, firstName: e.target.value }))}
-                    placeholder={t('firstNamePlaceholder')}
-                    required
-                    data-testid="input-first-name"
-                  />
-                </div>
-                <div>
-                  <Label htmlFor="lastName">{t('lastNameRequired')}</Label>
-                  <Input
-                    id="lastName"
-                    value={formData.lastName}
-                    onChange={(e) => setFormData(prev => ({ ...prev, lastName: e.target.value }))}
-                    placeholder={t('lastNamePlaceholder')}
-                    required
-                    data-testid="input-last-name"
-                  />
-                </div>
-              </div>
 
               <div>
-                <Label htmlFor="phone">{t('phoneRequired')}</Label>
-                <Input
-                  id="phone"
-                  type="tel"
-                  value={formData.phone || ""}
-                  onChange={(e) => setFormData(prev => ({ ...prev, phone: e.target.value }))}
-                  placeholder={t('enterPhoneNumber')}
-                  required
-                  data-testid="input-phone"
-                />
-              </div>
-
-              <div>
-                <Label htmlFor="city">{t('cityRequired')}</Label>
-                <Input
-                  id="city"
-                  value={formData.city || ""}
-                  onChange={(e) => setFormData(prev => ({ ...prev, city: e.target.value }))}
-                  placeholder={t('enterCity')}
-                  required
-                  data-testid="input-city"
-                />
-              </div>
-
-              <div>
-                <Label htmlFor="customerCode">{t('customerCode')}</Label>
-                <Input
-                  id="customerCode"
-                  value={formData.shippingCode || ""}
-                  onChange={(e) => setFormData(prev => ({ ...prev, shippingCode: e.target.value }))}
-                  placeholder={t('enterCustomerCode')}
-                  data-testid="input-customer-code"
-                />
-              </div>
-
-              <div className="flex justify-end space-x-2 pt-4">
-                <Button 
-                  type="button" 
-                  variant="outline" 
-                  onClick={() => setIsModalOpen(false)}
-                  data-testid="button-cancel"
-                >
-                  {t("cancel")}
-                </Button>
-                <Button 
-                  type="submit" 
-                  disabled={createCustomerMutation.isPending}
-                  data-testid="button-save-customer"
-                >
-                  {createCustomerMutation.isPending ? t("creatingCustomer") : t("createCustomer")}
-                </Button>
-              </div>
-            </form>
-          </DialogContent>
-        </Dialog>
-
-        {/* Edit Customer Modal */}
-        <Dialog open={isEditModalOpen} onOpenChange={setIsEditModalOpen}>
-          <DialogContent className="max-w-md" data-testid="modal-edit-customer">
-            <DialogHeader>
-              <DialogTitle>{t("editCustomer")}</DialogTitle>
-            </DialogHeader>
-            <form onSubmit={handleEditSubmit} className="space-y-4">
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <Label htmlFor="edit-firstName">{t("firstNameRequired")}</Label>
-                  <Input
-                    id="edit-firstName"
-                    value={editFormData.firstName}
-                    onChange={(e) => setEditFormData(prev => ({ ...prev, firstName: e.target.value }))}
-                    required
-                    data-testid="input-edit-first-name"
-                  />
-                </div>
-                <div>
-                  <Label htmlFor="edit-lastName">{t("lastNameRequired")}</Label>
-                  <Input
-                    id="edit-lastName"
-                    value={editFormData.lastName}
-                    onChange={(e) => setEditFormData(prev => ({ ...prev, lastName: e.target.value }))}
-                    required
-                    data-testid="input-edit-last-name"
-                  />
-                </div>
-              </div>
-
-              <div>
-                <Label htmlFor="edit-phone">{t("phone")}*</Label>
-                <Input
-                  id="edit-phone"
-                  type="tel"
-                  value={editFormData.phone || ""}
-                  onChange={(e) => setEditFormData(prev => ({ ...prev, phone: e.target.value }))}
-                  required
-                  data-testid="input-edit-phone"
-                />
-              </div>
-
-              <div>
-                <Label htmlFor="edit-shippingCode">{t("shippingCode")}</Label>
-                <Input
-                  id="edit-shippingCode"
-                  value={editFormData.shippingCode || ""}
-                  onChange={(e) => setEditFormData(prev => ({ ...prev, shippingCode: e.target.value }))}
-                  data-testid="input-edit-shipping-code"
-                />
-              </div>
-
-              <div className="border-t pt-4 space-y-3">
-                <h4 className="font-semibold text-sm">{t('paymentInformation')}</h4>
-                <div className="grid grid-cols-3 gap-4">
-                  <div>
-                    <Label htmlFor="edit-total-amount">{t('totalAmountLabel')}</Label>
-                    <Input
-                      id="edit-total-amount"
-                      type="number"
-                      step="0.01"
-                      value={editingTotalAmount.toFixed(2)}
-                      disabled
-                      className="bg-muted"
-                      data-testid="input-edit-total-amount"
-                    />
-                  </div>
-                  <div>
-                    <Label htmlFor="edit-down-payment">{t('downPaymentRequired')}</Label>
-                    <Input
-                      id="edit-down-payment"
-                      type="number"
-                      step="0.01"
-                      min="0"
-                      max={editingTotalAmount}
-                      value={editingTotalDownPayment}
-                      onChange={(e) => setEditingTotalDownPayment(parseFloat(e.target.value) || 0)}
-                      data-testid="input-edit-customer-down-payment"
-                    />
-                  </div>
-                  <div>
-                    <Label htmlFor="edit-remaining">{t('remainingBalance')}</Label>
-                    <Input
-                      id="edit-remaining"
-                      type="number"
-                      step="0.01"
-                      value={(editingTotalAmount - editingTotalDownPayment).toFixed(2)}
-                      disabled
-                      className="bg-muted"
-                      data-testid="input-edit-remaining-balance"
-                    />
-                  </div>
-                </div>
-                <p className="text-xs text-muted-foreground">
-                  This will update the down payment across all orders for this customer proportionally.
-                </p>
-              </div>
-
-              <div className="flex justify-end space-x-2 pt-4">
-                <Button 
-                  type="button" 
-                  variant="outline" 
-                  onClick={() => setIsEditModalOpen(false)}
-                  data-testid="button-cancel-edit"
-                >
-                  {t("cancel")}
-                </Button>
-                <Button 
-                  type="submit" 
-                  disabled={updateCustomerMutation.isPending}
-                  data-testid="button-update-customer"
-                >
-                  {updateCustomerMutation.isPending ? t("updatingCustomer") : t("updateCustomer")}
-                </Button>
-              </div>
-            </form>
-          </DialogContent>
-        </Dialog>
-
-        {/* View Customer Modal */}
-        <Dialog open={isViewModalOpen} onOpenChange={(open) => {
-          setIsViewModalOpen(open);
-          if (!open) setViewingCustomer(null);
-        }}>
-          <DialogContent className="max-w-2xl" data-testid="modal-view-customer">
-            <DialogHeader>
-              <DialogTitle>{t("customerDetails")}</DialogTitle>
-            </DialogHeader>
-            {viewingCustomer && (
-              <div className="space-y-6">
-                {/* Personal Information */}
-                <div className="bg-muted/50 p-4 rounded-lg space-y-3">
-                  <h3 className="font-semibold text-lg mb-3">{t("personalInformation")}</h3>
-                  <div className="grid grid-cols-2 gap-4 text-sm">
-                    <div>
-                      <span className="font-medium text-muted-foreground">{t("customerId")}</span>
-                      <p className="mt-1" data-testid="text-view-customer-id">{viewingCustomer.id.substring(0, 8)}...</p>
-                    </div>
-                    <div>
-                      <span className="font-medium text-muted-foreground">{t("fullName")}</span>
-                      <p className="mt-1" data-testid="text-view-customer-name">
-                        {viewingCustomer.firstName} {viewingCustomer.lastName}
-                      </p>
-                    </div>
-                    <div>
-                      <span className="font-medium text-muted-foreground">{t('shippingCodeLabel')}</span>
-                      <p className="mt-1 font-semibold text-primary" data-testid="text-view-customer-code">{viewingCustomer.shippingCode || t("naLabel")}</p>
-                    </div>
-                    <div>
-                      <span className="font-medium text-muted-foreground">{t("phoneLabel")}</span>
-                      <p className="mt-1" data-testid="text-view-customer-phone">{viewingCustomer.phone || t("naLabel")}</p>
-                    </div>
-                    <div>
-                      <span className="font-medium text-muted-foreground">{t("emailLabel")}</span>
-                      <p className="mt-1" data-testid="text-view-customer-email">{viewingCustomer.email}</p>
-                    </div>
-                    <div>
-                      <span className="font-medium text-muted-foreground">{t("createdDate")}</span>
-                      <p className="mt-1" data-testid="text-view-customer-created">
-                        {new Date(viewingCustomer.createdAt).toLocaleString()}
-                      </p>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Address Information */}
-                <div className="bg-muted/50 p-4 rounded-lg space-y-3">
-                  <h3 className="font-semibold text-lg mb-3">{t("addressInformation")}</h3>
-                  <div className="grid grid-cols-2 gap-4 text-sm">
-                    <div>
-                      <span className="font-medium text-muted-foreground">{t("streetAddress")}</span>
-                      <p className="mt-1" data-testid="text-view-customer-address">
-                        {viewingCustomer.address || t("naLabel")}
-                      </p>
-                    </div>
-                    <div>
-                      <span className="font-medium text-muted-foreground">{t("city")}:</span>
-                      <p className="mt-1" data-testid="text-view-customer-city">{viewingCustomer.city || t("naLabel")}</p>
-                    </div>
-                    <div>
-                      <span className="font-medium text-muted-foreground">{t("postalCode")}:</span>
-                      <p className="mt-1" data-testid="text-view-customer-postal">
-                        {viewingCustomer.postalCode || t("naLabel")}
-                      </p>
-                    </div>
-                    <div>
-                      <span className="font-medium text-muted-foreground">{t("country")}:</span>
-                      <p className="mt-1" data-testid="text-view-customer-country">{viewingCustomer.country}</p>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Payment Information */}
-                {(() => {
-                  const customerOrders = orders.filter(order => order.customerId === viewingCustomer.id);
-                  const totalAmount = customerOrders.reduce((sum, order) => sum + parseFloat(order.totalAmount), 0);
-                  const totalDownPayment = customerOrders.reduce((sum, order) => sum + parseFloat(order.downPayment || "0"), 0);
-                  const totalRemainingBalance = customerOrders.reduce((sum, order) => sum + parseFloat(order.remainingBalance || "0"), 0);
-                  
-                  return (
-                    <div className="bg-muted/50 p-4 rounded-lg space-y-3">
-                      <h3 className="font-semibold text-lg mb-3">{t('paymentSummary')}</h3>
-                      <div className="grid grid-cols-2 gap-4 text-sm">
+                <h4 className="font-medium mb-2">Purchase History</h4>
+                {viewingCustomer.sales && viewingCustomer.sales.length > 0 ? (
+                  <div className="space-y-2 max-h-48 overflow-auto">
+                    {viewingCustomer.sales.map((sale: Sale) => (
+                      <div key={sale.id} className="flex justify-between items-center p-3 bg-muted rounded">
                         <div>
-                          <span className="font-medium text-muted-foreground">{t('totalOrders')}:</span>
-                          <p className="mt-1" data-testid="text-view-total-orders">{customerOrders.length}</p>
+                          <p className="font-medium">{sale.saleNumber}</p>
+                          <p className="text-sm text-muted-foreground">{format(new Date(sale.createdAt), "PPp")}</p>
                         </div>
-                        <div>
-                          <span className="font-medium text-muted-foreground">{t('totalOrderAmount')}:</span>
-                          {lydExchangeRate > 0 ? (
-                            <div className="mt-1">
-                              <p className="font-bold text-blue-600" data-testid="text-view-total-amount">
-                                {(totalAmount * lydExchangeRate).toFixed(2)} LYD
-                              </p>
-                              <p className="text-xs text-muted-foreground">${totalAmount.toFixed(2)}</p>
-                            </div>
-                          ) : (
-                            <p className="mt-1 font-semibold" data-testid="text-view-total-amount">${totalAmount.toFixed(2)}</p>
-                          )}
-                        </div>
-                        <div>
-                          <span className="font-medium text-muted-foreground">{t('totalDownPayment')}:</span>
-                          {lydExchangeRate > 0 ? (
-                            <div className="mt-1">
-                              <p className="font-bold text-green-600" data-testid="text-view-total-down-payment">
-                                {(totalDownPayment * lydExchangeRate).toFixed(2)} LYD
-                              </p>
-                              <p className="text-xs text-muted-foreground">${totalDownPayment.toFixed(2)}</p>
-                            </div>
-                          ) : (
-                            <p className="mt-1 text-blue-600 font-semibold" data-testid="text-view-total-down-payment">${totalDownPayment.toFixed(2)}</p>
-                          )}
-                        </div>
-                        <div>
-                          <span className="font-medium text-muted-foreground">{t('totalRemainingBalance')}:</span>
-                          {lydExchangeRate > 0 ? (
-                            <div className="mt-1">
-                              <p className="font-bold text-orange-600" data-testid="text-view-total-remaining-balance">
-                                {(totalRemainingBalance * lydExchangeRate).toFixed(2)} LYD
-                              </p>
-                              <p className="text-xs text-muted-foreground">${totalRemainingBalance.toFixed(2)}</p>
-                            </div>
-                          ) : (
-                            <p className="mt-1 text-red-600 font-semibold" data-testid="text-view-total-remaining-balance">${totalRemainingBalance.toFixed(2)}</p>
-                          )}
+                        <div className="text-right">
+                          <p className="font-bold">{sale.totalAmount} {sale.currency}</p>
+                          <Badge variant={sale.status === "completed" ? "secondary" : "outline"}>{sale.status}</Badge>
                         </div>
                       </div>
-                    </div>
-                  );
-                })()}
-
-                <div className="flex justify-end pt-4 border-t">
-                  <Button 
-                    variant="outline" 
-                    onClick={() => setIsViewModalOpen(false)}
-                    data-testid="button-close-view-customer"
-                  >
-                    {t("close")}
-                  </Button>
-                </div>
-              </div>
-            )}
-          </DialogContent>
-        </Dialog>
-
-        {/* Delete Confirmation Dialog */}
-        <AlertDialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
-          <AlertDialogContent data-testid="dialog-delete-customer">
-            <AlertDialogHeader>
-              <AlertDialogTitle>{t("deleteCustomerTitle")}</AlertDialogTitle>
-              <AlertDialogDescription>
-                {t("deleteCustomerConfirmation")}
-                {deletingCustomer && (
-                  <div className="mt-2 p-2 bg-muted rounded text-sm">
-                    <strong>{deletingCustomer.firstName} {deletingCustomer.lastName}</strong> - {deletingCustomer.email}
+                    ))}
                   </div>
+                ) : (
+                  <p className="text-muted-foreground text-center py-4">No purchases yet</p>
                 )}
-              </AlertDialogDescription>
-            </AlertDialogHeader>
-            <AlertDialogFooter>
-              <AlertDialogCancel data-testid="button-cancel-delete">{t("cancel")}</AlertDialogCancel>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={isPaymentDialogOpen} onOpenChange={setIsPaymentDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Record Payment</DialogTitle>
+          </DialogHeader>
+          {viewingCustomer && (
+            <div className="space-y-4">
+              <div className="p-3 bg-muted rounded">
+                <p className="text-sm text-muted-foreground">Current Balance</p>
+                <p className="text-xl font-bold text-destructive">{viewingCustomer.balanceOwed} LYD</p>
+              </div>
+              <div>
+                <label className="text-sm font-medium">Payment Amount (LYD)</label>
+                <Input
+                  type="number"
+                  step="0.01"
+                  value={paymentAmount}
+                  onChange={(e) => setPaymentAmount(e.target.value)}
+                  placeholder="Enter amount"
+                  data-testid="input-payment-amount"
+                />
+              </div>
               <Button
-                onClick={(e) => {
-                  e.preventDefault();
-                  handleDelete();
-                  setIsDeleteDialogOpen(false);
-                }}
-                className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-                data-testid="button-confirm-delete"
+                className="w-full"
+                onClick={() => paymentMutation.mutate({ id: viewingCustomer.id, amount: paymentAmount })}
+                disabled={!paymentAmount || paymentMutation.isPending}
+                data-testid="button-submit-payment"
               >
-                {t("delete")}
+                {paymentMutation.isPending ? "Processing..." : "Record Payment"}
               </Button>
-            </AlertDialogFooter>
-          </AlertDialogContent>
-        </AlertDialog>
-      </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
