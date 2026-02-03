@@ -134,6 +134,37 @@ The system features comprehensive functionality with responsive interface, bilin
 
 - **Persistent Dark Mode**: ThemeProvider with localStorage sync for dark mode preferences
 
+- **Enhanced Financial Management Module (February 2026)**:
+  - Unified Finance page with 6 organized tabs: Overview, Safes, Banks, Receipts, Capital, Reconcile
+  - **Safes Management**: Multi-currency safes (USD/LYD) with transaction history, deposits, and withdrawals
+  - **Banks Management**: Bank accounts with dual currency support and transaction tracking
+  - **Expenses with Double-Entry Accounting**: 
+    - Server-side expense number generation for security
+    - Source of funds selection (safe or bank) with automatic balance deduction
+    - Currency selection (USD/LYD) with dual-amount tracking
+    - Expense categories linked to revenue accounts for proper accounting
+  - **Receipts System**:
+    - Payment and collection receipts with server-side numbering
+    - Automatic safe transaction creation when cashbox selected
+    - Print functionality with popup window for receipt printing
+    - Customer linking with full details display
+  - **Owner Capital Accounts**:
+    - Personal accounts for business owners with type classification (capital, personal, loan)
+    - Capital injection and withdrawal transaction tracking
+    - Dual currency balance display (USD/LYD)
+  - **Safe Reconciliation**:
+    - System vs actual balance comparison
+    - Shortage/excess tracking with historical records
+    - Notes field for reconciliation explanations
+  - **Revenue Categories**: Order revenues, exchange rate differences, external invoice clearance
+  - **Hierarchical Account Structure**: Multi-level sub-accounts with parentId for aggregated reporting
+  - Full bilingual support (English/Arabic) with RTL layout
+
+- **Order Status Workflow Enhancement (February 2026)**:
+  - Extended status enum: pending, processing, partially_arrived, arrived, ready_to_collect, with_shipping_company, out_for_delivery, office_collect, delivered, ready_to_buy
+  - Down payment type options: none, upfront, shipping_company (for orders to other cities)
+  - Darib Assabil integration correctly sets "with_shipping_company" status (not delivered)
+
 # External Dependencies
 
 ## Third-Party Services
