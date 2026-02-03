@@ -21,6 +21,18 @@ import {
   type InsertDeliveryTask,
   type Expense,
   type InsertExpense,
+  type ExpenseCategory,
+  type InsertExpenseCategory,
+  type SafeReconciliation,
+  type InsertSafeReconciliation,
+  type OwnerAccount,
+  type InsertOwnerAccount,
+  type OwnerAccountTransaction,
+  type InsertOwnerAccountTransaction,
+  type RevenueCategory,
+  type InsertRevenueCategory,
+  type Revenue,
+  type InsertRevenue,
   type DeliveryTaskWithDetails,
   type OrderWithCustomer,
   type CustomerWithOrders,
@@ -58,6 +70,12 @@ import {
   messages,
   deliveryTasks,
   expenses,
+  expenseCategories,
+  safeReconciliations,
+  ownerAccounts,
+  ownerAccountTransactions,
+  revenueCategories,
+  revenues,
   revenueAccounts,
   safes,
   safeTransactions,
@@ -176,6 +194,37 @@ export interface IStorage {
   createExpense(expense: InsertExpense): Promise<Expense>;
   getAllExpenses(): Promise<Expense[]>;
   deleteExpense(id: string): Promise<boolean>;
+  getNextExpenseNumber(): Promise<string>;
+
+  // Expense Categories
+  getAllExpenseCategories(): Promise<ExpenseCategory[]>;
+  createExpenseCategory(category: InsertExpenseCategory): Promise<ExpenseCategory>;
+  updateExpenseCategory(id: string, category: Partial<InsertExpenseCategory>): Promise<ExpenseCategory | undefined>;
+  deleteExpenseCategory(id: string): Promise<boolean>;
+
+  // Safe Reconciliations
+  getSafeReconciliations(safeId: string): Promise<SafeReconciliation[]>;
+  createSafeReconciliation(reconciliation: InsertSafeReconciliation): Promise<SafeReconciliation>;
+
+  // Owner Accounts
+  getAllOwnerAccounts(): Promise<OwnerAccount[]>;
+  createOwnerAccount(account: InsertOwnerAccount): Promise<OwnerAccount>;
+  updateOwnerAccount(id: string, account: Partial<InsertOwnerAccount>): Promise<OwnerAccount | undefined>;
+  deleteOwnerAccount(id: string): Promise<boolean>;
+  getOwnerAccountTransactions(accountId: string): Promise<OwnerAccountTransaction[]>;
+  createOwnerAccountTransaction(transaction: InsertOwnerAccountTransaction): Promise<OwnerAccountTransaction>;
+
+  // Revenue Categories
+  getAllRevenueCategories(): Promise<RevenueCategory[]>;
+  createRevenueCategory(category: InsertRevenueCategory): Promise<RevenueCategory>;
+  updateRevenueCategory(id: string, category: Partial<InsertRevenueCategory>): Promise<RevenueCategory | undefined>;
+  deleteRevenueCategory(id: string): Promise<boolean>;
+
+  // Revenues
+  getAllRevenues(): Promise<Revenue[]>;
+  createRevenue(revenue: InsertRevenue): Promise<Revenue>;
+  deleteRevenue(id: string): Promise<boolean>;
+  getNextRevenueNumber(): Promise<string>;
 
   // ============ FINANCIAL MODULE METHODS ============
 
@@ -1471,6 +1520,144 @@ export class PostgreSQLStorage implements IStorage {
   async deleteExpense(id: string): Promise<boolean> {
     const result = await db.delete(expenses).where(eq(expenses.id, id)).returning();
     return result.length > 0;
+  }
+
+  async getNextExpenseNumber(): Promise<string> {
+    const result = await db.select({ count: sql<number>`count(*)` }).from(expenses);
+    const count = result[0]?.count || 0;
+    return `EXP-${String(Number(count) + 1).padStart(6, '0')}`;
+  }
+
+  // Expense Categories
+  async getAllExpenseCategories(): Promise<ExpenseCategory[]> {
+    return await db.select().from(expenseCategories).orderBy(expenseCategories.code);
+  }
+
+  async createExpenseCategory(category: InsertExpenseCategory): Promise<ExpenseCategory> {
+    const result = await db.insert(expenseCategories).values(category).returning();
+    return result[0];
+  }
+
+  async updateExpenseCategory(id: string, category: Partial<InsertExpenseCategory>): Promise<ExpenseCategory | undefined> {
+    const result = await db.update(expenseCategories)
+      .set({ ...category, updatedAt: new Date() })
+      .where(eq(expenseCategories.id, id))
+      .returning();
+    return result[0];
+  }
+
+  async deleteExpenseCategory(id: string): Promise<boolean> {
+    const result = await db.delete(expenseCategories).where(eq(expenseCategories.id, id)).returning();
+    return result.length > 0;
+  }
+
+  // Safe Reconciliations
+  async getSafeReconciliations(safeId: string): Promise<SafeReconciliation[]> {
+    return await db.select()
+      .from(safeReconciliations)
+      .where(eq(safeReconciliations.safeId, safeId))
+      .orderBy(desc(safeReconciliations.reconciledAt));
+  }
+
+  async createSafeReconciliation(reconciliation: InsertSafeReconciliation): Promise<SafeReconciliation> {
+    const result = await db.insert(safeReconciliations).values(reconciliation).returning();
+    return result[0];
+  }
+
+  // Owner Accounts
+  async getAllOwnerAccounts(): Promise<OwnerAccount[]> {
+    return await db.select().from(ownerAccounts).orderBy(ownerAccounts.name);
+  }
+
+  async createOwnerAccount(account: InsertOwnerAccount): Promise<OwnerAccount> {
+    const result = await db.insert(ownerAccounts).values(account).returning();
+    return result[0];
+  }
+
+  async updateOwnerAccount(id: string, account: Partial<InsertOwnerAccount>): Promise<OwnerAccount | undefined> {
+    const result = await db.update(ownerAccounts)
+      .set({ ...account, updatedAt: new Date() })
+      .where(eq(ownerAccounts.id, id))
+      .returning();
+    return result[0];
+  }
+
+  async deleteOwnerAccount(id: string): Promise<boolean> {
+    const result = await db.delete(ownerAccounts).where(eq(ownerAccounts.id, id)).returning();
+    return result.length > 0;
+  }
+
+  async getOwnerAccountTransactions(accountId: string): Promise<OwnerAccountTransaction[]> {
+    return await db.select()
+      .from(ownerAccountTransactions)
+      .where(eq(ownerAccountTransactions.ownerAccountId, accountId))
+      .orderBy(desc(ownerAccountTransactions.createdAt));
+  }
+
+  async createOwnerAccountTransaction(transaction: InsertOwnerAccountTransaction): Promise<OwnerAccountTransaction> {
+    const result = await db.insert(ownerAccountTransactions).values(transaction).returning();
+    
+    // Update owner account balance
+    const account = await db.select().from(ownerAccounts).where(eq(ownerAccounts.id, transaction.ownerAccountId)).limit(1);
+    if (account[0]) {
+      const multiplier = transaction.type === 'deposit' ? 1 : -1;
+      const newBalanceUSD = parseFloat(account[0].balanceUSD || "0") + (parseFloat(transaction.amountUSD || "0") * multiplier);
+      const newBalanceLYD = parseFloat(account[0].balanceLYD || "0") + (parseFloat(transaction.amountLYD || "0") * multiplier);
+      
+      await db.update(ownerAccounts)
+        .set({
+          balanceUSD: newBalanceUSD.toString(),
+          balanceLYD: newBalanceLYD.toString(),
+          updatedAt: new Date()
+        })
+        .where(eq(ownerAccounts.id, transaction.ownerAccountId));
+    }
+    
+    return result[0];
+  }
+
+  // Revenue Categories
+  async getAllRevenueCategories(): Promise<RevenueCategory[]> {
+    return await db.select().from(revenueCategories).orderBy(revenueCategories.code);
+  }
+
+  async createRevenueCategory(category: InsertRevenueCategory): Promise<RevenueCategory> {
+    const result = await db.insert(revenueCategories).values(category).returning();
+    return result[0];
+  }
+
+  async updateRevenueCategory(id: string, category: Partial<InsertRevenueCategory>): Promise<RevenueCategory | undefined> {
+    const result = await db.update(revenueCategories)
+      .set({ ...category, updatedAt: new Date() })
+      .where(eq(revenueCategories.id, id))
+      .returning();
+    return result[0];
+  }
+
+  async deleteRevenueCategory(id: string): Promise<boolean> {
+    const result = await db.delete(revenueCategories).where(eq(revenueCategories.id, id)).returning();
+    return result.length > 0;
+  }
+
+  // Revenues
+  async getAllRevenues(): Promise<Revenue[]> {
+    return await db.select().from(revenues).orderBy(desc(revenues.date));
+  }
+
+  async createRevenue(revenue: InsertRevenue): Promise<Revenue> {
+    const result = await db.insert(revenues).values(revenue).returning();
+    return result[0];
+  }
+
+  async deleteRevenue(id: string): Promise<boolean> {
+    const result = await db.delete(revenues).where(eq(revenues.id, id)).returning();
+    return result.length > 0;
+  }
+
+  async getNextRevenueNumber(): Promise<string> {
+    const result = await db.select({ count: sql<number>`count(*)` }).from(revenues);
+    const count = result[0]?.count || 0;
+    return `REV-${String(Number(count) + 1).padStart(6, '0')}`;
   }
 
   // ============ FINANCIAL MODULE IMPLEMENTATIONS ============

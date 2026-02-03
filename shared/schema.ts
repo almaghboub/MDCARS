@@ -4,14 +4,17 @@ import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
 export const userRoleEnum = pgEnum("user_role", ["owner", "customer_service", "receptionist", "sorter", "stock_manager", "shipping_staff"]);
-export const orderStatusEnum = pgEnum("order_status", ["pending", "processing", "shipped", "delivered", "cancelled", "partially_arrived", "ready_to_collect", "with_shipping_company", "ready_to_buy"]);
+export const orderStatusEnum = pgEnum("order_status", ["pending", "processing", "arrived", "received_from_office", "out_to_delivery", "office_collect", "delivered", "cancelled", "partially_arrived", "ready_to_collect", "with_shipping_company", "ready_to_buy"]);
 export const taskStatusEnum = pgEnum("task_status", ["pending", "completed", "to_collect"]);
 export const taskTypeEnum = pgEnum("task_type", ["task", "delivery", "pickup", "receive_payment"]);
 export const expenseCategoryEnum = pgEnum("expense_category", ["employee_salaries", "supplier_expenses", "marketing_commission", "rent", "cleaning_salaries", "other"]);
+export const expenseCategoryTypeEnum = pgEnum("expense_category_type", ["operational", "administrative", "financial", "other"]);
+export const fundSourceTypeEnum = pgEnum("fund_source_type", ["safe", "bank", "external_party"]);
 export const currencyEnum = pgEnum("currency", ["USD", "LYD"]);
 export const accountTypeEnum = pgEnum("account_type", ["debit", "credit"]);
-export const transactionTypeEnum = pgEnum("transaction_type", ["deposit", "withdrawal", "transfer", "settlement", "currency_adjustment"]);
+export const transactionTypeEnum = pgEnum("transaction_type", ["deposit", "withdrawal", "transfer", "settlement", "currency_adjustment", "expense"]);
 export const receiptTypeEnum = pgEnum("receipt_type", ["payment", "collection"]);
+export const downPaymentTypeEnum = pgEnum("down_payment_type", ["paid_upfront", "collected_by_shipping", "none"]);
 
 // ============ FINANCIAL MODULES ============
 
@@ -246,6 +249,7 @@ export const orders = pgTable("orders", {
   totalAmount: decimal("total_amount", { precision: 10, scale: 2 }).notNull(),
   downPayment: decimal("down_payment", { precision: 10, scale: 2 }).notNull().default("0"),
   downPaymentCurrency: currencyEnum("down_payment_currency").notNull().default("USD"),
+  downPaymentType: downPaymentTypeEnum("down_payment_type").default("none"),
   shippingDownPayment: decimal("shipping_down_payment", { precision: 10, scale: 2 }).notNull().default("0"),
   shippingDownPaymentCurrency: currencyEnum("shipping_down_payment_currency").notNull().default("USD"),
   remainingBalance: decimal("remaining_balance", { precision: 10, scale: 2 }).notNull().default("0"),
@@ -354,13 +358,116 @@ export const deliveryTasks = pgTable("delivery_tasks", {
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });
 
+// Expense Categories (linked to financial accounts)
+export const expenseCategories = pgTable("expense_categories", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  name: text("name").notNull(),
+  nameAr: text("name_ar"),
+  code: text("code").notNull().unique(),
+  categoryType: expenseCategoryTypeEnum("category_type").notNull().default("other"),
+  revenueAccountId: varchar("revenue_account_id").references(() => revenueAccounts.id),
+  description: text("description"),
+  isActive: boolean("is_active").notNull().default(true),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+});
+
 export const expenses = pgTable("expenses", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  expenseNumber: text("expense_number").notNull().unique(),
   category: expenseCategoryEnum("category").notNull(),
-  amount: decimal("amount", { precision: 10, scale: 2 }).notNull(),
+  expenseCategoryId: varchar("expense_category_id").references(() => expenseCategories.id),
+  amount: decimal("amount", { precision: 15, scale: 2 }).notNull(),
+  currency: currencyEnum("currency").notNull().default("USD"),
+  amountLYD: decimal("amount_lyd", { precision: 15, scale: 2 }),
+  exchangeRate: decimal("exchange_rate", { precision: 10, scale: 4 }),
+  sourceType: fundSourceTypeEnum("source_type").notNull(),
+  sourceId: varchar("source_id"),
+  entryType: accountTypeEnum("entry_type").notNull().default("debit"),
+  debitAccountType: text("debit_account_type"),
+  debitAccountId: varchar("debit_account_id"),
+  creditAccountType: text("credit_account_type"),
+  creditAccountId: varchar("credit_account_id"),
   personName: text("person_name").notNull(),
   description: text("description"),
   date: timestamp("date").notNull().defaultNow(),
+  createdByUserId: varchar("created_by_user_id").notNull(),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+// Cashbox Reconciliation
+export const safeReconciliations = pgTable("safe_reconciliations", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  safeId: varchar("safe_id").notNull().references(() => safes.id),
+  systemBalanceUSD: decimal("system_balance_usd", { precision: 15, scale: 2 }).notNull(),
+  systemBalanceLYD: decimal("system_balance_lyd", { precision: 15, scale: 2 }).notNull(),
+  actualBalanceUSD: decimal("actual_balance_usd", { precision: 15, scale: 2 }).notNull(),
+  actualBalanceLYD: decimal("actual_balance_lyd", { precision: 15, scale: 2 }).notNull(),
+  differenceUSD: decimal("difference_usd", { precision: 15, scale: 2 }).notNull(),
+  differenceLYD: decimal("difference_lyd", { precision: 15, scale: 2 }).notNull(),
+  notes: text("notes"),
+  reconciledByUserId: varchar("reconciled_by_user_id").notNull(),
+  reconciledAt: timestamp("reconciled_at").notNull().defaultNow(),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+// Owner/Capital Accounts
+export const ownerAccounts = pgTable("owner_accounts", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").notNull().references(() => users.id),
+  name: text("name").notNull(),
+  balanceUSD: decimal("balance_usd", { precision: 15, scale: 2 }).notNull().default("0"),
+  balanceLYD: decimal("balance_lyd", { precision: 15, scale: 2 }).notNull().default("0"),
+  isCapitalAccount: boolean("is_capital_account").notNull().default(false),
+  description: text("description"),
+  isActive: boolean("is_active").notNull().default(true),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+});
+
+// Owner Account Transactions (capital injections, withdrawals)
+export const ownerAccountTransactions = pgTable("owner_account_transactions", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  ownerAccountId: varchar("owner_account_id").notNull().references(() => ownerAccounts.id),
+  type: transactionTypeEnum("type").notNull(),
+  amountUSD: decimal("amount_usd", { precision: 15, scale: 2 }).notNull().default("0"),
+  amountLYD: decimal("amount_lyd", { precision: 15, scale: 2 }).notNull().default("0"),
+  description: text("description"),
+  referenceType: text("reference_type"),
+  referenceId: varchar("reference_id"),
+  createdByUserId: varchar("created_by_user_id").notNull(),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+// Revenue Categories
+export const revenueCategories = pgTable("revenue_categories", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  name: text("name").notNull(),
+  nameAr: text("name_ar"),
+  code: text("code").notNull().unique(),
+  revenueType: text("revenue_type").notNull(),
+  revenueAccountId: varchar("revenue_account_id").references(() => revenueAccounts.id),
+  description: text("description"),
+  isActive: boolean("is_active").notNull().default(true),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+});
+
+// Revenues
+export const revenues = pgTable("revenues", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  revenueNumber: text("revenue_number").notNull().unique(),
+  revenueCategoryId: varchar("revenue_category_id").references(() => revenueCategories.id),
+  amount: decimal("amount", { precision: 15, scale: 2 }).notNull(),
+  currency: currencyEnum("currency").notNull().default("USD"),
+  amountLYD: decimal("amount_lyd", { precision: 15, scale: 2 }),
+  exchangeRate: decimal("exchange_rate", { precision: 10, scale: 4 }),
+  sourceType: text("source_type").notNull(),
+  sourceId: varchar("source_id"),
+  safeId: varchar("safe_id").references(() => safes.id),
+  description: text("description"),
+  date: timestamp("date").notNull().defaultNow(),
+  createdByUserId: varchar("created_by_user_id").notNull(),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 
@@ -428,6 +535,39 @@ export const insertDeliveryTaskSchema = createInsertSchema(deliveryTasks).omit({
 });
 
 export const insertExpenseSchema = createInsertSchema(expenses).omit({
+  id: true,
+  createdAt: true,
+});
+
+export const insertExpenseCategorySchema = createInsertSchema(expenseCategories).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const insertSafeReconciliationSchema = createInsertSchema(safeReconciliations).omit({
+  id: true,
+  createdAt: true,
+});
+
+export const insertOwnerAccountSchema = createInsertSchema(ownerAccounts).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const insertOwnerAccountTransactionSchema = createInsertSchema(ownerAccountTransactions).omit({
+  id: true,
+  createdAt: true,
+});
+
+export const insertRevenueCategorySchema = createInsertSchema(revenueCategories).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const insertRevenueSchema = createInsertSchema(revenues).omit({
   id: true,
   createdAt: true,
 });
@@ -539,6 +679,24 @@ export type DeliveryTask = typeof deliveryTasks.$inferSelect;
 
 export type InsertExpense = z.infer<typeof insertExpenseSchema>;
 export type Expense = typeof expenses.$inferSelect;
+
+export type InsertExpenseCategory = z.infer<typeof insertExpenseCategorySchema>;
+export type ExpenseCategory = typeof expenseCategories.$inferSelect;
+
+export type InsertSafeReconciliation = z.infer<typeof insertSafeReconciliationSchema>;
+export type SafeReconciliation = typeof safeReconciliations.$inferSelect;
+
+export type InsertOwnerAccount = z.infer<typeof insertOwnerAccountSchema>;
+export type OwnerAccount = typeof ownerAccounts.$inferSelect;
+
+export type InsertOwnerAccountTransaction = z.infer<typeof insertOwnerAccountTransactionSchema>;
+export type OwnerAccountTransaction = typeof ownerAccountTransactions.$inferSelect;
+
+export type InsertRevenueCategory = z.infer<typeof insertRevenueCategorySchema>;
+export type RevenueCategory = typeof revenueCategories.$inferSelect;
+
+export type InsertRevenue = z.infer<typeof insertRevenueSchema>;
+export type Revenue = typeof revenues.$inferSelect;
 
 // Financial Module Types
 export type InsertRevenueAccount = z.infer<typeof insertRevenueAccountSchema>;

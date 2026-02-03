@@ -46,6 +46,7 @@ interface OrderImage {
 
 export default function Orders() {
   const { t, i18n } = useTranslation();
+  const isRTL = i18n.language === 'ar';
   const isMobile = useIsMobile();
   const { user } = useAuth();
   const [, setLocation] = useLocation();
@@ -113,6 +114,7 @@ export default function Orders() {
   const [hasDownPayment, setHasDownPayment] = useState(false);
   const [downPayment, setDownPayment] = useState("");
   const [downPaymentCurrency, setDownPaymentCurrency] = useState<"USD" | "LYD">("USD");
+  const [downPaymentType, setDownPaymentType] = useState<"paid_upfront" | "collected_by_shipping" | "none">("paid_upfront");
   const [shippingDownPayment, setShippingDownPayment] = useState("");
   const [shippingDownPaymentCurrency, setShippingDownPaymentCurrency] = useState<"USD" | "LYD">("USD");
   const [lydExchangeRate, setLydExchangeRate] = useState<string>("");
@@ -948,6 +950,7 @@ export default function Orders() {
       totalAmount: totals.total.toFixed(2),
       downPayment: downPaymentUSD.toFixed(2),
       downPaymentCurrency: downPaymentCurrency,
+      downPaymentType: hasDownPayment ? downPaymentType : "none",
       shippingDownPayment: shippingDownPaymentUSD.toFixed(2),
       shippingDownPaymentCurrency: shippingDownPaymentCurrency,
       remainingBalance: remainingBalance.toFixed(2),
@@ -2030,6 +2033,17 @@ export default function Orders() {
                       </div>
                       {hasDownPayment && (
                         <div className="space-y-2">
+                          <Label htmlFor="down-payment-type" className="text-sm">{isRTL ? 'نوع الدفعة المقدمة' : 'Down Payment Type'}</Label>
+                          <select
+                            id="down-payment-type"
+                            value={downPaymentType}
+                            onChange={(e) => setDownPaymentType(e.target.value as "paid_upfront" | "collected_by_shipping")}
+                            className="w-full px-3 py-2 border rounded-md bg-background"
+                            data-testid="select-down-payment-type"
+                          >
+                            <option value="paid_upfront">{isRTL ? 'مدفوعة مقدماً' : 'Paid Upfront'}</option>
+                            <option value="collected_by_shipping">{isRTL ? 'تحصيل من شركة الشحن' : 'Collected by Shipping Company'}</option>
+                          </select>
                           <Label htmlFor="down-payment-currency" className="text-sm">{t('downPaymentCurrency') || 'Currency'}</Label>
                           <select
                             id="down-payment-currency"

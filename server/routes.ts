@@ -20,6 +20,12 @@ import {
   insertMessageSchema,
   insertDeliveryTaskSchema,
   insertExpenseSchema,
+  insertExpenseCategorySchema,
+  insertSafeReconciliationSchema,
+  insertOwnerAccountSchema,
+  insertOwnerAccountTransactionSchema,
+  insertRevenueCategorySchema,
+  insertRevenueSchema,
   insertRevenueAccountSchema,
   insertSafeSchema,
   insertSafeTransactionSchema,
@@ -1387,14 +1393,69 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post("/api/expenses", requireOwner, async (req, res) => {
     try {
-      const result = insertExpenseSchema.safeParse(req.body);
+      const expenseNumber = await storage.getNextExpenseNumber();
+      const expenseData = {
+        ...req.body,
+        expenseNumber,
+        createdByUserId: req.user!.id,
+      };
+      
+      const result = insertExpenseSchema.safeParse(expenseData);
       if (!result.success) {
         return res.status(400).json({ message: "Invalid expense data", errors: result.error.errors });
       }
 
+      // Validate sourceId exists if provided
+      if (result.data.sourceType === 'safe' && result.data.sourceId) {
+        const safes = await storage.getAllSafes();
+        const safe = safes.find(s => s.id === result.data.sourceId);
+        if (!safe) {
+          return res.status(400).json({ message: "Invalid safe ID" });
+        }
+      } else if (result.data.sourceType === 'bank' && result.data.sourceId) {
+        const banks = await storage.getAllBanks();
+        const bank = banks.find(b => b.id === result.data.sourceId);
+        if (!bank) {
+          return res.status(400).json({ message: "Invalid bank ID" });
+        }
+      }
+
       const expense = await storage.createExpense(result.data);
+      
+      // Create transactions to update balances
+      if (result.data.sourceType === 'safe' && result.data.sourceId) {
+        const amountUSD = result.data.currency === 'USD' ? parseFloat(result.data.amount) : 0;
+        const amountLYD = result.data.currency === 'LYD' ? parseFloat(result.data.amount) : 0;
+        
+        await storage.createSafeTransaction({
+          safeId: result.data.sourceId,
+          type: 'withdrawal',
+          amountUSD: (-amountUSD).toString(),
+          amountLYD: (-amountLYD).toString(),
+          description: `Expense: ${result.data.personName} - ${result.data.description || ''}`,
+          referenceType: 'expense',
+          referenceId: expense.id,
+          createdByUserId: req.user!.id,
+        });
+      } else if (result.data.sourceType === 'bank' && result.data.sourceId) {
+        const amountUSD = result.data.currency === 'USD' ? parseFloat(result.data.amount) : 0;
+        const amountLYD = result.data.currency === 'LYD' ? parseFloat(result.data.amount) : 0;
+        
+        await storage.createBankTransaction({
+          bankId: result.data.sourceId,
+          type: 'withdrawal',
+          amountUSD: (-amountUSD).toString(),
+          amountLYD: (-amountLYD).toString(),
+          description: `Expense: ${result.data.personName} - ${result.data.description || ''}`,
+          referenceType: 'expense',
+          referenceId: expense.id,
+          createdByUserId: req.user!.id,
+        });
+      }
+      
       res.status(201).json(expense);
     } catch (error) {
+      console.error("Failed to create expense:", error);
       res.status(500).json({ message: "Failed to create expense" });
     }
   });
@@ -1408,6 +1469,240 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.json({ message: "Expense deleted successfully" });
     } catch (error) {
       res.status(500).json({ message: "Failed to delete expense" });
+    }
+  });
+
+  // Expense Categories routes
+  app.get("/api/expense-categories", requireAuth, async (req, res) => {
+    try {
+      const categories = await storage.getAllExpenseCategories();
+      res.json(categories);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to fetch expense categories" });
+    }
+  });
+
+  app.post("/api/expense-categories", requireOwner, async (req, res) => {
+    try {
+      const result = insertExpenseCategorySchema.safeParse(req.body);
+      if (!result.success) {
+        return res.status(400).json({ message: "Invalid expense category data", errors: result.error.errors });
+      }
+      const category = await storage.createExpenseCategory(result.data);
+      res.status(201).json(category);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to create expense category" });
+    }
+  });
+
+  app.patch("/api/expense-categories/:id", requireOwner, async (req, res) => {
+    try {
+      const category = await storage.updateExpenseCategory(req.params.id, req.body);
+      if (!category) {
+        return res.status(404).json({ message: "Expense category not found" });
+      }
+      res.json(category);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to update expense category" });
+    }
+  });
+
+  app.delete("/api/expense-categories/:id", requireOwner, async (req, res) => {
+    try {
+      const success = await storage.deleteExpenseCategory(req.params.id);
+      if (!success) {
+        return res.status(404).json({ message: "Expense category not found" });
+      }
+      res.json({ message: "Expense category deleted successfully" });
+    } catch (error) {
+      res.status(500).json({ message: "Failed to delete expense category" });
+    }
+  });
+
+  // Safe Reconciliation routes
+  app.get("/api/safes/:safeId/reconciliations", requireAuth, async (req, res) => {
+    try {
+      const reconciliations = await storage.getSafeReconciliations(req.params.safeId);
+      res.json(reconciliations);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to fetch reconciliations" });
+    }
+  });
+
+  app.post("/api/safes/:safeId/reconciliations", requireOwner, async (req, res) => {
+    try {
+      const result = insertSafeReconciliationSchema.safeParse({
+        ...req.body,
+        safeId: req.params.safeId,
+        reconciledByUserId: req.user!.id,
+      });
+      if (!result.success) {
+        return res.status(400).json({ message: "Invalid reconciliation data", errors: result.error.errors });
+      }
+      const reconciliation = await storage.createSafeReconciliation(result.data);
+      res.status(201).json(reconciliation);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to create reconciliation" });
+    }
+  });
+
+  // Owner Accounts routes
+  app.get("/api/owner-accounts", requireOwner, async (req, res) => {
+    try {
+      const accounts = await storage.getAllOwnerAccounts();
+      res.json(accounts);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to fetch owner accounts" });
+    }
+  });
+
+  app.post("/api/owner-accounts", requireOwner, async (req, res) => {
+    try {
+      const result = insertOwnerAccountSchema.safeParse(req.body);
+      if (!result.success) {
+        return res.status(400).json({ message: "Invalid owner account data", errors: result.error.errors });
+      }
+      const account = await storage.createOwnerAccount(result.data);
+      res.status(201).json(account);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to create owner account" });
+    }
+  });
+
+  app.patch("/api/owner-accounts/:id", requireOwner, async (req, res) => {
+    try {
+      const account = await storage.updateOwnerAccount(req.params.id, req.body);
+      if (!account) {
+        return res.status(404).json({ message: "Owner account not found" });
+      }
+      res.json(account);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to update owner account" });
+    }
+  });
+
+  app.delete("/api/owner-accounts/:id", requireOwner, async (req, res) => {
+    try {
+      const success = await storage.deleteOwnerAccount(req.params.id);
+      if (!success) {
+        return res.status(404).json({ message: "Owner account not found" });
+      }
+      res.json({ message: "Owner account deleted successfully" });
+    } catch (error) {
+      res.status(500).json({ message: "Failed to delete owner account" });
+    }
+  });
+
+  app.get("/api/owner-accounts/:id/transactions", requireOwner, async (req, res) => {
+    try {
+      const transactions = await storage.getOwnerAccountTransactions(req.params.id);
+      res.json(transactions);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to fetch transactions" });
+    }
+  });
+
+  app.post("/api/owner-accounts/:id/transactions", requireOwner, async (req, res) => {
+    try {
+      const result = insertOwnerAccountTransactionSchema.safeParse({
+        ...req.body,
+        ownerAccountId: req.params.id,
+        createdByUserId: req.user!.id,
+      });
+      if (!result.success) {
+        return res.status(400).json({ message: "Invalid transaction data", errors: result.error.errors });
+      }
+      const transaction = await storage.createOwnerAccountTransaction(result.data);
+      res.status(201).json(transaction);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to create transaction" });
+    }
+  });
+
+  // Revenue Categories routes
+  app.get("/api/revenue-categories", requireAuth, async (req, res) => {
+    try {
+      const categories = await storage.getAllRevenueCategories();
+      res.json(categories);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to fetch revenue categories" });
+    }
+  });
+
+  app.post("/api/revenue-categories", requireOwner, async (req, res) => {
+    try {
+      const result = insertRevenueCategorySchema.safeParse(req.body);
+      if (!result.success) {
+        return res.status(400).json({ message: "Invalid revenue category data", errors: result.error.errors });
+      }
+      const category = await storage.createRevenueCategory(result.data);
+      res.status(201).json(category);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to create revenue category" });
+    }
+  });
+
+  app.patch("/api/revenue-categories/:id", requireOwner, async (req, res) => {
+    try {
+      const category = await storage.updateRevenueCategory(req.params.id, req.body);
+      if (!category) {
+        return res.status(404).json({ message: "Revenue category not found" });
+      }
+      res.json(category);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to update revenue category" });
+    }
+  });
+
+  app.delete("/api/revenue-categories/:id", requireOwner, async (req, res) => {
+    try {
+      const success = await storage.deleteRevenueCategory(req.params.id);
+      if (!success) {
+        return res.status(404).json({ message: "Revenue category not found" });
+      }
+      res.json({ message: "Revenue category deleted successfully" });
+    } catch (error) {
+      res.status(500).json({ message: "Failed to delete revenue category" });
+    }
+  });
+
+  // Revenues routes
+  app.get("/api/revenues", requireAuth, async (req, res) => {
+    try {
+      const revenueList = await storage.getAllRevenues();
+      res.json(revenueList);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to fetch revenues" });
+    }
+  });
+
+  app.post("/api/revenues", requireOwner, async (req, res) => {
+    try {
+      const revenueNumber = await storage.getNextRevenueNumber();
+      const result = insertRevenueSchema.safeParse({
+        ...req.body,
+        revenueNumber,
+        createdByUserId: req.user!.id,
+      });
+      if (!result.success) {
+        return res.status(400).json({ message: "Invalid revenue data", errors: result.error.errors });
+      }
+      const revenue = await storage.createRevenue(result.data);
+      res.status(201).json(revenue);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to create revenue" });
+    }
+  });
+
+  app.delete("/api/revenues/:id", requireOwner, async (req, res) => {
+    try {
+      const success = await storage.deleteRevenue(req.params.id);
+      if (!success) {
+        return res.status(404).json({ message: "Revenue not found" });
+      }
+      res.json({ message: "Revenue deleted successfully" });
+    } catch (error) {
+      res.status(500).json({ message: "Failed to delete revenue" });
     }
   });
 
