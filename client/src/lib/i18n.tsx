@@ -306,6 +306,14 @@ const translations = {
     noPurchasesYet: "No purchases yet",
 
     // Sales Income & Invoice & Returns
+    invoiceHistory: "Invoice History",
+    invoices: "Invoices",
+    allInvoices: "All Invoices",
+    searchInvoices: "Search by invoice #, customer...",
+    allStatuses: "All Statuses",
+    noInvoicesFound: "No invoices found",
+    showing: "Showing",
+    invoicesOf: "of",
     salesIncome: "Sales Income",
     invoiceDetails: "Invoice Details",
     viewInvoice: "View Invoice",
@@ -631,6 +639,14 @@ const translations = {
     noPurchasesYet: "لا توجد مشتريات بعد",
 
     // Sales Income & Invoice & Returns
+    invoiceHistory: "سجل الفواتير",
+    invoices: "الفواتير",
+    allInvoices: "جميع الفواتير",
+    searchInvoices: "بحث برقم الفاتورة أو العميل...",
+    allStatuses: "جميع الحالات",
+    noInvoicesFound: "لم يتم العثور على فواتير",
+    showing: "عرض",
+    invoicesOf: "من",
     salesIncome: "دخل المبيعات",
     invoiceDetails: "تفاصيل الفاتورة",
     viewInvoice: "عرض الفاتورة",
