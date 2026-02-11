@@ -9,6 +9,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { BarChart3, TrendingUp, Package, DollarSign, Calendar, Download } from "lucide-react";
 import type { Sale, SaleWithDetails } from "@shared/schema";
 import { format, startOfMonth, endOfMonth, startOfDay, endOfDay, subMonths, subDays } from "date-fns";
+import { useI18n } from "@/lib/i18n";
 
 interface DailySalesReport {
   date: string;
@@ -32,6 +33,7 @@ interface SalesSummary {
 }
 
 export default function Reports() {
+  const { t } = useI18n();
   const [period, setPeriod] = useState<"today" | "week" | "month" | "year">("month");
 
   const { data: sales = [] } = useQuery<SaleWithDetails[]>({
@@ -84,11 +86,11 @@ export default function Reports() {
   };
 
   const exportToCSV = () => {
-    const headers = ["Date", "Sale Number", "Customer", "Total", "Profit", "Payment Method", "Status"];
+    const headers = [t("date"), t("saleNumber"), t("customer"), t("total"), t("profit"), t("payment"), t("status")];
     const rows = filteredSales.map(sale => [
       format(new Date(sale.createdAt), "yyyy-MM-dd HH:mm"),
       sale.saleNumber,
-      sale.customer?.name || "Walk-in",
+      sale.customer?.name || t("walkin"),
       sale.totalAmount,
       calculateProfit(sale).toFixed(2),
       sale.paymentMethod,
@@ -108,8 +110,8 @@ export default function Reports() {
     <div className="p-6 space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold" data-testid="text-reports-title">Reports & Analytics</h1>
-          <p className="text-muted-foreground">Sales performance and business insights</p>
+          <h1 className="text-2xl font-bold" data-testid="text-reports-title">{t("reportsAnalytics")}</h1>
+          <p className="text-muted-foreground">{t("salesPerformance")}</p>
         </div>
         <div className="flex gap-2">
           <Select value={period} onValueChange={(v) => setPeriod(v as any)}>
@@ -118,15 +120,15 @@ export default function Reports() {
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="today">Today</SelectItem>
-              <SelectItem value="week">Last 7 Days</SelectItem>
-              <SelectItem value="month">This Month</SelectItem>
-              <SelectItem value="year">This Year</SelectItem>
+              <SelectItem value="today">{t("today")}</SelectItem>
+              <SelectItem value="week">{t("lastSevenDays")}</SelectItem>
+              <SelectItem value="month">{t("thisMonth")}</SelectItem>
+              <SelectItem value="year">{t("thisYear")}</SelectItem>
             </SelectContent>
           </Select>
           <Button onClick={exportToCSV} variant="outline" data-testid="button-export">
             <Download className="w-4 h-4 mr-2" />
-            Export CSV
+            {t("exportCSV")}
           </Button>
         </div>
       </div>
@@ -136,7 +138,7 @@ export default function Reports() {
           <CardContent className="p-6">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-muted-foreground">Total Sales</p>
+                <p className="text-sm text-muted-foreground">{t("totalSales")}</p>
                 <p className="text-2xl font-bold" data-testid="text-total-sales">{summary.totalSales}</p>
               </div>
               <BarChart3 className="w-8 h-8 text-primary" />
@@ -148,7 +150,7 @@ export default function Reports() {
           <CardContent className="p-6">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-muted-foreground">Total Revenue</p>
+                <p className="text-sm text-muted-foreground">{t("totalRevenue")}</p>
                 <p className="text-2xl font-bold" data-testid="text-total-revenue">{summary.totalRevenue.toFixed(2)} LYD</p>
               </div>
               <DollarSign className="w-8 h-8 text-green-500" />
@@ -160,7 +162,7 @@ export default function Reports() {
           <CardContent className="p-6">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-muted-foreground">Total Profit</p>
+                <p className="text-sm text-muted-foreground">{t("totalProfit")}</p>
                 <p className="text-2xl font-bold text-green-600" data-testid="text-total-profit">{summary.totalProfit.toFixed(2)} LYD</p>
               </div>
               <TrendingUp className="w-8 h-8 text-green-600" />
@@ -172,7 +174,7 @@ export default function Reports() {
           <CardContent className="p-6">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-muted-foreground">Avg Order Value</p>
+                <p className="text-sm text-muted-foreground">{t("avgOrderValue")}</p>
                 <p className="text-2xl font-bold" data-testid="text-avg-order">{summary.averageOrderValue.toFixed(2)} LYD</p>
               </div>
               <Package className="w-8 h-8 text-blue-500" />
@@ -183,32 +185,32 @@ export default function Reports() {
 
       <Tabs defaultValue="sales" className="space-y-4">
         <TabsList>
-          <TabsTrigger value="sales">Sales History</TabsTrigger>
-          <TabsTrigger value="best-sellers">Best Sellers</TabsTrigger>
-          <TabsTrigger value="daily">Daily Summary</TabsTrigger>
+          <TabsTrigger value="sales">{t("salesHistory")}</TabsTrigger>
+          <TabsTrigger value="best-sellers">{t("bestSellers")}</TabsTrigger>
+          <TabsTrigger value="daily">{t("dailySummary")}</TabsTrigger>
         </TabsList>
 
         <TabsContent value="sales" className="space-y-4">
           <Card>
             <CardHeader>
-              <CardTitle>Sales History ({filteredSales.length} sales)</CardTitle>
+              <CardTitle>{t("salesHistory")} ({filteredSales.length} sales)</CardTitle>
             </CardHeader>
             <CardContent>
               {filteredSales.length === 0 ? (
-                <p className="text-center py-8 text-muted-foreground">No sales in this period</p>
+                <p className="text-center py-8 text-muted-foreground">{t("noSalesInPeriod")}</p>
               ) : (
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead>Date</TableHead>
-                      <TableHead>Sale #</TableHead>
-                      <TableHead>Sold By</TableHead>
-                      <TableHead>Customer</TableHead>
-                      <TableHead>Items</TableHead>
-                      <TableHead>Total</TableHead>
-                      <TableHead>Profit</TableHead>
-                      <TableHead>Payment</TableHead>
-                      <TableHead>Status</TableHead>
+                      <TableHead>{t("date")}</TableHead>
+                      <TableHead>{t("saleNumber")}</TableHead>
+                      <TableHead>{t("soldBy")}</TableHead>
+                      <TableHead>{t("customer")}</TableHead>
+                      <TableHead>{t("items")}</TableHead>
+                      <TableHead>{t("total")}</TableHead>
+                      <TableHead>{t("profit")}</TableHead>
+                      <TableHead>{t("payment")}</TableHead>
+                      <TableHead>{t("status")}</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -217,7 +219,7 @@ export default function Reports() {
                         <TableCell>{format(new Date(sale.createdAt), "PPp")}</TableCell>
                         <TableCell className="font-medium">{sale.saleNumber}</TableCell>
                         <TableCell>{sale.createdBy?.firstName} {sale.createdBy?.lastName}</TableCell>
-                        <TableCell>{sale.customer?.name || "Walk-in"}</TableCell>
+                        <TableCell>{sale.customer?.name || t("walkin")}</TableCell>
                         <TableCell>{sale.items?.length || 0}</TableCell>
                         <TableCell className="font-bold">{sale.totalAmount} {sale.currency}</TableCell>
                         <TableCell className="text-green-600">{calculateProfit(sale).toFixed(2)} LYD</TableCell>
@@ -245,12 +247,12 @@ export default function Reports() {
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <TrendingUp className="w-5 h-5" />
-                Best Selling Products
+                {t("bestSellingProducts")}
               </CardTitle>
             </CardHeader>
             <CardContent>
               {bestSellers.length === 0 ? (
-                <p className="text-center py-8 text-muted-foreground">No sales data yet</p>
+                <p className="text-center py-8 text-muted-foreground">{t("noSalesDataYet")}</p>
               ) : (
                 <div className="space-y-4">
                   {bestSellers.map((item, index) => (
@@ -270,8 +272,8 @@ export default function Reports() {
                         </div>
                       </div>
                       <div className="text-right">
-                        <p className="text-xl font-bold">{item.totalSold} sold</p>
-                        <p className="text-sm text-muted-foreground">{item.totalRevenue.toFixed(2)} LYD revenue</p>
+                        <p className="text-xl font-bold">{item.totalSold} {t("sold")}</p>
+                        <p className="text-sm text-muted-foreground">{item.totalRevenue.toFixed(2)} LYD {t("revenue")}</p>
                       </div>
                     </div>
                   ))}
@@ -284,19 +286,19 @@ export default function Reports() {
         <TabsContent value="daily" className="space-y-4">
           <Card>
             <CardHeader>
-              <CardTitle>Daily Sales Summary</CardTitle>
+              <CardTitle>{t("dailySummary")}</CardTitle>
             </CardHeader>
             <CardContent>
               {dailyReport.length === 0 ? (
-                <p className="text-center py-8 text-muted-foreground">No daily data available</p>
+                <p className="text-center py-8 text-muted-foreground">{t("dailySalesData")}</p>
               ) : (
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead>Date</TableHead>
-                      <TableHead>Total Sales</TableHead>
-                      <TableHead>Revenue</TableHead>
-                      <TableHead>Profit</TableHead>
+                      <TableHead>{t("date")}</TableHead>
+                      <TableHead>{t("totalSales")}</TableHead>
+                      <TableHead>{t("revenue")}</TableHead>
+                      <TableHead>{t("profit")}</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>

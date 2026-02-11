@@ -9,12 +9,14 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
+import { useI18n } from "@/lib/i18n";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { Boxes, Search, Plus, Minus, AlertTriangle, ArrowUpCircle, ArrowDownCircle, RefreshCw } from "lucide-react";
 import type { ProductWithCategory, StockMovement } from "@shared/schema";
 import { format } from "date-fns";
 
 export default function Inventory() {
+  const { t } = useI18n();
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedProduct, setSelectedProduct] = useState<ProductWithCategory | null>(null);
   const [stockDialogOpen, setStockDialogOpen] = useState(false);
@@ -45,7 +47,7 @@ export default function Inventory() {
       queryClient.invalidateQueries({ queryKey: ["/api/products"] });
       queryClient.invalidateQueries({ queryKey: ["/api/products/low-stock"] });
       queryClient.invalidateQueries({ queryKey: ["/api/stock-movements"] });
-      toast({ title: "Stock updated successfully" });
+      toast({ title: t("stockUpdatedSuccessfully") || "Stock updated successfully" });
       setStockDialogOpen(false);
       setStockQuantity("");
       setStockReason("");
@@ -84,16 +86,16 @@ export default function Inventory() {
     <div className="p-6 space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold" data-testid="text-inventory-title">Inventory Management</h1>
-          <p className="text-muted-foreground">Track and manage your stock levels</p>
+          <h1 className="text-2xl font-bold" data-testid="text-inventory-title">{t("inventoryManagement")}</h1>
+          <p className="text-muted-foreground">{t("trackStockMovements")}</p>
         </div>
       </div>
 
       <Tabs defaultValue="stock" className="space-y-4">
         <TabsList>
-          <TabsTrigger value="stock">Stock Levels</TabsTrigger>
-          <TabsTrigger value="alerts">Low Stock Alerts ({lowStockProducts.length})</TabsTrigger>
-          <TabsTrigger value="movements">Stock Movements</TabsTrigger>
+          <TabsTrigger value="stock">{t("stock")}</TabsTrigger>
+          <TabsTrigger value="alerts">{t("lowStockAlert")} ({lowStockProducts.length})</TabsTrigger>
+          <TabsTrigger value="movements">{t("stockMovements")}</TabsTrigger>
         </TabsList>
 
         <TabsContent value="stock" className="space-y-4">
@@ -102,12 +104,12 @@ export default function Inventory() {
               <div className="flex items-center justify-between">
                 <CardTitle className="flex items-center gap-2">
                   <Boxes className="w-5 h-5" />
-                  Stock Levels
+                  {t("stock")}
                 </CardTitle>
                 <div className="relative w-64">
                   <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-muted-foreground" />
                   <Input
-                    placeholder="Search products..."
+                    placeholder={t("searchProducts")}
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
                     className="pl-10"
@@ -118,18 +120,18 @@ export default function Inventory() {
             </CardHeader>
             <CardContent>
               {isLoading ? (
-                <p>Loading...</p>
+                <p>{t("loading")}</p>
               ) : (
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead>Product</TableHead>
-                      <TableHead>SKU</TableHead>
-                      <TableHead>Category</TableHead>
-                      <TableHead>Current Stock</TableHead>
+                      <TableHead>{t("product")}</TableHead>
+                      <TableHead>{t("sku")}</TableHead>
+                      <TableHead>{t("category")}</TableHead>
+                      <TableHead>{t("stock")}</TableHead>
                       <TableHead>Low Threshold</TableHead>
-                      <TableHead>Status</TableHead>
-                      <TableHead>Actions</TableHead>
+                      <TableHead>{t("status")}</TableHead>
+                      <TableHead>{t("actions")}</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -142,11 +144,11 @@ export default function Inventory() {
                         <TableCell>{product.lowStockThreshold}</TableCell>
                         <TableCell>
                           {product.currentStock <= 0 ? (
-                            <Badge variant="destructive">Out of Stock</Badge>
+                            <Badge variant="destructive">{t("outOfStock")}</Badge>
                           ) : product.currentStock <= product.lowStockThreshold ? (
                             <Badge variant="destructive" className="flex items-center gap-1 w-fit">
                               <AlertTriangle className="w-3 h-3" />
-                              Low Stock
+                              {t("low")}
                             </Badge>
                           ) : (
                             <Badge variant="secondary">In Stock</Badge>
@@ -158,7 +160,7 @@ export default function Inventory() {
                               variant="outline"
                               size="sm"
                               onClick={() => openStockDialog(product, "in")}
-                              title="Stock In"
+                              title={t("stockIn")}
                               data-testid={`button-stock-in-${product.id}`}
                             >
                               <ArrowUpCircle className="w-4 h-4 text-green-500" />
@@ -167,7 +169,7 @@ export default function Inventory() {
                               variant="outline"
                               size="sm"
                               onClick={() => openStockDialog(product, "out")}
-                              title="Stock Out"
+                              title={t("stockOut")}
                               data-testid={`button-stock-out-${product.id}`}
                             >
                               <ArrowDownCircle className="w-4 h-4 text-red-500" />
@@ -176,7 +178,7 @@ export default function Inventory() {
                               variant="outline"
                               size="sm"
                               onClick={() => openStockDialog(product, "adjustment")}
-                              title="Adjust"
+                              title={t("adjustment")}
                               data-testid={`button-adjust-${product.id}`}
                             >
                               <RefreshCw className="w-4 h-4" />
@@ -197,19 +199,19 @@ export default function Inventory() {
             <CardHeader>
               <CardTitle className="flex items-center gap-2 text-destructive">
                 <AlertTriangle className="w-5 h-5" />
-                Low Stock Alerts
+                {t("lowStockAlert")}
               </CardTitle>
             </CardHeader>
             <CardContent>
               {lowStockProducts.length === 0 ? (
-                <p className="text-center py-8 text-muted-foreground">All products are well stocked!</p>
+                <p className="text-center py-8 text-muted-foreground">{t("allWellStocked")}</p>
               ) : (
                 <div className="space-y-3">
                   {lowStockProducts.map((product) => (
                     <div key={product.id} className="flex items-center justify-between p-4 bg-destructive/10 rounded-lg" data-testid={`low-stock-alert-${product.id}`}>
                       <div>
                         <p className="font-medium">{product.name}</p>
-                        <p className="text-sm text-muted-foreground">SKU: {product.sku}</p>
+                        <p className="text-sm text-muted-foreground">{t("sku")}: {product.sku}</p>
                       </div>
                       <div className="flex items-center gap-4">
                         <div className="text-right">
@@ -218,7 +220,7 @@ export default function Inventory() {
                         </div>
                         <Button onClick={() => openStockDialog(product, "in")} data-testid={`button-restock-${product.id}`}>
                           <Plus className="w-4 h-4 mr-2" />
-                          Restock
+                          {t("stockIn")}
                         </Button>
                       </div>
                     </div>
@@ -232,7 +234,7 @@ export default function Inventory() {
         <TabsContent value="movements" className="space-y-4">
           <Card>
             <CardHeader>
-              <CardTitle>Recent Stock Movements</CardTitle>
+              <CardTitle>{t("stockMovements")}</CardTitle>
             </CardHeader>
             <CardContent>
               {movements.length === 0 ? (
@@ -241,12 +243,12 @@ export default function Inventory() {
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead>Date</TableHead>
-                      <TableHead>Type</TableHead>
-                      <TableHead>Quantity</TableHead>
-                      <TableHead>Previous</TableHead>
-                      <TableHead>New</TableHead>
-                      <TableHead>Reason</TableHead>
+                      <TableHead>{t("date")}</TableHead>
+                      <TableHead>{t("type")}</TableHead>
+                      <TableHead>{t("quantity")}</TableHead>
+                      <TableHead>{t("previousStock")}</TableHead>
+                      <TableHead>{t("newStock")}</TableHead>
+                      <TableHead>{t("reason")}</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -278,18 +280,18 @@ export default function Inventory() {
         <DialogContent>
           <DialogHeader>
             <DialogTitle>
-              {stockType === "in" ? "Stock In" : stockType === "out" ? "Stock Out" : "Stock Adjustment"}
+              {stockType === "in" ? t("stockIn") : stockType === "out" ? t("stockOut") : t("adjustment")}
             </DialogTitle>
           </DialogHeader>
           {selectedProduct && (
             <div className="space-y-4">
               <div className="p-3 bg-muted rounded">
                 <p className="font-medium">{selectedProduct.name}</p>
-                <p className="text-sm text-muted-foreground">Current Stock: {selectedProduct.currentStock}</p>
+                <p className="text-sm text-muted-foreground">{t("stock")}: {selectedProduct.currentStock}</p>
               </div>
               <div>
                 <label className="text-sm font-medium">
-                  {stockType === "adjustment" ? "New Stock Level" : "Quantity"}
+                  {stockType === "adjustment" ? "New Stock Level" : t("quantity")}
                 </label>
                 <Input
                   type="number"
@@ -312,7 +314,7 @@ export default function Inventory() {
                 </div>
               )}
               <div>
-                <label className="text-sm font-medium">Reason (Optional)</label>
+                <label className="text-sm font-medium">{t("reason")} (Optional)</label>
                 <Input
                   value={stockReason}
                   onChange={(e) => setStockReason(e.target.value)}
@@ -326,7 +328,7 @@ export default function Inventory() {
                 disabled={!stockQuantity || stockMutation.isPending}
                 data-testid="button-update-stock"
               >
-                {stockMutation.isPending ? "Updating..." : "Update Stock"}
+                {stockMutation.isPending ? "Updating..." : t("save")}
               </Button>
             </div>
           )}

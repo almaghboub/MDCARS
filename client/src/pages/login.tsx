@@ -8,12 +8,14 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/components/auth-provider";
 import { loginSchema, type LoginCredentials } from "@shared/schema";
+import { useI18n } from "@/lib/i18n";
 import logoPath from "@assets/MD-removebg-preview_1770139105370.png";
 
 export default function Login() {
   const [, setLocation] = useLocation();
   const { login, isLoading } = useAuth();
   const { toast } = useToast();
+  const { t } = useI18n();
   
   const form = useForm<LoginCredentials>({
     resolver: zodResolver(loginSchema),
@@ -27,15 +29,14 @@ export default function Login() {
     try {
       await login(data.username, data.password);
       toast({
-        title: "Login Successful",
-        description: "Welcome to MD CARS",
+        title: t("loginSuccessful"),
+        description: t("welcomeMdCars"),
       });
-      // Force page reload to ensure auth state is properly recognized
       window.location.href = "/dashboard";
     } catch (error) {
       toast({
-        title: "Login Failed",
-        description: "Invalid username or password",
+        title: t("loginFailed"),
+        description: t("invalidCredentials"),
         variant: "destructive",
       });
     }
@@ -48,8 +49,8 @@ export default function Login() {
           <div className="flex justify-center mb-2">
             <img src={logoPath} alt="MD Cars Logo" className="h-24 w-auto" />
           </div>
-          <CardTitle className="text-2xl font-bold text-slate-900">Welcome Back</CardTitle>
-          <p className="text-muted-foreground">Car Accessories Sales & Inventory</p>
+          <CardTitle className="text-2xl font-bold text-slate-900">{t("welcomeBack")}</CardTitle>
+          <p className="text-muted-foreground">{t("carAccessoriesSales")}</p>
         </CardHeader>
         <CardContent>
           <Form {...form}>
@@ -59,10 +60,10 @@ export default function Login() {
                 name="username"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Username</FormLabel>
+                    <FormLabel>{t("username")}</FormLabel>
                     <FormControl>
                       <Input
-                        placeholder="Enter username"
+                        placeholder={t("username")}
                         data-testid="input-username"
                         {...field}
                       />
@@ -77,11 +78,11 @@ export default function Login() {
                 name="password"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Password</FormLabel>
+                    <FormLabel>{t("password")}</FormLabel>
                     <FormControl>
                       <Input
                         type="password"
-                        placeholder="Enter password"
+                        placeholder={t("password")}
                         data-testid="input-password"
                         {...field}
                       />
@@ -97,12 +98,12 @@ export default function Login() {
                 disabled={isLoading}
                 data-testid="button-login"
               >
-                {isLoading ? "Signing in..." : "Sign In"}
+                {isLoading ? t("signingIn") : t("signIn")}
               </Button>
             </form>
           </Form>
           <div className="mt-4 text-center text-sm text-muted-foreground">
-            <p>Default: admin / admin123</p>
+            <p>{t("defaultCredentials")}</p>
           </div>
         </CardContent>
       </Card>

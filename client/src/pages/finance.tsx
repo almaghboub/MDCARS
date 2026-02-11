@@ -14,6 +14,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
+import { useI18n } from "@/lib/i18n";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { Wallet, Plus, ArrowUpCircle, ArrowDownCircle, DollarSign, TrendingUp, Trash2 } from "lucide-react";
 import type { Cashbox, CashboxTransaction, Expense, Revenue } from "@shared/schema";
@@ -42,6 +43,7 @@ const transactionFormSchema = z.object({
 });
 
 export default function Finance() {
+  const { t } = useI18n();
   const [isExpenseDialogOpen, setIsExpenseDialogOpen] = useState(false);
   const [isRevenueDialogOpen, setIsRevenueDialogOpen] = useState(false);
   const [isTransactionDialogOpen, setIsTransactionDialogOpen] = useState(false);
@@ -87,7 +89,7 @@ export default function Finance() {
       queryClient.invalidateQueries({ queryKey: ["/api/expenses"] });
       queryClient.invalidateQueries({ queryKey: ["/api/cashbox"] });
       queryClient.invalidateQueries({ queryKey: ["/api/cashbox/transactions"] });
-      toast({ title: "Expense recorded successfully" });
+      toast({ title: t("expenseRecordedSuccessfully") || "Expense recorded successfully" });
       setIsExpenseDialogOpen(false);
       expenseForm.reset();
     },
@@ -158,8 +160,8 @@ export default function Finance() {
     <div className="p-6 space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold" data-testid="text-finance-title">Financial Management</h1>
-          <p className="text-muted-foreground">Manage cashbox, expenses, and revenues</p>
+          <h1 className="text-2xl font-bold" data-testid="text-finance-title">{t("financialManagement")}</h1>
+          <p className="text-muted-foreground">{t("manageFinances")}</p>
         </div>
       </div>
 
@@ -168,7 +170,7 @@ export default function Finance() {
           <CardContent className="p-6">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-muted-foreground">Cashbox LYD</p>
+                <p className="text-sm text-muted-foreground">{t("cashbox")} LYD</p>
                 <p className="text-2xl font-bold" data-testid="text-cashbox-lyd">{cashbox?.balanceLYD || "0.00"} LYD</p>
               </div>
               <Wallet className="w-8 h-8 text-primary" />
@@ -180,7 +182,7 @@ export default function Finance() {
           <CardContent className="p-6">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-muted-foreground">Cashbox USD</p>
+                <p className="text-sm text-muted-foreground">{t("cashbox")} USD</p>
                 <p className="text-2xl font-bold" data-testid="text-cashbox-usd">${cashbox?.balanceUSD || "0.00"}</p>
               </div>
               <DollarSign className="w-8 h-8 text-green-500" />
@@ -205,9 +207,9 @@ export default function Finance() {
 
       <Tabs defaultValue="cashbox" className="space-y-4">
         <TabsList>
-          <TabsTrigger value="cashbox">Cashbox</TabsTrigger>
-          <TabsTrigger value="expenses">Expenses ({expenses.length})</TabsTrigger>
-          <TabsTrigger value="revenues">Revenues ({revenues.length})</TabsTrigger>
+          <TabsTrigger value="cashbox">{t("cashbox")}</TabsTrigger>
+          <TabsTrigger value="expenses">{t("expenses")} ({expenses.length})</TabsTrigger>
+          <TabsTrigger value="revenues">{t("revenues")} ({revenues.length})</TabsTrigger>
         </TabsList>
 
         <TabsContent value="cashbox" className="space-y-4">
@@ -216,29 +218,29 @@ export default function Finance() {
               <div className="flex items-center justify-between">
                 <CardTitle className="flex items-center gap-2">
                   <Wallet className="w-5 h-5" />
-                  Cashbox Transactions
+                  {t("cashbox")} {t("transactions")}
                 </CardTitle>
                 <Dialog open={isTransactionDialogOpen} onOpenChange={setIsTransactionDialogOpen}>
                   <DialogTrigger asChild>
                     <Button data-testid="button-add-transaction">
                       <Plus className="w-4 h-4 mr-2" />
-                      Add Transaction
+                      {t("addTransaction")}
                     </Button>
                   </DialogTrigger>
                   <DialogContent>
                     <DialogHeader>
-                      <DialogTitle>Add Cashbox Transaction</DialogTitle>
+                      <DialogTitle>{t("addTransaction")}</DialogTitle>
                     </DialogHeader>
                     <Form {...transactionForm}>
                       <form onSubmit={transactionForm.handleSubmit((data) => transactionMutation.mutate(data))} className="space-y-4">
                         <FormField control={transactionForm.control} name="type" render={({ field }) => (
                           <FormItem>
-                            <FormLabel>Type</FormLabel>
+                            <FormLabel>{t("type")}</FormLabel>
                             <Select onValueChange={field.onChange} value={field.value}>
                               <FormControl><SelectTrigger><SelectValue /></SelectTrigger></FormControl>
                               <SelectContent>
-                                <SelectItem value="deposit">Deposit</SelectItem>
-                                <SelectItem value="withdrawal">Withdrawal</SelectItem>
+                                <SelectItem value="deposit">{t("deposit")}</SelectItem>
+                                <SelectItem value="withdrawal">{t("withdrawal")}</SelectItem>
                               </SelectContent>
                             </Select>
                             <FormMessage />
@@ -247,14 +249,14 @@ export default function Finance() {
                         <div className="grid grid-cols-2 gap-4">
                           <FormField control={transactionForm.control} name="amountLYD" render={({ field }) => (
                             <FormItem>
-                              <FormLabel>Amount LYD</FormLabel>
+                              <FormLabel>{t("amountLYD")}</FormLabel>
                               <FormControl><Input type="number" step="0.01" {...field} /></FormControl>
                               <FormMessage />
                             </FormItem>
                           )} />
                           <FormField control={transactionForm.control} name="amountUSD" render={({ field }) => (
                             <FormItem>
-                              <FormLabel>Amount USD</FormLabel>
+                              <FormLabel>{t("amountUSD")}</FormLabel>
                               <FormControl><Input type="number" step="0.01" {...field} /></FormControl>
                               <FormMessage />
                             </FormItem>
@@ -262,13 +264,13 @@ export default function Finance() {
                         </div>
                         <FormField control={transactionForm.control} name="description" render={({ field }) => (
                           <FormItem>
-                            <FormLabel>Description</FormLabel>
+                            <FormLabel>{t("description")}</FormLabel>
                             <FormControl><Textarea {...field} /></FormControl>
                             <FormMessage />
                           </FormItem>
                         )} />
                         <Button type="submit" className="w-full" disabled={transactionMutation.isPending}>
-                          {transactionMutation.isPending ? "Saving..." : "Add Transaction"}
+                          {transactionMutation.isPending ? t("saving") : t("addTransaction")}
                         </Button>
                       </form>
                     </Form>
@@ -278,16 +280,16 @@ export default function Finance() {
             </CardHeader>
             <CardContent>
               {transactions.length === 0 ? (
-                <p className="text-center py-8 text-muted-foreground">No transactions yet</p>
+                <p className="text-center py-8 text-muted-foreground">{t("noTransactions")}</p>
               ) : (
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead>Date</TableHead>
-                      <TableHead>Type</TableHead>
-                      <TableHead>Amount LYD</TableHead>
-                      <TableHead>Amount USD</TableHead>
-                      <TableHead>Description</TableHead>
+                      <TableHead>{t("date")}</TableHead>
+                      <TableHead>{t("type")}</TableHead>
+                      <TableHead>{t("amountLYD")}</TableHead>
+                      <TableHead>{t("amountUSD")}</TableHead>
+                      <TableHead>{t("description")}</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -322,34 +324,34 @@ export default function Finance() {
               <div className="flex items-center justify-between">
                 <CardTitle className="flex items-center gap-2">
                   <ArrowDownCircle className="w-5 h-5 text-destructive" />
-                  Expenses (Total: {totalExpenses.toFixed(2)} LYD)
+                  {t("expenses")} (Total: {totalExpenses.toFixed(2)} LYD)
                 </CardTitle>
                 <Dialog open={isExpenseDialogOpen} onOpenChange={setIsExpenseDialogOpen}>
                   <DialogTrigger asChild>
                     <Button variant="destructive" data-testid="button-add-expense">
                       <Plus className="w-4 h-4 mr-2" />
-                      Add Expense
+                      {t("addExpense")}
                     </Button>
                   </DialogTrigger>
                   <DialogContent>
                     <DialogHeader>
-                      <DialogTitle>Add Expense</DialogTitle>
+                      <DialogTitle>{t("addExpense")}</DialogTitle>
                     </DialogHeader>
                     <Form {...expenseForm}>
                       <form onSubmit={expenseForm.handleSubmit((data) => expenseMutation.mutate(data))} className="space-y-4">
                         <FormField control={expenseForm.control} name="category" render={({ field }) => (
                           <FormItem>
-                            <FormLabel>Category</FormLabel>
+                            <FormLabel>{t("category")}</FormLabel>
                             <Select onValueChange={field.onChange} value={field.value}>
                               <FormControl><SelectTrigger><SelectValue /></SelectTrigger></FormControl>
                               <SelectContent>
-                                <SelectItem value="rent">Rent</SelectItem>
-                                <SelectItem value="utilities">Utilities</SelectItem>
-                                <SelectItem value="salaries">Salaries</SelectItem>
-                                <SelectItem value="supplies">Supplies</SelectItem>
-                                <SelectItem value="maintenance">Maintenance</SelectItem>
-                                <SelectItem value="marketing">Marketing</SelectItem>
-                                <SelectItem value="other">Other</SelectItem>
+                                <SelectItem value="rent">{t("rent")}</SelectItem>
+                                <SelectItem value="utilities">{t("utilities")}</SelectItem>
+                                <SelectItem value="salaries">{t("salaries")}</SelectItem>
+                                <SelectItem value="supplies">{t("supplies")}</SelectItem>
+                                <SelectItem value="maintenance">{t("maintenance")}</SelectItem>
+                                <SelectItem value="marketing">{t("marketing")}</SelectItem>
+                                <SelectItem value="other">{t("other")}</SelectItem>
                               </SelectContent>
                             </Select>
                             <FormMessage />
@@ -358,14 +360,14 @@ export default function Finance() {
                         <div className="grid grid-cols-2 gap-4">
                           <FormField control={expenseForm.control} name="amount" render={({ field }) => (
                             <FormItem>
-                              <FormLabel>Amount</FormLabel>
+                              <FormLabel>{t("amount")}</FormLabel>
                               <FormControl><Input type="number" step="0.01" {...field} /></FormControl>
                               <FormMessage />
                             </FormItem>
                           )} />
                           <FormField control={expenseForm.control} name="currency" render={({ field }) => (
                             <FormItem>
-                              <FormLabel>Currency</FormLabel>
+                              <FormLabel>{t("currency")}</FormLabel>
                               <Select onValueChange={field.onChange} value={field.value}>
                                 <FormControl><SelectTrigger><SelectValue /></SelectTrigger></FormControl>
                                 <SelectContent>
@@ -379,7 +381,7 @@ export default function Finance() {
                         </div>
                         <FormField control={expenseForm.control} name="description" render={({ field }) => (
                           <FormItem>
-                            <FormLabel>Description</FormLabel>
+                            <FormLabel>{t("description")}</FormLabel>
                             <FormControl><Textarea {...field} /></FormControl>
                             <FormMessage />
                           </FormItem>
@@ -392,7 +394,7 @@ export default function Finance() {
                           </FormItem>
                         )} />
                         <Button type="submit" className="w-full" disabled={expenseMutation.isPending}>
-                          {expenseMutation.isPending ? "Saving..." : "Add Expense"}
+                          {expenseMutation.isPending ? t("saving") : t("addExpense")}
                         </Button>
                       </form>
                     </Form>
@@ -402,17 +404,17 @@ export default function Finance() {
             </CardHeader>
             <CardContent>
               {expenses.length === 0 ? (
-                <p className="text-center py-8 text-muted-foreground">No expenses recorded yet</p>
+                <p className="text-center py-8 text-muted-foreground">{t("noExpenses")}</p>
               ) : (
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead>Date</TableHead>
+                      <TableHead>{t("date")}</TableHead>
                       <TableHead>Number</TableHead>
-                      <TableHead>Category</TableHead>
-                      <TableHead>Description</TableHead>
-                      <TableHead>Amount</TableHead>
-                      <TableHead>Actions</TableHead>
+                      <TableHead>{t("category")}</TableHead>
+                      <TableHead>{t("description")}</TableHead>
+                      <TableHead>{t("amount")}</TableHead>
+                      <TableHead>{t("actions")}</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -443,18 +445,18 @@ export default function Finance() {
               <div className="flex items-center justify-between">
                 <CardTitle className="flex items-center gap-2">
                   <ArrowUpCircle className="w-5 h-5 text-green-500" />
-                  Revenues (Total: {totalRevenues.toFixed(2)} LYD)
+                  {t("revenues")} (Total: {totalRevenues.toFixed(2)} LYD)
                 </CardTitle>
                 <Dialog open={isRevenueDialogOpen} onOpenChange={setIsRevenueDialogOpen}>
                   <DialogTrigger asChild>
                     <Button className="bg-green-600 hover:bg-green-700" data-testid="button-add-revenue">
                       <Plus className="w-4 h-4 mr-2" />
-                      Add Revenue
+                      {t("addRevenue")}
                     </Button>
                   </DialogTrigger>
                   <DialogContent>
                     <DialogHeader>
-                      <DialogTitle>Add Revenue</DialogTitle>
+                      <DialogTitle>{t("addRevenue")}</DialogTitle>
                     </DialogHeader>
                     <Form {...revenueForm}>
                       <form onSubmit={revenueForm.handleSubmit((data) => revenueMutation.mutate(data))} className="space-y-4">
@@ -468,14 +470,14 @@ export default function Finance() {
                         <div className="grid grid-cols-2 gap-4">
                           <FormField control={revenueForm.control} name="amount" render={({ field }) => (
                             <FormItem>
-                              <FormLabel>Amount</FormLabel>
+                              <FormLabel>{t("amount")}</FormLabel>
                               <FormControl><Input type="number" step="0.01" {...field} /></FormControl>
                               <FormMessage />
                             </FormItem>
                           )} />
                           <FormField control={revenueForm.control} name="currency" render={({ field }) => (
                             <FormItem>
-                              <FormLabel>Currency</FormLabel>
+                              <FormLabel>{t("currency")}</FormLabel>
                               <Select onValueChange={field.onChange} value={field.value}>
                                 <FormControl><SelectTrigger><SelectValue /></SelectTrigger></FormControl>
                                 <SelectContent>
@@ -489,13 +491,13 @@ export default function Finance() {
                         </div>
                         <FormField control={revenueForm.control} name="description" render={({ field }) => (
                           <FormItem>
-                            <FormLabel>Description</FormLabel>
+                            <FormLabel>{t("description")}</FormLabel>
                             <FormControl><Textarea {...field} /></FormControl>
                             <FormMessage />
                           </FormItem>
                         )} />
                         <Button type="submit" className="w-full" disabled={revenueMutation.isPending}>
-                          {revenueMutation.isPending ? "Saving..." : "Add Revenue"}
+                          {revenueMutation.isPending ? t("saving") : t("addRevenue")}
                         </Button>
                       </form>
                     </Form>
@@ -505,17 +507,17 @@ export default function Finance() {
             </CardHeader>
             <CardContent>
               {revenues.length === 0 ? (
-                <p className="text-center py-8 text-muted-foreground">No revenues recorded yet</p>
+                <p className="text-center py-8 text-muted-foreground">{t("noRevenues")}</p>
               ) : (
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead>Date</TableHead>
+                      <TableHead>{t("date")}</TableHead>
                       <TableHead>Number</TableHead>
                       <TableHead>Source</TableHead>
-                      <TableHead>Description</TableHead>
-                      <TableHead>Amount</TableHead>
-                      <TableHead>Actions</TableHead>
+                      <TableHead>{t("description")}</TableHead>
+                      <TableHead>{t("amount")}</TableHead>
+                      <TableHead>{t("actions")}</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>

@@ -14,6 +14,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import { queryClient, apiRequest } from "@/lib/queryClient";
+import { useI18n } from "@/lib/i18n";
 import { Plus, Pencil, Trash2, Search, Package, AlertTriangle } from "lucide-react";
 import { useAuth } from "@/components/auth-provider";
 import type { ProductWithCategory, Category } from "@shared/schema";
@@ -38,6 +39,7 @@ const categoryFormSchema = z.object({
 });
 
 export default function Products() {
+  const { t } = useI18n();
   const [searchQuery, setSearchQuery] = useState("");
   const [isProductDialogOpen, setIsProductDialogOpen] = useState(false);
   const [isCategoryDialogOpen, setIsCategoryDialogOpen] = useState(false);
@@ -81,7 +83,7 @@ export default function Products() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/products"] });
-      toast({ title: "Product created successfully" });
+      toast({ title: t("productCreated") });
       setIsProductDialogOpen(false);
       productForm.reset();
     },
@@ -97,7 +99,7 @@ export default function Products() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/products"] });
-      toast({ title: "Product updated successfully" });
+      toast({ title: t("productUpdated") });
       setIsProductDialogOpen(false);
       setEditingProduct(null);
       productForm.reset();
@@ -113,7 +115,7 @@ export default function Products() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/products"] });
-      toast({ title: "Product deleted successfully" });
+      toast({ title: t("productDeleted") });
     },
     onError: (error: any) => {
       toast({ title: "Error", description: error.message, variant: "destructive" });
@@ -127,7 +129,7 @@ export default function Products() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/categories"] });
-      toast({ title: "Category created successfully" });
+      toast({ title: t("categoryCreated") });
       setIsCategoryDialogOpen(false);
       categoryForm.reset();
     },
@@ -170,39 +172,39 @@ export default function Products() {
     <div className="p-6 space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold" data-testid="text-products-title">Products</h1>
-          <p className="text-muted-foreground">Manage your product catalog</p>
+          <h1 className="text-2xl font-bold" data-testid="text-products-title">{t("products")}</h1>
+          <p className="text-muted-foreground">{t("manageProductCatalog")}</p>
         </div>
         <div className="flex gap-2">
           {canEdit && <Dialog open={isCategoryDialogOpen} onOpenChange={setIsCategoryDialogOpen}>
             <DialogTrigger asChild>
               <Button variant="outline" data-testid="button-add-category">
                 <Plus className="w-4 h-4 mr-2" />
-                Add Category
+                {t("addCategory")}
               </Button>
             </DialogTrigger>
             <DialogContent>
               <DialogHeader>
-                <DialogTitle>Add Category</DialogTitle>
+                <DialogTitle>{t("addCategory")}</DialogTitle>
               </DialogHeader>
               <Form {...categoryForm}>
                 <form onSubmit={categoryForm.handleSubmit((data) => createCategoryMutation.mutate(data))} className="space-y-4">
                   <FormField control={categoryForm.control} name="name" render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Name</FormLabel>
+                      <FormLabel>{t("name")}</FormLabel>
                       <FormControl><Input {...field} data-testid="input-category-name" /></FormControl>
                       <FormMessage />
                     </FormItem>
                   )} />
                   <FormField control={categoryForm.control} name="description" render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Description</FormLabel>
+                      <FormLabel>{t("description")}</FormLabel>
                       <FormControl><Textarea {...field} data-testid="input-category-description" /></FormControl>
                       <FormMessage />
                     </FormItem>
                   )} />
                   <Button type="submit" className="w-full" disabled={createCategoryMutation.isPending} data-testid="button-save-category">
-                    {createCategoryMutation.isPending ? "Saving..." : "Save Category"}
+                    {createCategoryMutation.isPending ? t("saving") : t("saveCategory")}
                   </Button>
                 </form>
               </Form>
@@ -218,26 +220,26 @@ export default function Products() {
             <DialogTrigger asChild>
               <Button data-testid="button-add-product">
                 <Plus className="w-4 h-4 mr-2" />
-                Add Product
+                {t("addProduct")}
               </Button>
             </DialogTrigger>
             <DialogContent className="max-w-2xl">
               <DialogHeader>
-                <DialogTitle>{editingProduct ? "Edit Product" : "Add Product"}</DialogTitle>
+                <DialogTitle>{editingProduct ? t("editProduct") : t("addProduct")}</DialogTitle>
               </DialogHeader>
               <Form {...productForm}>
                 <form onSubmit={productForm.handleSubmit(onProductSubmit)} className="space-y-4">
                   <div className="grid grid-cols-2 gap-4">
                     <FormField control={productForm.control} name="name" render={({ field }) => (
                       <FormItem>
-                        <FormLabel>Product Name</FormLabel>
+                        <FormLabel>{t("productName")}</FormLabel>
                         <FormControl><Input {...field} data-testid="input-product-name" /></FormControl>
                         <FormMessage />
                       </FormItem>
                     )} />
                     <FormField control={productForm.control} name="sku" render={({ field }) => (
                       <FormItem>
-                        <FormLabel>SKU</FormLabel>
+                        <FormLabel>{t("sku")}</FormLabel>
                         <FormControl><Input {...field} data-testid="input-product-sku" /></FormControl>
                         <FormMessage />
                       </FormItem>
@@ -246,14 +248,14 @@ export default function Products() {
                   <div className="grid grid-cols-2 gap-4">
                     <FormField control={productForm.control} name="barcode" render={({ field }) => (
                       <FormItem>
-                        <FormLabel>Barcode (Optional)</FormLabel>
+                        <FormLabel>{t("barcode")}</FormLabel>
                         <FormControl><Input {...field} data-testid="input-product-barcode" /></FormControl>
                         <FormMessage />
                       </FormItem>
                     )} />
                     <FormField control={productForm.control} name="categoryId" render={({ field }) => (
                       <FormItem>
-                        <FormLabel>Category</FormLabel>
+                        <FormLabel>{t("category")}</FormLabel>
                         <Select onValueChange={field.onChange} value={field.value}>
                           <FormControl>
                             <SelectTrigger data-testid="select-product-category">
@@ -273,14 +275,14 @@ export default function Products() {
                   <div className="grid grid-cols-2 gap-4">
                     <FormField control={productForm.control} name="costPrice" render={({ field }) => (
                       <FormItem>
-                        <FormLabel>Cost Price (LYD)</FormLabel>
+                        <FormLabel>{t("costPrice")}</FormLabel>
                         <FormControl><Input type="number" step="0.01" {...field} data-testid="input-product-cost" /></FormControl>
                         <FormMessage />
                       </FormItem>
                     )} />
                     <FormField control={productForm.control} name="sellingPrice" render={({ field }) => (
                       <FormItem>
-                        <FormLabel>Selling Price (LYD)</FormLabel>
+                        <FormLabel>{t("sellingPrice")}</FormLabel>
                         <FormControl><Input type="number" step="0.01" {...field} data-testid="input-product-price" /></FormControl>
                         <FormMessage />
                       </FormItem>
@@ -289,14 +291,14 @@ export default function Products() {
                   <div className="grid grid-cols-2 gap-4">
                     <FormField control={productForm.control} name="currentStock" render={({ field }) => (
                       <FormItem>
-                        <FormLabel>Initial Stock</FormLabel>
+                        <FormLabel>{t("initialStock")}</FormLabel>
                         <FormControl><Input type="number" {...field} onChange={e => field.onChange(parseInt(e.target.value) || 0)} data-testid="input-product-stock" /></FormControl>
                         <FormMessage />
                       </FormItem>
                     )} />
                     <FormField control={productForm.control} name="lowStockThreshold" render={({ field }) => (
                       <FormItem>
-                        <FormLabel>Low Stock Alert</FormLabel>
+                        <FormLabel>{t("lowStockAlertThreshold")}</FormLabel>
                         <FormControl><Input type="number" {...field} onChange={e => field.onChange(parseInt(e.target.value) || 0)} data-testid="input-product-threshold" /></FormControl>
                         <FormMessage />
                       </FormItem>
@@ -304,13 +306,13 @@ export default function Products() {
                   </div>
                   <FormField control={productForm.control} name="description" render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Description</FormLabel>
+                      <FormLabel>{t("description")}</FormLabel>
                       <FormControl><Textarea {...field} data-testid="input-product-description" /></FormControl>
                       <FormMessage />
                     </FormItem>
                   )} />
                   <Button type="submit" className="w-full" disabled={createProductMutation.isPending || updateProductMutation.isPending} data-testid="button-save-product">
-                    {createProductMutation.isPending || updateProductMutation.isPending ? "Saving..." : editingProduct ? "Update Product" : "Add Product"}
+                    {createProductMutation.isPending || updateProductMutation.isPending ? t("saving") : editingProduct ? t("updateProduct") : t("addProduct")}
                   </Button>
                 </form>
               </Form>
@@ -324,12 +326,12 @@ export default function Products() {
           <div className="flex items-center justify-between">
             <CardTitle className="flex items-center gap-2">
               <Package className="w-5 h-5" />
-              Product Catalog ({filteredProducts.length})
+              {t("productCatalog")} ({filteredProducts.length})
             </CardTitle>
             <div className="relative w-64">
               <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-muted-foreground" />
               <Input
-                placeholder="Search products..."
+                placeholder={t("searchProducts")}
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 className="pl-10"
@@ -340,20 +342,20 @@ export default function Products() {
         </CardHeader>
         <CardContent>
           {isLoading ? (
-            <p>Loading...</p>
+            <p>{t("loading")}</p>
           ) : filteredProducts.length === 0 ? (
-            <p className="text-center py-8 text-muted-foreground">No products found. Add your first product!</p>
+            <p className="text-center py-8 text-muted-foreground">{t("noProductsFound")}</p>
           ) : (
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Product</TableHead>
-                  <TableHead>SKU</TableHead>
-                  <TableHead>Category</TableHead>
-                  {canEdit && <TableHead>Cost</TableHead>}
-                  <TableHead>Price</TableHead>
-                  <TableHead>Stock</TableHead>
-                  {canEdit && <TableHead>Actions</TableHead>}
+                  <TableHead>{t("product")}</TableHead>
+                  <TableHead>{t("sku")}</TableHead>
+                  <TableHead>{t("category")}</TableHead>
+                  {canEdit && <TableHead>{t("cost")}</TableHead>}
+                  <TableHead>{t("price")}</TableHead>
+                  <TableHead>{t("stock")}</TableHead>
+                  {canEdit && <TableHead>{t("actions")}</TableHead>}
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -370,7 +372,7 @@ export default function Products() {
                         {product.currentStock <= product.lowStockThreshold && (
                           <Badge variant="destructive" className="flex items-center gap-1">
                             <AlertTriangle className="w-3 h-3" />
-                            Low
+                            {t("low")}
                           </Badge>
                         )}
                       </div>

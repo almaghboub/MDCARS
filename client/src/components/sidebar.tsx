@@ -6,17 +6,18 @@ import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import { useAuth } from "@/components/auth-provider";
 import { useQuery } from "@tanstack/react-query";
 import { useIsMobile } from "@/hooks/use-mobile";
+import { useI18n } from "@/lib/i18n";
 import logoPath from "@assets/MD-removebg-preview_1770139105370.png";
 
 const navigationItems = [
-  { key: "Dashboard", href: "/dashboard", icon: LayoutDashboard, roles: ["owner", "cashier", "stock_manager"] },
-  { key: "POS / Sales", href: "/pos", icon: ShoppingCart, roles: ["owner", "cashier"] },
-  { key: "Products", href: "/products", icon: Package, roles: ["owner", "cashier", "stock_manager"] },
-  { key: "Inventory", href: "/inventory", icon: Boxes, roles: ["owner", "stock_manager"] },
-  { key: "Customers", href: "/customers", icon: Users, roles: ["owner", "cashier"] },
-  { key: "Finance", href: "/finance", icon: Wallet, roles: ["owner"] },
-  { key: "Reports", href: "/reports", icon: BarChart3, roles: ["owner"] },
-  { key: "Settings", href: "/settings", icon: Settings, roles: ["owner"] },
+  { labelKey: "dashboard" as const, href: "/dashboard", icon: LayoutDashboard, roles: ["owner", "cashier", "stock_manager"] },
+  { labelKey: "posSales" as const, href: "/pos", icon: ShoppingCart, roles: ["owner", "cashier"] },
+  { labelKey: "products" as const, href: "/products", icon: Package, roles: ["owner", "cashier", "stock_manager"] },
+  { labelKey: "inventory" as const, href: "/inventory", icon: Boxes, roles: ["owner", "stock_manager"] },
+  { labelKey: "customers" as const, href: "/customers", icon: Users, roles: ["owner", "cashier"] },
+  { labelKey: "finance" as const, href: "/finance", icon: Wallet, roles: ["owner"] },
+  { labelKey: "reports" as const, href: "/reports", icon: BarChart3, roles: ["owner"] },
+  { labelKey: "settings" as const, href: "/settings", icon: Settings, roles: ["owner"] },
 ];
 
 interface SidebarContentProps {
@@ -26,6 +27,7 @@ interface SidebarContentProps {
 function SidebarContent({ onNavigate }: SidebarContentProps) {
   const [location] = useLocation();
   const { user, logout } = useAuth();
+  const { t } = useI18n();
 
   const { data: lowStockData } = useQuery<Array<any>>({
     queryKey: ["/api/products/low-stock"],
@@ -66,18 +68,18 @@ function SidebarContent({ onNavigate }: SidebarContentProps) {
             const isActive = location === item.href;
             
             return (
-              <li key={item.key}>
+              <li key={item.labelKey}>
                 <Link href={item.href} onClick={handleNavClick}>
                   <span
-                    className={`flex items-center space-x-3 px-3 py-2 rounded-md transition-colors cursor-pointer ${
+                    className={`flex items-center gap-3 px-3 py-2 rounded-md transition-colors cursor-pointer ${
                       isActive
                         ? "bg-blue-600 text-white"
                         : "text-slate-400 hover:bg-slate-800 hover:text-white"
                     }`}
-                    data-testid={`nav-${item.key.toLowerCase().replace(/\s+/g, '-').replace(/\//g, '')}`}
+                    data-testid={`nav-${item.labelKey}`}
                   >
                     <Icon className="w-4 h-4" />
-                    <span className={`flex-1 ${isActive ? "font-medium" : ""}`}>{item.key}</span>
+                    <span className={`flex-1 ${isActive ? "font-medium" : ""}`}>{t(item.labelKey)}</span>
                   </span>
                 </Link>
               </li>
@@ -89,14 +91,15 @@ function SidebarContent({ onNavigate }: SidebarContentProps) {
           <div className="mt-4 p-3 bg-red-500/20 border border-red-500/30 rounded-md">
             <div className="flex items-center gap-2 text-red-400">
               <AlertTriangle className="w-4 h-4" />
-              <span className="text-sm font-medium">{lowStockCount} Low Stock Items</span>
+              <span className="text-sm font-medium">{lowStockCount} {t("lowStockItems")}</span>
             </div>
           </div>
         )}
+
       </nav>
 
       <div className="p-4 border-t border-slate-800">
-        <div className="flex items-center space-x-3">
+        <div className="flex items-center gap-3">
           <div className="w-8 h-8 bg-blue-600 rounded-full flex items-center justify-center">
             <span className="text-sm font-medium text-white">
               {user?.firstName?.[0]}{user?.lastName?.[0]}
@@ -116,6 +119,7 @@ function SidebarContent({ onNavigate }: SidebarContentProps) {
             onClick={handleLogout}
             className="text-slate-400 hover:text-white hover:bg-slate-800"
             data-testid="button-logout"
+            title={t("logout")}
           >
             <LogOut className="w-4 h-4" />
           </Button>

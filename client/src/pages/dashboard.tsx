@@ -5,6 +5,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Link } from "wouter";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/components/auth-provider";
+import { useI18n } from "@/lib/i18n";
 
 interface DashboardStats {
   todaySales: number;
@@ -24,6 +25,7 @@ interface BestSeller {
 }
 
 export default function Dashboard() {
+  const { t } = useI18n();
   const { user } = useAuth();
   const isOwner = user?.role === "owner";
   const isCashier = user?.role === "cashier";
@@ -63,14 +65,14 @@ export default function Dashboard() {
     <div className="p-6 space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold" data-testid="text-dashboard-title">Dashboard</h1>
-          <p className="text-muted-foreground">Welcome to MD CARS Management System</p>
+          <h1 className="text-2xl font-bold" data-testid="text-dashboard-title">{t("dashboard")}</h1>
+          <p className="text-muted-foreground">{t("welcomeSystem")}</p>
         </div>
         {(isOwner || isCashier) && (
           <Link href="/pos">
             <Button data-testid="button-new-sale">
               <ShoppingCart className="w-4 h-4 mr-2" />
-              New Sale
+              {t("newSale")}
             </Button>
           </Link>
         )}
@@ -81,7 +83,7 @@ export default function Dashboard() {
           <CardContent className="p-6">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-muted-foreground">Today's Sales</p>
+                <p className="text-sm text-muted-foreground">{t("todaysSales")}</p>
                 <p className="text-2xl font-bold" data-testid="text-today-sales">{stats?.todaySales || 0}</p>
               </div>
               <ShoppingCart className="w-8 h-8 text-primary" />
@@ -94,7 +96,7 @@ export default function Dashboard() {
             <CardContent className="p-6">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm text-muted-foreground">Today's Revenue</p>
+                  <p className="text-sm text-muted-foreground">{t("todaysRevenue")}</p>
                   <p className="text-2xl font-bold" data-testid="text-today-revenue">{stats?.todayRevenue?.toFixed(2) || "0.00"} LYD</p>
                 </div>
                 <TrendingUp className="w-8 h-8 text-green-500" />
@@ -107,7 +109,7 @@ export default function Dashboard() {
           <CardContent className="p-6">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-muted-foreground">Total Products</p>
+                <p className="text-sm text-muted-foreground">{t("totalProducts")}</p>
                 <p className="text-2xl font-bold" data-testid="text-total-products">{stats?.totalProducts || 0}</p>
               </div>
               <Package className="w-8 h-8 text-blue-500" />
@@ -120,7 +122,7 @@ export default function Dashboard() {
             <CardContent className="p-6">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm text-muted-foreground">Total Customers</p>
+                  <p className="text-sm text-muted-foreground">{t("totalCustomers")}</p>
                   <p className="text-2xl font-bold" data-testid="text-total-customers">{stats?.totalCustomers || 0}</p>
                 </div>
                 <Users className="w-8 h-8 text-purple-500" />
@@ -134,7 +136,7 @@ export default function Dashboard() {
             <CardContent className="p-6">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm text-muted-foreground">Low Stock Items</p>
+                  <p className="text-sm text-muted-foreground">{t("lowStockItems")}</p>
                   <p className="text-2xl font-bold text-destructive" data-testid="text-low-stock-count">{stats?.lowStockCount || 0}</p>
                 </div>
                 <AlertTriangle className="w-8 h-8 text-destructive" />
@@ -150,17 +152,17 @@ export default function Dashboard() {
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <DollarSign className="w-5 h-5" />
-                Cashbox Balance
+                {t("cashboxBalance")}
               </CardTitle>
             </CardHeader>
             <CardContent>
               <div className="space-y-4">
                 <div className="flex justify-between items-center p-3 bg-muted rounded-lg">
-                  <span className="font-medium">LYD Balance</span>
+                  <span className="font-medium">{t("lydBalance")}</span>
                   <span className="text-xl font-bold" data-testid="text-cashbox-lyd">{stats?.cashboxBalanceLYD?.toFixed(2) || "0.00"} LYD</span>
                 </div>
                 <div className="flex justify-between items-center p-3 bg-muted rounded-lg">
-                  <span className="font-medium">USD Balance</span>
+                  <span className="font-medium">{t("usdBalance")}</span>
                   <span className="text-xl font-bold" data-testid="text-cashbox-usd">${stats?.cashboxBalanceUSD?.toFixed(2) || "0.00"}</span>
                 </div>
               </div>
@@ -173,7 +175,7 @@ export default function Dashboard() {
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <AlertTriangle className="w-5 h-5 text-destructive" />
-                Low Stock Alert ({stats?.lowStockCount || 0})
+                {t("lowStockAlert")} ({stats?.lowStockCount || 0})
               </CardTitle>
             </CardHeader>
             <CardContent>
@@ -182,17 +184,17 @@ export default function Dashboard() {
                   {lowStockProducts.slice(0, 5).map((product: any) => (
                     <div key={product.id} className="flex justify-between items-center p-2 bg-destructive/10 rounded" data-testid={`low-stock-product-${product.id}`}>
                       <span className="font-medium">{product.name}</span>
-                      <span className="text-destructive font-bold">{product.currentStock} left</span>
+                      <span className="text-destructive font-bold">{product.currentStock} {t("left")}</span>
                     </div>
                   ))}
                   {lowStockProducts.length > 5 && (
                     <Link href="/inventory">
-                      <Button variant="outline" className="w-full mt-2">View All ({lowStockProducts.length})</Button>
+                      <Button variant="outline" className="w-full mt-2">{t("viewAll")} ({lowStockProducts.length})</Button>
                     </Link>
                   )}
                 </div>
               ) : (
-                <p className="text-muted-foreground text-center py-4">All products are well stocked</p>
+                <p className="text-muted-foreground text-center py-4">{t("allWellStocked")}</p>
               )}
             </CardContent>
           </Card>
@@ -204,7 +206,7 @@ export default function Dashboard() {
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <TrendingUp className="w-5 h-5" />
-              Best Selling Products
+              {t("bestSellingProducts")}
             </CardTitle>
           </CardHeader>
           <CardContent>
@@ -219,14 +221,14 @@ export default function Dashboard() {
                       <span className="font-medium">{item.productName}</span>
                     </div>
                     <div className="text-right">
-                      <p className="font-bold">{item.totalSold} sold</p>
+                      <p className="font-bold">{item.totalSold} {t("sold")}</p>
                       <p className="text-sm text-muted-foreground">{item.totalRevenue.toFixed(2)} LYD</p>
                     </div>
                   </div>
                 ))}
               </div>
             ) : (
-              <p className="text-muted-foreground text-center py-4">No sales data yet</p>
+              <p className="text-muted-foreground text-center py-4">{t("noSalesDataYet")}</p>
             )}
           </CardContent>
         </Card>

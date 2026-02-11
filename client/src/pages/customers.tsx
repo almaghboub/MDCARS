@@ -12,6 +12,7 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
+import { useI18n } from "@/lib/i18n";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { Plus, Pencil, Trash2, Search, Users, Phone, Mail, DollarSign, Eye } from "lucide-react";
 import type { Customer, CustomerWithSales, Sale } from "@shared/schema";
@@ -28,6 +29,7 @@ const customerFormSchema = z.object({
 type CustomerFormData = z.infer<typeof customerFormSchema>;
 
 export default function Customers() {
+  const { t } = useI18n();
   const [searchQuery, setSearchQuery] = useState("");
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [isViewDialogOpen, setIsViewDialogOpen] = useState(false);
@@ -59,7 +61,7 @@ export default function Customers() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/customers"] });
-      toast({ title: "Customer created successfully" });
+      toast({ title: t("customerSaved") });
       setIsDialogOpen(false);
       form.reset();
     },
@@ -75,7 +77,7 @@ export default function Customers() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/customers"] });
-      toast({ title: "Customer updated successfully" });
+      toast({ title: t("customerSaved") });
       setIsDialogOpen(false);
       setEditingCustomer(null);
       form.reset();
@@ -91,7 +93,7 @@ export default function Customers() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/customers"] });
-      toast({ title: "Customer deleted successfully" });
+      toast({ title: t("customerDeleted") });
     },
     onError: (error: any) => {
       toast({ title: "Error", description: error.message, variant: "destructive" });
@@ -155,8 +157,8 @@ export default function Customers() {
     <div className="p-6 space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold" data-testid="text-customers-title">Customers</h1>
-          <p className="text-muted-foreground">Manage your customer database</p>
+          <h1 className="text-2xl font-bold" data-testid="text-customers-title">{t("customers")}</h1>
+          <p className="text-muted-foreground">{t("manageCustomers")}</p>
         </div>
         <Dialog open={isDialogOpen} onOpenChange={(open) => {
           setIsDialogOpen(open);
@@ -168,52 +170,52 @@ export default function Customers() {
           <DialogTrigger asChild>
             <Button data-testid="button-add-customer">
               <Plus className="w-4 h-4 mr-2" />
-              Add Customer
+              {t("addCustomer")}
             </Button>
           </DialogTrigger>
           <DialogContent>
             <DialogHeader>
-              <DialogTitle>{editingCustomer ? "Edit Customer" : "Add Customer"}</DialogTitle>
+              <DialogTitle>{editingCustomer ? t("editCustomer") : t("addCustomer")}</DialogTitle>
             </DialogHeader>
             <Form {...form}>
               <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
                 <FormField control={form.control} name="name" render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Name</FormLabel>
+                    <FormLabel>{t("name")}</FormLabel>
                     <FormControl><Input {...field} data-testid="input-customer-name" /></FormControl>
                     <FormMessage />
                   </FormItem>
                 )} />
                 <FormField control={form.control} name="phone" render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Phone</FormLabel>
+                    <FormLabel>{t("phone")}</FormLabel>
                     <FormControl><Input {...field} data-testid="input-customer-phone" /></FormControl>
                     <FormMessage />
                   </FormItem>
                 )} />
                 <FormField control={form.control} name="email" render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Email (Optional)</FormLabel>
+                    <FormLabel>{t("email")} (Optional)</FormLabel>
                     <FormControl><Input type="email" {...field} data-testid="input-customer-email" /></FormControl>
                     <FormMessage />
                   </FormItem>
                 )} />
                 <FormField control={form.control} name="address" render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Address (Optional)</FormLabel>
+                    <FormLabel>{t("address")} (Optional)</FormLabel>
                     <FormControl><Textarea {...field} data-testid="input-customer-address" /></FormControl>
                     <FormMessage />
                   </FormItem>
                 )} />
                 <FormField control={form.control} name="notes" render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Notes (Optional)</FormLabel>
+                    <FormLabel>{t("notes")} (Optional)</FormLabel>
                     <FormControl><Textarea {...field} data-testid="input-customer-notes" /></FormControl>
                     <FormMessage />
                   </FormItem>
                 )} />
                 <Button type="submit" className="w-full" disabled={createMutation.isPending || updateMutation.isPending} data-testid="button-save-customer">
-                  {createMutation.isPending || updateMutation.isPending ? "Saving..." : editingCustomer ? "Update Customer" : "Add Customer"}
+                  {createMutation.isPending || updateMutation.isPending ? t("saving") : editingCustomer ? t("editCustomer") : t("addCustomer")}
                 </Button>
               </form>
             </Form>
@@ -226,12 +228,12 @@ export default function Customers() {
           <div className="flex items-center justify-between">
             <CardTitle className="flex items-center gap-2">
               <Users className="w-5 h-5" />
-              Customers ({filteredCustomers.length})
+              {t("customers")} ({filteredCustomers.length})
             </CardTitle>
             <div className="relative w-64">
               <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-muted-foreground" />
               <Input
-                placeholder="Search customers..."
+                placeholder={t("searchCustomers")}
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 className="pl-10"
@@ -242,19 +244,19 @@ export default function Customers() {
         </CardHeader>
         <CardContent>
           {isLoading ? (
-            <p>Loading...</p>
+            <p>{t("loading")}</p>
           ) : filteredCustomers.length === 0 ? (
-            <p className="text-center py-8 text-muted-foreground">No customers found. Add your first customer!</p>
+            <p className="text-center py-8 text-muted-foreground">{t("noCustomersFound")}</p>
           ) : (
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Name</TableHead>
-                  <TableHead>Phone</TableHead>
-                  <TableHead>Email</TableHead>
-                  <TableHead>Total Purchases</TableHead>
-                  <TableHead>Balance Owed</TableHead>
-                  <TableHead>Actions</TableHead>
+                  <TableHead>{t("name")}</TableHead>
+                  <TableHead>{t("phone")}</TableHead>
+                  <TableHead>{t("email")}</TableHead>
+                  <TableHead>{t("totalPurchases")}</TableHead>
+                  <TableHead>{t("balanceOwed")}</TableHead>
+                  <TableHead>{t("actions")}</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -310,36 +312,36 @@ export default function Customers() {
       <Dialog open={isViewDialogOpen} onOpenChange={setIsViewDialogOpen}>
         <DialogContent className="max-w-2xl">
           <DialogHeader>
-            <DialogTitle>Customer Details</DialogTitle>
+            <DialogTitle>{t("customers")}</DialogTitle>
           </DialogHeader>
           {viewingCustomer && (
             <div className="space-y-6">
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <p className="text-sm text-muted-foreground">Name</p>
+                  <p className="text-sm text-muted-foreground">{t("name")}</p>
                   <p className="font-medium">{viewingCustomer.name}</p>
                 </div>
                 <div>
-                  <p className="text-sm text-muted-foreground">Phone</p>
+                  <p className="text-sm text-muted-foreground">{t("phone")}</p>
                   <p className="font-medium">{viewingCustomer.phone}</p>
                 </div>
                 <div>
-                  <p className="text-sm text-muted-foreground">Email</p>
+                  <p className="text-sm text-muted-foreground">{t("email")}</p>
                   <p className="font-medium">{viewingCustomer.email || "-"}</p>
                 </div>
                 <div>
-                  <p className="text-sm text-muted-foreground">Address</p>
+                  <p className="text-sm text-muted-foreground">{t("address")}</p>
                   <p className="font-medium">{viewingCustomer.address || "-"}</p>
                 </div>
               </div>
 
               <div className="flex justify-between items-center p-4 bg-muted rounded-lg">
                 <div>
-                  <p className="text-sm text-muted-foreground">Total Purchases</p>
+                  <p className="text-sm text-muted-foreground">{t("totalPurchases")}</p>
                   <p className="text-xl font-bold">{viewingCustomer.totalPurchases} LYD</p>
                 </div>
                 <div>
-                  <p className="text-sm text-muted-foreground">Balance Owed</p>
+                  <p className="text-sm text-muted-foreground">{t("balanceOwed")}</p>
                   <p className={`text-xl font-bold ${parseFloat(viewingCustomer.balanceOwed) > 0 ? 'text-destructive' : ''}`}>
                     {viewingCustomer.balanceOwed} LYD
                   </p>
@@ -352,7 +354,7 @@ export default function Customers() {
               </div>
 
               <div>
-                <h4 className="font-medium mb-2">Purchase History</h4>
+                <h4 className="font-medium mb-2">{t("purchaseHistory")}</h4>
                 {viewingCustomer.sales && viewingCustomer.sales.length > 0 ? (
                   <div className="space-y-2 max-h-48 overflow-auto">
                     {viewingCustomer.sales.map((sale: Sale) => (
@@ -385,7 +387,7 @@ export default function Customers() {
           {viewingCustomer && (
             <div className="space-y-4">
               <div className="p-3 bg-muted rounded">
-                <p className="text-sm text-muted-foreground">Current Balance</p>
+                <p className="text-sm text-muted-foreground">{t("balanceOwed")}</p>
                 <p className="text-xl font-bold text-destructive">{viewingCustomer.balanceOwed} LYD</p>
               </div>
               <div>

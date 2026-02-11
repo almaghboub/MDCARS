@@ -5,7 +5,9 @@ import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { AuthProvider, useAuth } from "@/components/auth-provider";
 import { ThemeProvider } from "@/components/theme-provider";
+import { I18nProvider } from "@/lib/i18n";
 import { Sidebar } from "@/components/sidebar";
+import { TopHeader } from "@/components/top-header";
 import { useIsMobile } from "@/hooks/use-mobile";
 import NotFound from "@/pages/not-found";
 import Login from "@/pages/login";
@@ -38,9 +40,12 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
     <div className="min-h-screen flex bg-background">
       {!isMobile && <Sidebar />}
       {isMobile && <Sidebar />}
-      <main className="flex-1 overflow-x-hidden">
-        {children}
-      </main>
+      <div className="flex-1 flex flex-col overflow-x-hidden">
+        <TopHeader />
+        <main className="flex-1 overflow-x-hidden">
+          {children}
+        </main>
+      </div>
     </div>
   );
 }
@@ -69,9 +74,12 @@ function RoleProtectedRoute({ children, allowedRoles }: { children: React.ReactN
     <div className="min-h-screen flex bg-background">
       {!isMobile && <Sidebar />}
       {isMobile && <Sidebar />}
-      <main className="flex-1 overflow-x-hidden">
-        {children}
-      </main>
+      <div className="flex-1 flex flex-col overflow-x-hidden">
+        <TopHeader />
+        <main className="flex-1 overflow-x-hidden">
+          {children}
+        </main>
+      </div>
     </div>
   );
 }
@@ -165,14 +173,16 @@ function Router() {
 function App() {
   return (
     <QueryClientProvider client={queryClient}>
-      <ThemeProvider>
-        <AuthProvider>
-          <TooltipProvider>
-            <Toaster />
-            <Router />
-          </TooltipProvider>
-        </AuthProvider>
-      </ThemeProvider>
+      <I18nProvider>
+        <ThemeProvider>
+          <AuthProvider>
+            <TooltipProvider>
+              <Toaster />
+              <Router />
+            </TooltipProvider>
+          </AuthProvider>
+        </ThemeProvider>
+      </I18nProvider>
     </QueryClientProvider>
   );
 }

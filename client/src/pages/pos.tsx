@@ -8,6 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
+import { useI18n } from "@/lib/i18n";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useAuth } from "@/components/auth-provider";
 import { ShoppingCart, Search, Plus, Minus, Trash2, User, Receipt, X, Printer } from "lucide-react";
@@ -37,6 +38,7 @@ export default function POS() {
   const [customerSearch, setCustomerSearch] = useState("");
   const [newCustomerName, setNewCustomerName] = useState("");
   const [newCustomerPhone, setNewCustomerPhone] = useState("");
+  const { t } = useI18n();
   const { toast } = useToast();
   const { user } = useAuth();
   const receiptRef = useRef<HTMLDivElement>(null);
@@ -59,7 +61,7 @@ export default function POS() {
       queryClient.invalidateQueries({ queryKey: ["/api/sales"] });
       queryClient.invalidateQueries({ queryKey: ["/api/dashboard/stats"] });
       queryClient.invalidateQueries({ queryKey: ["/api/cashbox"] });
-      toast({ title: "Sale completed!", description: `Invoice #${sale.saleNumber}` });
+      toast({ title: t("saleCompleted"), description: `${t("invoiceNumber")}${sale.saleNumber}` });
       try {
         const res = await apiRequest("GET", `/api/sales/${sale.id}`);
         const fullSale = await res.json();
@@ -123,7 +125,7 @@ export default function POS() {
       setIsCustomerDialogOpen(false);
       setNewCustomerName("");
       setNewCustomerPhone("");
-      toast({ title: "Customer created" });
+      toast({ title: t("customerCreated") });
     },
     onError: (error: any) => {
       toast({ title: "Error", description: error.message, variant: "destructive" });
@@ -144,13 +146,13 @@ export default function POS() {
 
   const addToCart = (product: ProductWithCategory) => {
     if (product.currentStock <= 0) {
-      toast({ title: "Out of stock", variant: "destructive" });
+      toast({ title: t("outOfStock"), variant: "destructive" });
       return;
     }
     const existing = cart.find(item => item.product.id === product.id);
     if (existing) {
       if (existing.quantity >= product.currentStock) {
-        toast({ title: "Not enough stock", variant: "destructive" });
+        toast({ title: t("notEnoughStock"), variant: "destructive" });
         return;
       }
       setCart(cart.map(item =>
@@ -174,7 +176,7 @@ export default function POS() {
         const newQty = item.quantity + delta;
         if (newQty <= 0) return item;
         if (newQty > item.product.currentStock) {
-          toast({ title: "Not enough stock", variant: "destructive" });
+          toast({ title: t("notEnoughStock"), variant: "destructive" });
           return item;
         }
         return { ...item, quantity: newQty };
@@ -198,7 +200,7 @@ export default function POS() {
 
   const handleCheckout = () => {
     if (cart.length === 0) {
-      toast({ title: "Cart is empty", variant: "destructive" });
+      toast({ title: t("cartIsEmpty"), variant: "destructive" });
       return;
     }
     if (paid <= 0) {
@@ -235,7 +237,7 @@ export default function POS() {
   return (
     <div className="p-6 h-[calc(100vh-2rem)]">
       <div className="flex items-center justify-between mb-4">
-        <h1 className="text-2xl font-bold" data-testid="text-pos-title">Point of Sale</h1>
+        <h1 className="text-2xl font-bold" data-testid="text-pos-title">{t("pointOfSale")}</h1>
         {selectedCustomer ? (
           <div className="flex items-center gap-2">
             <Badge variant="secondary" className="flex items-center gap-1">
@@ -249,7 +251,7 @@ export default function POS() {
         ) : (
           <Button variant="outline" onClick={() => setIsCustomerDialogOpen(true)} data-testid="button-select-customer">
             <User className="w-4 h-4 mr-2" />
-            Select Customer
+            {t("selectCustomer")}
           </Button>
         )}
       </div>
@@ -259,7 +261,7 @@ export default function POS() {
           <div className="relative">
             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-muted-foreground" />
             <Input
-              placeholder="Search by name, SKU, or barcode..."
+              placeholder={t("searchByNameSkuBarcode")}
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               className="pl-10 text-lg py-6"
@@ -295,13 +297,13 @@ export default function POS() {
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <ShoppingCart className="w-5 h-5" />
-              Cart ({cart.length} items)
+              {t("cart")} ({cart.length} {t("items")})
             </CardTitle>
           </CardHeader>
           <CardContent className="flex-1 flex flex-col">
             <div className="flex-1 overflow-auto">
               {cart.length === 0 ? (
-                <p className="text-center py-8 text-muted-foreground">Cart is empty</p>
+                <p className="text-center py-8 text-muted-foreground">{t("cartIsEmpty")}</p>
               ) : (
                 <div className="space-y-2">
                   {cart.map((item) => (
@@ -330,11 +332,11 @@ export default function POS() {
 
             <div className="border-t pt-4 mt-4 space-y-2">
               <div className="flex justify-between">
-                <span>Subtotal:</span>
+                <span>{t("subtotal")}:</span>
                 <span className="font-medium">{subtotal.toFixed(2)} LYD</span>
               </div>
               <div className="flex justify-between items-center">
-                <span>Discount:</span>
+                <span>{t("discount")}:</span>
                 <Input
                   type="number"
                   value={discount}
@@ -344,7 +346,7 @@ export default function POS() {
                 />
               </div>
               <div className="flex justify-between text-lg font-bold">
-                <span>Total:</span>
+                <span>{t("total")}:</span>
                 <span data-testid="text-cart-total">{total.toFixed(2)} LYD</span>
               </div>
               <Button
@@ -358,7 +360,7 @@ export default function POS() {
                 data-testid="button-checkout"
               >
                 <Receipt className="w-4 h-4 mr-2" />
-                Checkout
+                {t("checkout")}
               </Button>
             </div>
           </CardContent>
@@ -368,11 +370,11 @@ export default function POS() {
       <Dialog open={isCustomerDialogOpen} onOpenChange={setIsCustomerDialogOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Select or Create Customer</DialogTitle>
+            <DialogTitle>{t("selectOrCreateCustomer")}</DialogTitle>
           </DialogHeader>
           <div className="space-y-4">
             <Input
-              placeholder="Search customers..."
+              placeholder={t("searchCustomers")}
               value={customerSearch}
               onChange={(e) => setCustomerSearch(e.target.value)}
               data-testid="input-customer-search"
@@ -394,22 +396,22 @@ export default function POS() {
               ))}
             </div>
             <div className="border-t pt-4">
-              <h4 className="font-medium mb-2">Create New Customer</h4>
+              <h4 className="font-medium mb-2">{t("createNewCustomer")}</h4>
               <div className="space-y-2">
-                <Input placeholder="Name" value={newCustomerName} onChange={(e) => setNewCustomerName(e.target.value)} data-testid="input-new-customer-name" />
-                <Input placeholder="Phone" value={newCustomerPhone} onChange={(e) => setNewCustomerPhone(e.target.value)} data-testid="input-new-customer-phone" />
+                <Input placeholder={t("name")} value={newCustomerName} onChange={(e) => setNewCustomerName(e.target.value)} data-testid="input-new-customer-name" />
+                <Input placeholder={t("phone")} value={newCustomerPhone} onChange={(e) => setNewCustomerPhone(e.target.value)} data-testid="input-new-customer-phone" />
                 <Button
                   className="w-full"
                   onClick={() => createCustomerMutation.mutate({ name: newCustomerName, phone: newCustomerPhone })}
                   disabled={!newCustomerName || !newCustomerPhone || createCustomerMutation.isPending}
                   data-testid="button-create-customer"
                 >
-                  Create Customer
+                  {t("createCustomer")}
                 </Button>
               </div>
             </div>
             <Button variant="outline" className="w-full" onClick={() => setIsCustomerDialogOpen(false)}>
-              Continue as Walk-in
+              {t("continueAsWalkin")}
             </Button>
           </div>
         </DialogContent>
@@ -418,16 +420,16 @@ export default function POS() {
       <Dialog open={isCheckoutDialogOpen} onOpenChange={setIsCheckoutDialogOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Complete Sale</DialogTitle>
+            <DialogTitle>{t("completeSale")}</DialogTitle>
           </DialogHeader>
           <div className="space-y-4">
             <div className="p-4 bg-muted rounded space-y-2">
-              <div className="flex justify-between"><span>Subtotal:</span><span>{subtotal.toFixed(2)} LYD</span></div>
-              <div className="flex justify-between"><span>Discount:</span><span>-{discountAmount.toFixed(2)} LYD</span></div>
-              <div className="flex justify-between text-lg font-bold"><span>Total:</span><span>{total.toFixed(2)} LYD</span></div>
+              <div className="flex justify-between"><span>{t("subtotal")}:</span><span>{subtotal.toFixed(2)} LYD</span></div>
+              <div className="flex justify-between"><span>{t("discount")}:</span><span>-{discountAmount.toFixed(2)} LYD</span></div>
+              <div className="flex justify-between text-lg font-bold"><span>{t("total")}:</span><span>{total.toFixed(2)} LYD</span></div>
             </div>
             <div>
-              <label className="text-sm font-medium">Currency</label>
+              <label className="text-sm font-medium">{t("currency")}</label>
               <Select value={currency} onValueChange={(v) => setCurrency(v as "LYD" | "USD")}>
                 <SelectTrigger data-testid="select-currency">
                   <SelectValue />
@@ -439,7 +441,7 @@ export default function POS() {
               </Select>
             </div>
             <div>
-              <label className="text-sm font-medium">Amount Paid</label>
+              <label className="text-sm font-medium">{t("amountPaid")}</label>
               <Input
                 type="number"
                 value={amountPaid}
@@ -450,13 +452,13 @@ export default function POS() {
             </div>
             {amountDue > 0 && (
               <div className="p-3 bg-destructive/10 rounded">
-                <p className="text-destructive font-medium">Amount Due: {amountDue.toFixed(2)} LYD</p>
-                <p className="text-sm text-muted-foreground">This will be added to customer's balance</p>
+                <p className="text-destructive font-medium">{t("amountDue")}: {amountDue.toFixed(2)} LYD</p>
+                <p className="text-sm text-muted-foreground">{t("addedToCustomerBalance")}</p>
               </div>
             )}
             {paid > total && (
               <div className="p-3 bg-green-500/10 rounded">
-                <p className="text-green-600 font-medium">Change: {(paid - total).toFixed(2)} LYD</p>
+                <p className="text-green-600 font-medium">{t("change")}: {(paid - total).toFixed(2)} LYD</p>
               </div>
             )}
             <Button
@@ -466,7 +468,7 @@ export default function POS() {
               disabled={createSaleMutation.isPending}
               data-testid="button-complete-sale"
             >
-              {createSaleMutation.isPending ? "Processing..." : "Complete Sale"}
+              {createSaleMutation.isPending ? t("processing") : t("completeSale")}
             </Button>
           </div>
         </DialogContent>
@@ -475,7 +477,7 @@ export default function POS() {
       <Dialog open={isReceiptDialogOpen} onOpenChange={setIsReceiptDialogOpen}>
         <DialogContent className="max-w-md">
           <DialogHeader>
-            <DialogTitle>Invoice / Receipt</DialogTitle>
+            <DialogTitle>{t("invoiceReceipt")}</DialogTitle>
           </DialogHeader>
           {lastSale && (
             <>
@@ -490,22 +492,22 @@ export default function POS() {
 
                 <div className="space-y-1">
                   <div className="flex justify-between">
-                    <span className="text-muted-foreground">Invoice #:</span>
+                    <span className="text-muted-foreground">{t("invoiceNumber")}:</span>
                     <span className="font-bold" data-testid="text-receipt-number">{lastSale.saleNumber}</span>
                   </div>
                   <div className="flex justify-between">
-                    <span className="text-muted-foreground">Date:</span>
+                    <span className="text-muted-foreground">{t("date")}:</span>
                     <span>{new Date(lastSale.createdAt).toLocaleDateString()} {new Date(lastSale.createdAt).toLocaleTimeString()}</span>
                   </div>
                   <div className="flex justify-between">
-                    <span className="text-muted-foreground">Sold by:</span>
+                    <span className="text-muted-foreground">{t("soldBy")}:</span>
                     <span className="font-medium" data-testid="text-receipt-seller">
                       {lastSale.createdBy?.firstName} {lastSale.createdBy?.lastName}
                     </span>
                   </div>
                   {lastSale.customer && (
                     <div className="flex justify-between">
-                      <span className="text-muted-foreground">Customer:</span>
+                      <span className="text-muted-foreground">{t("customer")}:</span>
                       <span>{lastSale.customer.name}</span>
                     </div>
                   )}
@@ -514,10 +516,10 @@ export default function POS() {
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead className="text-xs">Item</TableHead>
-                      <TableHead className="text-xs text-center">Qty</TableHead>
-                      <TableHead className="text-xs text-right">Price</TableHead>
-                      <TableHead className="text-xs text-right">Total</TableHead>
+                      <TableHead className="text-xs">{t("item")}</TableHead>
+                      <TableHead className="text-xs text-center">{t("quantity")}</TableHead>
+                      <TableHead className="text-xs text-right">{t("price")}</TableHead>
+                      <TableHead className="text-xs text-right">{t("total")}</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -534,39 +536,39 @@ export default function POS() {
 
                 <div className="border-t pt-2 space-y-1">
                   <div className="flex justify-between">
-                    <span>Subtotal:</span>
+                    <span>{t("subtotal")}:</span>
                     <span>{parseFloat(lastSale.subtotal).toFixed(2)} {lastSale.currency}</span>
                   </div>
                   {parseFloat(lastSale.discount) > 0 && (
                     <div className="flex justify-between text-destructive">
-                      <span>Discount:</span>
+                      <span>{t("discount")}:</span>
                       <span>-{parseFloat(lastSale.discount).toFixed(2)} {lastSale.currency}</span>
                     </div>
                   )}
                   <div className="flex justify-between font-bold text-base border-t pt-1">
-                    <span>Total:</span>
+                    <span>{t("total")}:</span>
                     <span>{parseFloat(lastSale.totalAmount).toFixed(2)} {lastSale.currency}</span>
                   </div>
                   <div className="flex justify-between">
-                    <span>Paid:</span>
+                    <span>{t("paid")}:</span>
                     <span>{parseFloat(lastSale.amountPaid).toFixed(2)} {lastSale.currency}</span>
                   </div>
                   {parseFloat(lastSale.amountDue) > 0 && (
                     <div className="flex justify-between text-destructive font-medium">
-                      <span>Amount Due:</span>
+                      <span>{t("amountDue")}:</span>
                       <span>{parseFloat(lastSale.amountDue).toFixed(2)} {lastSale.currency}</span>
                     </div>
                   )}
                   {parseFloat(lastSale.amountPaid) > parseFloat(lastSale.totalAmount) && (
                     <div className="flex justify-between text-green-600 font-medium">
-                      <span>Change:</span>
+                      <span>{t("change")}:</span>
                       <span>{(parseFloat(lastSale.amountPaid) - parseFloat(lastSale.totalAmount)).toFixed(2)} {lastSale.currency}</span>
                     </div>
                   )}
                 </div>
 
                 <div className="text-center border-t pt-2 text-xs text-muted-foreground">
-                  <p>Thank you for your purchase!</p>
+                  <p>{t("thankYou")}</p>
                   <p>MD CARS - Car Accessories</p>
                 </div>
               </div>
@@ -574,10 +576,10 @@ export default function POS() {
               <div className="flex gap-2 mt-2">
                 <Button onClick={handlePrintReceipt} className="flex-1" data-testid="button-print-receipt">
                   <Printer className="w-4 h-4 mr-2" />
-                  Print Invoice
+                  {t("printInvoice")}
                 </Button>
                 <Button variant="outline" onClick={() => setIsReceiptDialogOpen(false)} className="flex-1" data-testid="button-close-receipt">
-                  Close
+                  {t("close")}
                 </Button>
               </div>
             </>

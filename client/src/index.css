@@ -111,3 +111,50 @@
     touch-action: manipulation;
   }
 }
+
+[dir="rtl"] {
+  direction: rtl;
+  text-align: right;
+}
+
+[dir="rtl"] .space-x-2 > :not([hidden]) ~ :not([hidden]),
+[dir="rtl"] .space-x-3 > :not([hidden]) ~ :not([hidden]) {
+  --tw-space-x-reverse: 1;
+}
+
+[dir="rtl"] .pl-10 {
+  padding-left: 0;
+  padding-right: 2.5rem;
+}
+
+[dir="rtl"] .mr-2 {
+  margin-right: 0;
+  margin-left: 0.5rem;
+}
+
+[dir="rtl"] .ml-2 {
+  margin-left: 0;
+  margin-right: 0.5rem;
+}
+
+[dir="rtl"] .text-right {
+  text-align: left;
+}
+
+[dir="rtl"] .text-left {
+  text-align: right;
+}
+
+[dir="rtl"] table {
+  text-align: right;
+}
+
+[dir="rtl"] .left-3 {
+  left: auto;
+  right: 0.75rem;
+}
+
+[dir="rtl"] .left-4 {
+  left: auto;
+  right: 1rem;
+}
