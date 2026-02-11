@@ -16,9 +16,10 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
 import { useI18n } from "@/lib/i18n";
 import { queryClient, apiRequest } from "@/lib/queryClient";
-import { Wallet, Plus, ArrowUpCircle, ArrowDownCircle, DollarSign, TrendingUp, Trash2 } from "lucide-react";
-import type { Cashbox, CashboxTransaction, Expense, Revenue } from "@shared/schema";
+import { Wallet, Plus, ArrowUpCircle, ArrowDownCircle, DollarSign, TrendingUp, Trash2, ShoppingCart, Eye } from "lucide-react";
+import type { Cashbox, CashboxTransaction, Expense, Revenue, SaleWithDetails } from "@shared/schema";
 import { format } from "date-fns";
+import { SaleInvoiceDialog } from "@/components/sale-invoice-dialog";
 
 const expenseFormSchema = z.object({
   category: z.enum(["rent", "utilities", "salaries", "supplies", "maintenance", "marketing", "other"]),
@@ -47,6 +48,8 @@ export default function Finance() {
   const [isExpenseDialogOpen, setIsExpenseDialogOpen] = useState(false);
   const [isRevenueDialogOpen, setIsRevenueDialogOpen] = useState(false);
   const [isTransactionDialogOpen, setIsTransactionDialogOpen] = useState(false);
+  const [selectedSale, setSelectedSale] = useState<SaleWithDetails | null>(null);
+  const [invoiceOpen, setInvoiceOpen] = useState(false);
   const { toast } = useToast();
 
   const { data: cashbox } = useQuery<Cashbox>({
@@ -63,6 +66,10 @@ export default function Finance() {
 
   const { data: revenues = [] } = useQuery<Revenue[]>({
     queryKey: ["/api/revenues"],
+  });
+
+  const { data: allSales = [] } = useQuery<SaleWithDetails[]>({
+    queryKey: ["/api/sales"],
   });
 
   const expenseForm = useForm<z.infer<typeof expenseFormSchema>>({
@@ -155,6 +162,9 @@ export default function Finance() {
 
   const totalExpenses = expenses.reduce((sum, e) => sum + parseFloat(e.amount), 0);
   const totalRevenues = revenues.reduce((sum, r) => sum + parseFloat(r.amount), 0);
+  const completedSales = allSales.filter(s => s.status === "completed");
+  const totalSalesLYD = completedSales.filter(s => s.currency === "LYD").reduce((sum, s) => sum + parseFloat(s.amountPaid), 0);
+  const totalSalesUSD = completedSales.filter(s => s.currency === "USD").reduce((sum, s) => sum + parseFloat(s.amountPaid), 0);
 
   return (
     <div className="p-6 space-y-6">
@@ -208,6 +218,10 @@ export default function Finance() {
       <Tabs defaultValue="cashbox" className="space-y-4">
         <TabsList>
           <TabsTrigger value="cashbox">{t("cashbox")}</TabsTrigger>
+          <TabsTrigger value="sales-income" data-testid="tab-sales-income">
+            <ShoppingCart className="w-4 h-4 mr-1" />
+            {t("salesIncome")} ({completedSales.length})
+          </TabsTrigger>
           <TabsTrigger value="expenses">{t("expenses")} ({expenses.length})</TabsTrigger>
           <TabsTrigger value="revenues">{t("revenues")} ({revenues.length})</TabsTrigger>
         </TabsList>
@@ -303,12 +317,68 @@ export default function Finance() {
                             ) : (
                               <ArrowDownCircle className="w-3 h-3 mr-1" />
                             )}
-                            {tx.type}
+                            {tx.type === "sale" ? t("sale") : tx.type === "expense" ? t("expense") : tx.type === "deposit" ? t("deposit") : tx.type === "withdrawal" ? t("withdrawal") : tx.type === "refund" ? t("refund") : tx.type}
                           </Badge>
                         </TableCell>
                         <TableCell>{tx.amountLYD} LYD</TableCell>
                         <TableCell>${tx.amountUSD}</TableCell>
                         <TableCell>{tx.description || "-"}</TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="sales-income" className="space-y-4">
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <ShoppingCart className="w-5 h-5 text-green-500" />
+                {t("salesIncome")} ({totalSalesLYD.toFixed(2)} LYD{totalSalesUSD > 0 ? ` | $${totalSalesUSD.toFixed(2)}` : ""})
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              {allSales.length === 0 ? (
+                <p className="text-center py-8 text-muted-foreground">{t("noSalesIncome")}</p>
+              ) : (
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>{t("date")}</TableHead>
+                      <TableHead>{t("saleNumber")}</TableHead>
+                      <TableHead>{t("customer")}</TableHead>
+                      <TableHead>{t("total")}</TableHead>
+                      <TableHead>{t("paid")}</TableHead>
+                      <TableHead>{t("status")}</TableHead>
+                      <TableHead>{t("actions")}</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {allSales.map((sale) => (
+                      <TableRow key={sale.id} data-testid={`finance-sale-${sale.id}`}>
+                        <TableCell>{format(new Date(sale.createdAt), "PPp")}</TableCell>
+                        <TableCell className="font-medium">{sale.saleNumber}</TableCell>
+                        <TableCell>{sale.customer?.name || t("walkin")}</TableCell>
+                        <TableCell className="font-bold">{sale.totalAmount} {sale.currency}</TableCell>
+                        <TableCell className="text-green-600 font-bold">{sale.amountPaid} {sale.currency}</TableCell>
+                        <TableCell>
+                          <Badge variant={sale.status === "completed" ? "default" : sale.status === "returned" ? "destructive" : "secondary"}>
+                            {sale.status === "completed" ? t("completed") : sale.status === "returned" ? t("returned") : sale.status === "cancelled" ? t("cancelled") : t("pending")}
+                          </Badge>
+                        </TableCell>
+                        <TableCell>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => { setSelectedSale(sale); setInvoiceOpen(true); }}
+                            data-testid={`button-finance-invoice-${sale.id}`}
+                          >
+                            <Eye className="w-4 h-4" />
+                          </Button>
+                        </TableCell>
                       </TableRow>
                     ))}
                   </TableBody>
@@ -542,6 +612,12 @@ export default function Finance() {
           </Card>
         </TabsContent>
       </Tabs>
+
+      <SaleInvoiceDialog
+        sale={selectedSale}
+        open={invoiceOpen}
+        onOpenChange={setInvoiceOpen}
+      />
     </div>
   );
 }

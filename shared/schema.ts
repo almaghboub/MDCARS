@@ -6,10 +6,10 @@ import { z } from "zod";
 export const userRoleEnum = pgEnum("user_role", ["owner", "cashier", "stock_manager"]);
 export const currencyEnum = pgEnum("currency", ["USD", "LYD"]);
 export const paymentMethodEnum = pgEnum("payment_method", ["cash", "partial"]);
-export const saleStatusEnum = pgEnum("sale_status", ["completed", "pending", "cancelled"]);
+export const saleStatusEnum = pgEnum("sale_status", ["completed", "pending", "cancelled", "returned"]);
 export const stockMovementTypeEnum = pgEnum("stock_movement_type", ["in", "out", "adjustment"]);
 export const expenseCategoryEnum = pgEnum("expense_category", ["rent", "utilities", "salaries", "supplies", "maintenance", "marketing", "other"]);
-export const transactionTypeEnum = pgEnum("transaction_type", ["sale", "expense", "deposit", "withdrawal", "adjustment"]);
+export const transactionTypeEnum = pgEnum("transaction_type", ["sale", "expense", "deposit", "withdrawal", "adjustment", "refund"]);
 
 export const users = pgTable("users", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),

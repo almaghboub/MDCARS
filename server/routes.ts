@@ -322,6 +322,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
     res.json(sale);
   });
 
+  app.post("/api/sales/:id/return", requireSalesAccess, async (req, res) => {
+    try {
+      const sale = await storage.returnSale(req.params.id, (req.user as any).id);
+      if (!sale) return res.status(400).json({ message: "Sale not found or already returned/cancelled" });
+      res.json(sale);
+    } catch (err: any) { res.status(400).json({ message: err.message }); }
+  });
+
   app.get("/api/cashbox", requireAuth, async (req, res) => {
     res.json(await storage.getCashbox());
   });

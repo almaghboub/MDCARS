@@ -6,10 +6,11 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { BarChart3, TrendingUp, Package, DollarSign, Calendar, Download } from "lucide-react";
+import { BarChart3, TrendingUp, Package, DollarSign, Calendar, Download, Eye } from "lucide-react";
 import type { Sale, SaleWithDetails } from "@shared/schema";
 import { format, startOfMonth, endOfMonth, startOfDay, endOfDay, subMonths, subDays } from "date-fns";
 import { useI18n } from "@/lib/i18n";
+import { SaleInvoiceDialog } from "@/components/sale-invoice-dialog";
 
 interface DailySalesReport {
   date: string;
@@ -35,6 +36,8 @@ interface SalesSummary {
 export default function Reports() {
   const { t } = useI18n();
   const [period, setPeriod] = useState<"today" | "week" | "month" | "year">("month");
+  const [selectedSale, setSelectedSale] = useState<SaleWithDetails | null>(null);
+  const [invoiceOpen, setInvoiceOpen] = useState(false);
 
   const { data: sales = [] } = useQuery<SaleWithDetails[]>({
     queryKey: ["/api/sales"],
@@ -211,6 +214,7 @@ export default function Reports() {
                       <TableHead>{t("profit")}</TableHead>
                       <TableHead>{t("payment")}</TableHead>
                       <TableHead>{t("status")}</TableHead>
+                      <TableHead>{t("actions")}</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -225,13 +229,23 @@ export default function Reports() {
                         <TableCell className="text-green-600">{calculateProfit(sale).toFixed(2)} LYD</TableCell>
                         <TableCell>
                           <Badge variant={sale.paymentMethod === "cash" ? "secondary" : "outline"}>
-                            {sale.paymentMethod}
+                            {sale.paymentMethod === "cash" ? t("cash") : t("partial")}
                           </Badge>
                         </TableCell>
                         <TableCell>
                           <Badge variant={sale.status === "completed" ? "default" : sale.status === "pending" ? "secondary" : "destructive"}>
-                            {sale.status}
+                            {sale.status === "completed" ? t("completed") : sale.status === "returned" ? t("returned") : sale.status === "cancelled" ? t("cancelled") : t("pending")}
                           </Badge>
+                        </TableCell>
+                        <TableCell>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => { setSelectedSale(sale); setInvoiceOpen(true); }}
+                            data-testid={`button-view-invoice-${sale.id}`}
+                          >
+                            <Eye className="w-4 h-4" />
+                          </Button>
                         </TableCell>
                       </TableRow>
                     ))}
@@ -317,6 +331,12 @@ export default function Reports() {
           </Card>
         </TabsContent>
       </Tabs>
+
+      <SaleInvoiceDialog
+        sale={selectedSale}
+        open={invoiceOpen}
+        onOpenChange={setInvoiceOpen}
+      />
     </div>
   );
 }

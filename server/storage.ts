@@ -62,6 +62,7 @@ export interface IStorage {
   getSalesByDateRange(startDate: Date, endDate: Date): Promise<SaleWithDetails[]>;
   createSale(sale: InsertSale, items: InsertSaleItem[]): Promise<SaleWithDetails>;
   updateSaleStatus(id: string, status: string): Promise<Sale | undefined>;
+  returnSale(id: string, userId: string): Promise<SaleWithDetails | undefined>;
   deleteSale(id: string): Promise<boolean>;
   getNextSaleNumber(): Promise<string>;
 
@@ -373,6 +374,63 @@ export class DatabaseStorage implements IStorage {
   async updateSaleStatus(id: string, status: string): Promise<Sale | undefined> {
     const [sale] = await db.update(sales).set({ status: status as any }).where(eq(sales.id, id)).returning();
     return sale || undefined;
+  }
+
+  async returnSale(id: string, userId: string): Promise<SaleWithDetails | undefined> {
+    const sale = await this.getSale(id);
+    if (!sale) return undefined;
+    if (sale.status !== "completed") return undefined;
+
+    await db.update(sales).set({ status: "returned" as any }).where(eq(sales.id, id));
+
+    for (const item of sale.items) {
+      const [product] = await db.select().from(products).where(eq(products.id, item.productId));
+      if (product) {
+        const newStock = product.currentStock + item.quantity;
+        await db.update(products).set({ currentStock: newStock, updatedAt: new Date() }).where(eq(products.id, item.productId));
+        await db.insert(stockMovements).values({
+          productId: item.productId,
+          type: "in",
+          quantity: item.quantity,
+          previousStock: product.currentStock,
+          newStock,
+          reason: `Return - Sale ${sale.saleNumber}`,
+          referenceType: "sale_return",
+          referenceId: sale.id,
+          createdByUserId: userId,
+        });
+      }
+    }
+
+    const amountUSD = sale.currency === "USD" ? sale.amountPaid : "0";
+    const amountLYD = sale.currency === "LYD" ? sale.amountPaid : "0";
+    await this.updateCashboxBalance(amountUSD, amountLYD, false);
+
+    const box = await this.getCashbox();
+    if (box) {
+      await this.createCashboxTransaction({
+        cashboxId: box.id,
+        type: "refund",
+        amountUSD,
+        amountLYD,
+        exchangeRate: sale.exchangeRate,
+        description: `Return - Sale ${sale.saleNumber}`,
+        referenceType: "sale_return",
+        referenceId: sale.id,
+        createdByUserId: userId,
+      });
+    }
+
+    if (sale.customerId) {
+      await this.updateCustomerBalance(sale.customerId, sale.amountDue, false);
+      const customer = await this.getCustomer(sale.customerId);
+      if (customer) {
+        const newTotal = Math.max(0, parseFloat(customer.totalPurchases) - parseFloat(sale.totalAmount));
+        await this.updateCustomer(sale.customerId, { totalPurchases: newTotal.toFixed(2) });
+      }
+    }
+
+    return this.getSale(id);
   }
 
   async deleteSale(id: string): Promise<boolean> {
