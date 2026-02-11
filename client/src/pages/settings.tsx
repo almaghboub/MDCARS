@@ -255,7 +255,7 @@ export default function Settings() {
                               </FormControl>
                               <SelectContent>
                                 <SelectItem value="owner">Owner (Full Access)</SelectItem>
-                                <SelectItem value="cashier">Cashier (Sales Only)</SelectItem>
+                                <SelectItem value="cashier">Worker / Cashier (Sales Only - No Financial Access)</SelectItem>
                                 <SelectItem value="stock_manager">Stock Manager (Inventory Only)</SelectItem>
                               </SelectContent>
                             </Select>
@@ -391,9 +391,9 @@ export default function Settings() {
                 </div>
                 <div className="p-4 bg-muted rounded-lg">
                   <div className="flex items-center gap-2 mb-2">
-                    <Badge className="bg-blue-600">Cashier</Badge>
+                    <Badge className="bg-blue-600">Cashier (Worker)</Badge>
                   </div>
-                  <p className="text-sm text-muted-foreground">Access to POS, products (view), and customers. Can process sales and manage customer accounts.</p>
+                  <p className="text-sm text-muted-foreground">Can create invoices, sell products, and manage customers. Cannot see cost prices, financial reports, profits, or system settings.</p>
                 </div>
                 <div className="p-4 bg-muted rounded-lg">
                   <div className="flex items-center gap-2 mb-2">

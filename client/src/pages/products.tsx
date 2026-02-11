@@ -15,6 +15,7 @@ import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { Plus, Pencil, Trash2, Search, Package, AlertTriangle } from "lucide-react";
+import { useAuth } from "@/components/auth-provider";
 import type { ProductWithCategory, Category } from "@shared/schema";
 
 const productFormSchema = z.object({
@@ -42,6 +43,8 @@ export default function Products() {
   const [isCategoryDialogOpen, setIsCategoryDialogOpen] = useState(false);
   const [editingProduct, setEditingProduct] = useState<ProductWithCategory | null>(null);
   const { toast } = useToast();
+  const { user } = useAuth();
+  const canEdit = user?.role === "owner" || user?.role === "stock_manager";
 
   const { data: products = [], isLoading } = useQuery<ProductWithCategory[]>({
     queryKey: ["/api/products"],
@@ -171,7 +174,7 @@ export default function Products() {
           <p className="text-muted-foreground">Manage your product catalog</p>
         </div>
         <div className="flex gap-2">
-          <Dialog open={isCategoryDialogOpen} onOpenChange={setIsCategoryDialogOpen}>
+          {canEdit && <Dialog open={isCategoryDialogOpen} onOpenChange={setIsCategoryDialogOpen}>
             <DialogTrigger asChild>
               <Button variant="outline" data-testid="button-add-category">
                 <Plus className="w-4 h-4 mr-2" />
@@ -204,8 +207,8 @@ export default function Products() {
                 </form>
               </Form>
             </DialogContent>
-          </Dialog>
-          <Dialog open={isProductDialogOpen} onOpenChange={(open) => {
+          </Dialog>}
+          {canEdit && <Dialog open={isProductDialogOpen} onOpenChange={(open) => {
             setIsProductDialogOpen(open);
             if (!open) {
               setEditingProduct(null);
@@ -312,7 +315,7 @@ export default function Products() {
                 </form>
               </Form>
             </DialogContent>
-          </Dialog>
+          </Dialog>}
         </div>
       </div>
 
@@ -347,10 +350,10 @@ export default function Products() {
                   <TableHead>Product</TableHead>
                   <TableHead>SKU</TableHead>
                   <TableHead>Category</TableHead>
-                  <TableHead>Cost</TableHead>
+                  {canEdit && <TableHead>Cost</TableHead>}
                   <TableHead>Price</TableHead>
                   <TableHead>Stock</TableHead>
-                  <TableHead>Actions</TableHead>
+                  {canEdit && <TableHead>Actions</TableHead>}
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -359,7 +362,7 @@ export default function Products() {
                     <TableCell className="font-medium">{product.name}</TableCell>
                     <TableCell>{product.sku}</TableCell>
                     <TableCell>{product.category?.name || "-"}</TableCell>
-                    <TableCell>{product.costPrice} LYD</TableCell>
+                    {canEdit && <TableCell>{product.costPrice} LYD</TableCell>}
                     <TableCell>{product.sellingPrice} LYD</TableCell>
                     <TableCell>
                       <div className="flex items-center gap-2">
@@ -372,16 +375,18 @@ export default function Products() {
                         )}
                       </div>
                     </TableCell>
-                    <TableCell>
-                      <div className="flex gap-2">
-                        <Button variant="ghost" size="sm" onClick={() => handleEditProduct(product)} data-testid={`button-edit-${product.id}`}>
-                          <Pencil className="w-4 h-4" />
-                        </Button>
-                        <Button variant="ghost" size="sm" onClick={() => deleteProductMutation.mutate(product.id)} data-testid={`button-delete-${product.id}`}>
-                          <Trash2 className="w-4 h-4 text-destructive" />
-                        </Button>
-                      </div>
-                    </TableCell>
+                    {canEdit && (
+                      <TableCell>
+                        <div className="flex gap-2">
+                          <Button variant="ghost" size="sm" onClick={() => handleEditProduct(product)} data-testid={`button-edit-${product.id}`}>
+                            <Pencil className="w-4 h-4" />
+                          </Button>
+                          <Button variant="ghost" size="sm" onClick={() => deleteProductMutation.mutate(product.id)} data-testid={`button-delete-${product.id}`}>
+                            <Trash2 className="w-4 h-4 text-destructive" />
+                          </Button>
+                        </div>
+                      </TableCell>
+                    )}
                   </TableRow>
                 ))}
               </TableBody>
