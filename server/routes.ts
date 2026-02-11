@@ -79,6 +79,35 @@ export async function registerRoutes(app: Express): Promise<Server> {
     res.json({ user: { id: user.id, username: user.username, role: user.role, firstName: user.firstName, lastName: user.lastName, email: user.email } });
   });
 
+  app.post("/api/auth/change-password", requireAuth, async (req, res) => {
+    try {
+      const { currentPassword, newPassword } = req.body;
+      const user = await storage.getUser((req.user as any).id);
+      if (!user) return res.status(404).json({ message: "User not found" });
+      const isValid = await verifyPassword(currentPassword, user.password);
+      if (!isValid) return res.status(400).json({ message: "Current password is incorrect" });
+      const hashedPassword = await hashPassword(newPassword);
+      await storage.updateUser(user.id, { password: hashedPassword });
+      res.json({ message: "Password changed successfully" });
+    } catch (err: any) { res.status(400).json({ message: err.message }); }
+  });
+
+  app.patch("/api/auth/profile", requireAuth, async (req, res) => {
+    try {
+      const userId = (req.user as any).id;
+      const { username, firstName, lastName, email, phone } = req.body;
+      const updateData: any = {};
+      if (username) updateData.username = username;
+      if (firstName) updateData.firstName = firstName;
+      if (lastName) updateData.lastName = lastName;
+      if (email !== undefined) updateData.email = email;
+      if (phone !== undefined) updateData.phone = phone;
+      const user = await storage.updateUser(userId, updateData);
+      if (!user) return res.status(404).json({ message: "User not found" });
+      res.json({ user: { id: user.id, username: user.username, role: user.role, firstName: user.firstName, lastName: user.lastName, email: user.email } });
+    } catch (err: any) { res.status(400).json({ message: err.message }); }
+  });
+
   app.get("/api/users", requireOwner, async (req, res) => {
     const users = await storage.getAllUsers();
     res.json(users.map(u => ({ ...u, password: undefined })));

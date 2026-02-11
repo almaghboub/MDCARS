@@ -145,6 +145,7 @@ export default function Settings() {
   const onUserSubmit = (data: UserFormData) => {
     if (editingUser) {
       const updateData: Partial<UserFormData> = {
+        username: data.username,
         firstName: data.firstName,
         lastName: data.lastName,
         role: data.role,
@@ -233,7 +234,7 @@ export default function Settings() {
                         <FormField control={userForm.control} name="username" render={({ field }) => (
                           <FormItem>
                             <FormLabel>Username</FormLabel>
-                            <FormControl><Input {...field} disabled={!!editingUser} data-testid="input-user-username" /></FormControl>
+                            <FormControl><Input {...field} data-testid="input-user-username" /></FormControl>
                             <FormMessage />
                           </FormItem>
                         )} />
