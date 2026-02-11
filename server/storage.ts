@@ -10,9 +10,12 @@ import {
   type CashboxTransaction, type InsertCashboxTransaction,
   type Expense, type InsertExpense,
   type Revenue, type InsertRevenue,
+  type Partner, type InsertPartner,
+  type PartnerTransaction, type InsertPartnerTransaction,
   type Setting, type InsertSetting,
   users, categories, products, stockMovements, customers,
-  sales, saleItems, cashbox, cashboxTransactions, expenses, revenues, settings,
+  sales, saleItems, cashbox, cashboxTransactions, expenses, revenues,
+  partners, partnerTransactions, settings,
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, desc, sql, or, ilike, and, gte, lte } from "drizzle-orm";
@@ -83,6 +86,14 @@ export interface IStorage {
   createRevenue(revenue: InsertRevenue): Promise<Revenue>;
   deleteRevenue(id: string): Promise<boolean>;
   getNextRevenueNumber(): Promise<string>;
+
+  getAllPartners(): Promise<Partner[]>;
+  getPartner(id: string): Promise<Partner | undefined>;
+  createPartner(partner: InsertPartner): Promise<Partner>;
+  updatePartner(id: string, partner: Partial<InsertPartner>): Promise<Partner | undefined>;
+  deletePartner(id: string): Promise<boolean>;
+  getPartnerTransactions(partnerId?: string): Promise<PartnerTransaction[]>;
+  createPartnerTransaction(transaction: InsertPartnerTransaction): Promise<PartnerTransaction>;
 
   getSetting(key: string): Promise<Setting | undefined>;
   getAllSettings(): Promise<Setting[]>;
@@ -650,6 +661,62 @@ export class DatabaseStorage implements IStorage {
       totalRevenue: Number(result?.totalRevenue || 0),
       totalProfit: Number(profitResult?.totalProfit || 0),
     };
+  }
+
+  async getAllPartners(): Promise<Partner[]> {
+    return await db.select().from(partners).orderBy(desc(partners.createdAt));
+  }
+
+  async getPartner(id: string): Promise<Partner | undefined> {
+    const [partner] = await db.select().from(partners).where(eq(partners.id, id));
+    return partner;
+  }
+
+  async createPartner(partner: InsertPartner): Promise<Partner> {
+    const [created] = await db.insert(partners).values(partner).returning();
+    return created;
+  }
+
+  async updatePartner(id: string, partner: Partial<InsertPartner>): Promise<Partner | undefined> {
+    const [updated] = await db.update(partners).set(partner).where(eq(partners.id, id)).returning();
+    return updated;
+  }
+
+  async deletePartner(id: string): Promise<boolean> {
+    const existing = await this.getPartner(id);
+    if (!existing) return false;
+    await db.delete(partnerTransactions).where(eq(partnerTransactions.partnerId, id));
+    await db.delete(partners).where(eq(partners.id, id));
+    return true;
+  }
+
+  async getPartnerTransactions(partnerId?: string): Promise<PartnerTransaction[]> {
+    if (partnerId) {
+      return await db.select().from(partnerTransactions).where(eq(partnerTransactions.partnerId, partnerId)).orderBy(desc(partnerTransactions.createdAt));
+    }
+    return await db.select().from(partnerTransactions).orderBy(desc(partnerTransactions.createdAt));
+  }
+
+  async createPartnerTransaction(transaction: InsertPartnerTransaction): Promise<PartnerTransaction> {
+    const [created] = await db.insert(partnerTransactions).values(transaction).returning();
+    const partner = await this.getPartner(transaction.partnerId);
+    if (partner) {
+      const amount = parseFloat(transaction.amount);
+      if (transaction.type === "investment") {
+        await db.update(partners).set({
+          totalInvested: (parseFloat(partner.totalInvested) + amount).toFixed(2),
+        }).where(eq(partners.id, transaction.partnerId));
+      } else if (transaction.type === "withdrawal") {
+        await db.update(partners).set({
+          totalWithdrawn: (parseFloat(partner.totalWithdrawn) + amount).toFixed(2),
+        }).where(eq(partners.id, transaction.partnerId));
+      } else if (transaction.type === "profit_distribution") {
+        await db.update(partners).set({
+          totalProfitDistributed: (parseFloat(partner.totalProfitDistributed) + amount).toFixed(2),
+        }).where(eq(partners.id, transaction.partnerId));
+      }
+    }
+    return created;
   }
 
   async initializeDefaultData(): Promise<void> {

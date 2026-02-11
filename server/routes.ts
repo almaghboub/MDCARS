@@ -17,6 +17,8 @@ import {
   insertExpenseSchema,
   insertRevenueSchema,
   insertCashboxTransactionSchema,
+  insertPartnerSchema,
+  insertPartnerTransactionSchema,
   insertSettingSchema,
 } from "@shared/schema";
 
@@ -430,6 +432,48 @@ export async function registerRoutes(app: Express): Promise<Server> {
     const deleted = await storage.deleteRevenue(req.params.id);
     if (!deleted) return res.status(404).json({ message: "Revenue not found" });
     res.json({ message: "Revenue deleted" });
+  });
+
+  app.get("/api/partners", requireOwner, async (req, res) => {
+    res.json(await storage.getAllPartners());
+  });
+
+  app.get("/api/partners/:id", requireOwner, async (req, res) => {
+    const partner = await storage.getPartner(req.params.id);
+    if (!partner) return res.status(404).json({ message: "Partner not found" });
+    res.json(partner);
+  });
+
+  app.post("/api/partners", requireOwner, async (req, res) => {
+    const parsed = insertPartnerSchema.safeParse(req.body);
+    if (!parsed.success) return res.status(400).json({ message: "Invalid data", errors: parsed.error.errors });
+    res.status(201).json(await storage.createPartner(parsed.data));
+  });
+
+  app.patch("/api/partners/:id", requireOwner, async (req, res) => {
+    const parsed = insertPartnerSchema.partial().safeParse(req.body);
+    if (!parsed.success) return res.status(400).json({ message: "Invalid data", errors: parsed.error.errors });
+    const updated = await storage.updatePartner(req.params.id, parsed.data);
+    if (!updated) return res.status(404).json({ message: "Partner not found" });
+    res.json(updated);
+  });
+
+  app.delete("/api/partners/:id", requireOwner, async (req, res) => {
+    const deleted = await storage.deletePartner(req.params.id);
+    if (!deleted) return res.status(404).json({ message: "Partner not found" });
+    res.json({ message: "Partner deleted" });
+  });
+
+  app.get("/api/partner-transactions", requireOwner, async (req, res) => {
+    const partnerId = req.query.partnerId as string | undefined;
+    res.json(await storage.getPartnerTransactions(partnerId));
+  });
+
+  app.post("/api/partner-transactions", requireOwner, async (req, res) => {
+    const user = req.user as any;
+    const parsed = insertPartnerTransactionSchema.safeParse({ ...req.body, createdByUserId: user.id });
+    if (!parsed.success) return res.status(400).json({ message: "Invalid data", errors: parsed.error.errors });
+    res.status(201).json(await storage.createPartnerTransaction(parsed.data));
   });
 
   app.get("/api/settings", requireAuth, async (req, res) => {

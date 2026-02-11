@@ -18,6 +18,8 @@ The frontend is a React 18 TypeScript SPA using Wouter for routing, TanStack Que
 - **Products**: Product catalog with categories, CRUD operations, SKU/barcode support
 - **Inventory**: Stock levels, low stock alerts, stock in/out/adjustment tracking, movement history
 - **Customers**: Customer database with purchase history, balance tracking, payment recording
+- **Invoices**: Dedicated invoice history page with search, status filter, and full invoice details
+- **Partners**: Partner management with ownership percentages, investment/withdrawal tracking, profit distribution
 - **Finance**: Cashbox management (LYD/USD), expenses by category, revenues tracking, sales income tab with invoice viewing
 - **Reports**: Sales analytics, best-sellers, daily/monthly summaries, CSV export, invoice viewing, sale returns
 - **Settings**: User management with role-based access control
