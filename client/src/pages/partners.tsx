@@ -100,6 +100,8 @@ export default function Partners() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/partner-transactions"] });
       queryClient.invalidateQueries({ queryKey: ["/api/partners"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/cashbox"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/cashbox/transactions"] });
       toast({ title: t("transactionRecorded") });
       setIsTransactionDialogOpen(false);
       transactionForm.reset();

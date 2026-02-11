@@ -4,6 +4,7 @@ import passport from "passport";
 import { Strategy as LocalStrategy } from "passport-local";
 import session from "express-session";
 import MemoryStore from "memorystore";
+import { z } from "zod";
 import { storage } from "./storage";
 import { hashPassword, verifyPassword } from "./auth";
 import { requireAuth, requireOwner, requireSalesAccess, requireInventoryAccess, requireFinanceAccess } from "./middleware";
@@ -267,9 +268,27 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post("/api/customers/:id/payment", requireSalesAccess, async (req, res) => {
     try {
-      const { amount } = req.body;
+      const paymentSchema = z.object({ amount: z.string(), currency: z.enum(["LYD", "USD"]).default("LYD") });
+      const { amount, currency } = paymentSchema.parse(req.body);
       const customer = await storage.updateCustomerBalance(req.params.id, amount, false);
       if (!customer) return res.status(404).json({ message: "Customer not found" });
+
+      const cashbox = await storage.getCashbox();
+      if (cashbox) {
+        const amountUSD = currency === "USD" ? amount : "0";
+        const amountLYD = currency === "LYD" ? amount : "0";
+        await storage.updateCashboxBalance(amountUSD, amountLYD, true);
+        await storage.createCashboxTransaction({
+          cashboxId: cashbox.id,
+          type: "deposit",
+          amountUSD,
+          amountLYD,
+          exchangeRate: "1",
+          description: `Customer payment from ${customer.name}`,
+          createdByUserId: (req.user as any).id,
+        });
+      }
+
       res.json(customer);
     } catch (err: any) { res.status(400).json({ message: err.message }); }
   });
@@ -470,10 +489,47 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   app.post("/api/partner-transactions", requireOwner, async (req, res) => {
-    const user = req.user as any;
-    const parsed = insertPartnerTransactionSchema.safeParse({ ...req.body, createdByUserId: user.id });
-    if (!parsed.success) return res.status(400).json({ message: "Invalid data", errors: parsed.error.errors });
-    res.status(201).json(await storage.createPartnerTransaction(parsed.data));
+    try {
+      const user = req.user as any;
+      const parsed = insertPartnerTransactionSchema.safeParse({ ...req.body, createdByUserId: user.id });
+      if (!parsed.success) return res.status(400).json({ message: "Invalid data", errors: parsed.error.errors });
+      const transaction = await storage.createPartnerTransaction(parsed.data);
+
+      const partner = await storage.getPartner(parsed.data.partnerId);
+      const cashbox = await storage.getCashbox();
+      if (cashbox && partner) {
+        const amountUSD = parsed.data.currency === "USD" ? parsed.data.amount : "0";
+        const amountLYD = parsed.data.currency === "LYD" ? parsed.data.amount : "0";
+
+        if (parsed.data.type === "investment") {
+          await storage.updateCashboxBalance(amountUSD, amountLYD, true);
+          await storage.createCashboxTransaction({
+            cashboxId: cashbox.id,
+            type: "deposit",
+            amountUSD,
+            amountLYD,
+            exchangeRate: "1",
+            description: `Partner investment from ${partner.name}`,
+            createdByUserId: user.id,
+          });
+        } else if (parsed.data.type === "withdrawal" || parsed.data.type === "profit_distribution") {
+          await storage.updateCashboxBalance(amountUSD, amountLYD, false);
+          await storage.createCashboxTransaction({
+            cashboxId: cashbox.id,
+            type: "withdrawal",
+            amountUSD,
+            amountLYD,
+            exchangeRate: "1",
+            description: parsed.data.type === "withdrawal"
+              ? `Partner withdrawal by ${partner.name}`
+              : `Profit distribution to ${partner.name}`,
+            createdByUserId: user.id,
+          });
+        }
+      }
+
+      res.status(201).json(transaction);
+    } catch (err: any) { res.status(400).json({ message: err.message }); }
   });
 
   app.get("/api/settings", requireAuth, async (req, res) => {

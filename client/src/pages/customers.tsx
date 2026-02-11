@@ -37,6 +37,7 @@ export default function Customers() {
   const [editingCustomer, setEditingCustomer] = useState<Customer | null>(null);
   const [viewingCustomer, setViewingCustomer] = useState<CustomerWithSales | null>(null);
   const [paymentAmount, setPaymentAmount] = useState("");
+  const [paymentCurrency, setPaymentCurrency] = useState("LYD");
   const { toast } = useToast();
 
   const { data: customers = [], isLoading } = useQuery<Customer[]>({
@@ -101,15 +102,18 @@ export default function Customers() {
   });
 
   const paymentMutation = useMutation({
-    mutationFn: async ({ id, amount }: { id: string; amount: string }) => {
-      const res = await apiRequest("POST", `/api/customers/${id}/payment`, { amount });
+    mutationFn: async ({ id, amount, currency }: { id: string; amount: string; currency: string }) => {
+      const res = await apiRequest("POST", `/api/customers/${id}/payment`, { amount, currency });
       return res.json();
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/customers"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/cashbox"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/cashbox/transactions"] });
       toast({ title: "Payment recorded successfully" });
       setIsPaymentDialogOpen(false);
       setPaymentAmount("");
+      setPaymentCurrency("LYD");
       setViewingCustomer(null);
     },
     onError: (error: any) => {
@@ -391,7 +395,19 @@ export default function Customers() {
                 <p className="text-xl font-bold text-destructive">{viewingCustomer.balanceOwed} LYD</p>
               </div>
               <div>
-                <label className="text-sm font-medium">Payment Amount (LYD)</label>
+                <label className="text-sm font-medium">{t("currency")}</label>
+                <select
+                  className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                  value={paymentCurrency}
+                  onChange={(e) => setPaymentCurrency(e.target.value)}
+                  data-testid="select-payment-currency"
+                >
+                  <option value="LYD">LYD</option>
+                  <option value="USD">USD</option>
+                </select>
+              </div>
+              <div>
+                <label className="text-sm font-medium">{t("amount")} ({paymentCurrency})</label>
                 <Input
                   type="number"
                   step="0.01"
@@ -403,11 +419,11 @@ export default function Customers() {
               </div>
               <Button
                 className="w-full"
-                onClick={() => paymentMutation.mutate({ id: viewingCustomer.id, amount: paymentAmount })}
+                onClick={() => paymentMutation.mutate({ id: viewingCustomer.id, amount: paymentAmount, currency: paymentCurrency })}
                 disabled={!paymentAmount || paymentMutation.isPending}
                 data-testid="button-submit-payment"
               >
-                {paymentMutation.isPending ? "Processing..." : "Record Payment"}
+                {paymentMutation.isPending ? "Processing..." : t("recordPayment")}
               </Button>
             </div>
           )}
