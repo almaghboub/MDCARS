@@ -10,6 +10,7 @@ export const saleStatusEnum = pgEnum("sale_status", ["completed", "pending", "ca
 export const stockMovementTypeEnum = pgEnum("stock_movement_type", ["in", "out", "adjustment"]);
 export const expenseCategoryEnum = pgEnum("expense_category", ["rent", "utilities", "salaries", "supplies", "maintenance", "marketing", "other"]);
 export const transactionTypeEnum = pgEnum("transaction_type", ["sale", "expense", "deposit", "withdrawal", "adjustment", "refund"]);
+export const partnerTransactionTypeEnum = pgEnum("partner_transaction_type", ["investment", "withdrawal", "profit_distribution"]);
 
 export const users = pgTable("users", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
@@ -162,6 +163,30 @@ export const revenues = pgTable("revenues", {
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 
+export const partners = pgTable("partners", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  name: text("name").notNull(),
+  phone: text("phone"),
+  email: text("email"),
+  ownershipPercentage: decimal("ownership_percentage", { precision: 5, scale: 2 }).notNull().default("50"),
+  totalInvested: decimal("total_invested", { precision: 15, scale: 2 }).notNull().default("0"),
+  totalWithdrawn: decimal("total_withdrawn", { precision: 15, scale: 2 }).notNull().default("0"),
+  totalProfitDistributed: decimal("total_profit_distributed", { precision: 15, scale: 2 }).notNull().default("0"),
+  isActive: boolean("is_active").notNull().default(true),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+export const partnerTransactions = pgTable("partner_transactions", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  partnerId: varchar("partner_id").notNull().references(() => partners.id),
+  type: partnerTransactionTypeEnum("type").notNull(),
+  amount: decimal("amount", { precision: 15, scale: 2 }).notNull(),
+  currency: currencyEnum("currency").notNull().default("LYD"),
+  description: text("description"),
+  createdByUserId: varchar("created_by_user_id").notNull().references(() => users.id),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
 export const settings = pgTable("settings", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   key: text("key").notNull().unique(),
@@ -183,6 +208,8 @@ export const insertCashboxSchema = createInsertSchema(cashbox).omit({ id: true, 
 export const insertCashboxTransactionSchema = createInsertSchema(cashboxTransactions).omit({ id: true, createdAt: true });
 export const insertExpenseSchema = createInsertSchema(expenses).omit({ id: true, createdAt: true });
 export const insertRevenueSchema = createInsertSchema(revenues).omit({ id: true, createdAt: true });
+export const insertPartnerSchema = createInsertSchema(partners).omit({ id: true, createdAt: true });
+export const insertPartnerTransactionSchema = createInsertSchema(partnerTransactions).omit({ id: true, createdAt: true });
 export const insertSettingSchema = createInsertSchema(settings).omit({ id: true, createdAt: true, updatedAt: true });
 
 export type InsertUser = z.infer<typeof insertUserSchema>;
@@ -196,6 +223,8 @@ export type InsertCashbox = z.infer<typeof insertCashboxSchema>;
 export type InsertCashboxTransaction = z.infer<typeof insertCashboxTransactionSchema>;
 export type InsertExpense = z.infer<typeof insertExpenseSchema>;
 export type InsertRevenue = z.infer<typeof insertRevenueSchema>;
+export type InsertPartner = z.infer<typeof insertPartnerSchema>;
+export type InsertPartnerTransaction = z.infer<typeof insertPartnerTransactionSchema>;
 export type InsertSetting = z.infer<typeof insertSettingSchema>;
 
 export type User = typeof users.$inferSelect;
@@ -209,6 +238,8 @@ export type Cashbox = typeof cashbox.$inferSelect;
 export type CashboxTransaction = typeof cashboxTransactions.$inferSelect;
 export type Expense = typeof expenses.$inferSelect;
 export type Revenue = typeof revenues.$inferSelect;
+export type Partner = typeof partners.$inferSelect;
+export type PartnerTransaction = typeof partnerTransactions.$inferSelect;
 export type Setting = typeof settings.$inferSelect;
 
 export type ProductWithCategory = Product & { category: Category | null };
