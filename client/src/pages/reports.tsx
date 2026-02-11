@@ -202,6 +202,7 @@ export default function Reports() {
                     <TableRow>
                       <TableHead>Date</TableHead>
                       <TableHead>Sale #</TableHead>
+                      <TableHead>Sold By</TableHead>
                       <TableHead>Customer</TableHead>
                       <TableHead>Items</TableHead>
                       <TableHead>Total</TableHead>
@@ -215,6 +216,7 @@ export default function Reports() {
                       <TableRow key={sale.id} data-testid={`sale-row-${sale.id}`}>
                         <TableCell>{format(new Date(sale.createdAt), "PPp")}</TableCell>
                         <TableCell className="font-medium">{sale.saleNumber}</TableCell>
+                        <TableCell>{sale.createdBy?.firstName} {sale.createdBy?.lastName}</TableCell>
                         <TableCell>{sale.customer?.name || "Walk-in"}</TableCell>
                         <TableCell>{sale.items?.length || 0}</TableCell>
                         <TableCell className="font-bold">{sale.totalAmount} {sale.currency}</TableCell>

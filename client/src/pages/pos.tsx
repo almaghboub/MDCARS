@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useRef } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -9,8 +9,10 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import { queryClient, apiRequest } from "@/lib/queryClient";
-import { ShoppingCart, Search, Plus, Minus, Trash2, User, Receipt, X } from "lucide-react";
-import type { ProductWithCategory, Customer } from "@shared/schema";
+import { useAuth } from "@/components/auth-provider";
+import { ShoppingCart, Search, Plus, Minus, Trash2, User, Receipt, X, Printer } from "lucide-react";
+import logoPath from "@assets/MD-removebg-preview_1770139105370.png";
+import type { ProductWithCategory, Customer, SaleWithDetails } from "@shared/schema";
 
 interface CartItem {
   product: ProductWithCategory;
@@ -25,6 +27,9 @@ export default function POS() {
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
   const [isCustomerDialogOpen, setIsCustomerDialogOpen] = useState(false);
   const [isCheckoutDialogOpen, setIsCheckoutDialogOpen] = useState(false);
+  const [isReceiptDialogOpen, setIsReceiptDialogOpen] = useState(false);
+  const [lastSale, setLastSale] = useState<SaleWithDetails | null>(null);
+  const [lastCartItems, setLastCartItems] = useState<CartItem[]>([]);
   const [paymentMethod, setPaymentMethod] = useState<"cash" | "partial">("cash");
   const [amountPaid, setAmountPaid] = useState("");
   const [currency, setCurrency] = useState<"LYD" | "USD">("LYD");
@@ -33,6 +38,8 @@ export default function POS() {
   const [newCustomerName, setNewCustomerName] = useState("");
   const [newCustomerPhone, setNewCustomerPhone] = useState("");
   const { toast } = useToast();
+  const { user } = useAuth();
+  const receiptRef = useRef<HTMLDivElement>(null);
 
   const { data: products = [] } = useQuery<ProductWithCategory[]>({
     queryKey: ["/api/products"],
@@ -47,15 +54,24 @@ export default function POS() {
       const res = await apiRequest("POST", "/api/sales", saleData);
       return res.json();
     },
-    onSuccess: (sale) => {
+    onSuccess: async (sale) => {
       queryClient.invalidateQueries({ queryKey: ["/api/products"] });
       queryClient.invalidateQueries({ queryKey: ["/api/sales"] });
       queryClient.invalidateQueries({ queryKey: ["/api/dashboard/stats"] });
       queryClient.invalidateQueries({ queryKey: ["/api/cashbox"] });
-      toast({ title: "Sale completed!", description: `Sale #${sale.saleNumber}` });
+      toast({ title: "Sale completed!", description: `Invoice #${sale.saleNumber}` });
+      try {
+        const res = await apiRequest("GET", `/api/sales/${sale.id}`);
+        const fullSale = await res.json();
+        setLastSale(fullSale);
+        setLastCartItems([...cart]);
+      } catch {
+        setLastSale(sale);
+      }
+      setIsCheckoutDialogOpen(false);
+      setIsReceiptDialogOpen(true);
       setCart([]);
       setSelectedCustomer(null);
-      setIsCheckoutDialogOpen(false);
       setAmountPaid("");
       setDiscount("0");
     },
@@ -63,6 +79,38 @@ export default function POS() {
       toast({ title: "Error", description: error.message, variant: "destructive" });
     },
   });
+
+  const handlePrintReceipt = () => {
+    if (receiptRef.current) {
+      const printWindow = window.open('', '_blank');
+      if (printWindow) {
+        printWindow.document.write(`
+          <html><head><title>Invoice - MD CARS</title>
+          <style>
+            body { font-family: Arial, sans-serif; padding: 20px; max-width: 400px; margin: 0 auto; }
+            table { width: 100%; border-collapse: collapse; }
+            th, td { padding: 6px 4px; text-align: left; border-bottom: 1px solid #ddd; font-size: 13px; }
+            th { font-weight: bold; }
+            .text-right { text-align: right; }
+            .text-center { text-align: center; }
+            .bold { font-weight: bold; }
+            .border-top { border-top: 2px solid #000; }
+            .mb { margin-bottom: 10px; }
+            .mt { margin-top: 10px; }
+            h2 { margin: 5px 0; }
+            p { margin: 3px 0; font-size: 13px; }
+            .logo { text-align: center; margin-bottom: 10px; }
+            .logo img { height: 60px; }
+            @media print { body { padding: 0; } }
+          </style></head><body>
+          ${receiptRef.current.innerHTML}
+          <script>window.print(); window.close();</script>
+          </body></html>
+        `);
+        printWindow.document.close();
+      }
+    }
+  };
 
   const createCustomerMutation = useMutation({
     mutationFn: async (data: { name: string; phone: string }) => {
@@ -421,6 +469,119 @@ export default function POS() {
               {createSaleMutation.isPending ? "Processing..." : "Complete Sale"}
             </Button>
           </div>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={isReceiptDialogOpen} onOpenChange={setIsReceiptDialogOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Invoice / Receipt</DialogTitle>
+          </DialogHeader>
+          {lastSale && (
+            <>
+              <div ref={receiptRef} className="space-y-3 text-sm">
+                <div className="text-center border-b pb-3">
+                  <div className="logo">
+                    <img src={logoPath} alt="MD Cars" className="h-14 mx-auto" />
+                  </div>
+                  <h2 className="text-lg font-bold">MD CARS</h2>
+                  <p className="text-muted-foreground text-xs">Car Accessories</p>
+                </div>
+
+                <div className="space-y-1">
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Invoice #:</span>
+                    <span className="font-bold" data-testid="text-receipt-number">{lastSale.saleNumber}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Date:</span>
+                    <span>{new Date(lastSale.createdAt).toLocaleDateString()} {new Date(lastSale.createdAt).toLocaleTimeString()}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Sold by:</span>
+                    <span className="font-medium" data-testid="text-receipt-seller">
+                      {lastSale.createdBy?.firstName} {lastSale.createdBy?.lastName}
+                    </span>
+                  </div>
+                  {lastSale.customer && (
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">Customer:</span>
+                      <span>{lastSale.customer.name}</span>
+                    </div>
+                  )}
+                </div>
+
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead className="text-xs">Item</TableHead>
+                      <TableHead className="text-xs text-center">Qty</TableHead>
+                      <TableHead className="text-xs text-right">Price</TableHead>
+                      <TableHead className="text-xs text-right">Total</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {lastSale.items?.map((item: any, idx: number) => (
+                      <TableRow key={idx}>
+                        <TableCell className="text-xs py-1">{item.productName}</TableCell>
+                        <TableCell className="text-xs text-center py-1">{item.quantity}</TableCell>
+                        <TableCell className="text-xs text-right py-1">{parseFloat(item.unitPrice).toFixed(2)}</TableCell>
+                        <TableCell className="text-xs text-right py-1">{parseFloat(item.totalPrice).toFixed(2)}</TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+
+                <div className="border-t pt-2 space-y-1">
+                  <div className="flex justify-between">
+                    <span>Subtotal:</span>
+                    <span>{parseFloat(lastSale.subtotal).toFixed(2)} {lastSale.currency}</span>
+                  </div>
+                  {parseFloat(lastSale.discount) > 0 && (
+                    <div className="flex justify-between text-destructive">
+                      <span>Discount:</span>
+                      <span>-{parseFloat(lastSale.discount).toFixed(2)} {lastSale.currency}</span>
+                    </div>
+                  )}
+                  <div className="flex justify-between font-bold text-base border-t pt-1">
+                    <span>Total:</span>
+                    <span>{parseFloat(lastSale.totalAmount).toFixed(2)} {lastSale.currency}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span>Paid:</span>
+                    <span>{parseFloat(lastSale.amountPaid).toFixed(2)} {lastSale.currency}</span>
+                  </div>
+                  {parseFloat(lastSale.amountDue) > 0 && (
+                    <div className="flex justify-between text-destructive font-medium">
+                      <span>Amount Due:</span>
+                      <span>{parseFloat(lastSale.amountDue).toFixed(2)} {lastSale.currency}</span>
+                    </div>
+                  )}
+                  {parseFloat(lastSale.amountPaid) > parseFloat(lastSale.totalAmount) && (
+                    <div className="flex justify-between text-green-600 font-medium">
+                      <span>Change:</span>
+                      <span>{(parseFloat(lastSale.amountPaid) - parseFloat(lastSale.totalAmount)).toFixed(2)} {lastSale.currency}</span>
+                    </div>
+                  )}
+                </div>
+
+                <div className="text-center border-t pt-2 text-xs text-muted-foreground">
+                  <p>Thank you for your purchase!</p>
+                  <p>MD CARS - Car Accessories</p>
+                </div>
+              </div>
+
+              <div className="flex gap-2 mt-2">
+                <Button onClick={handlePrintReceipt} className="flex-1" data-testid="button-print-receipt">
+                  <Printer className="w-4 h-4 mr-2" />
+                  Print Invoice
+                </Button>
+                <Button variant="outline" onClick={() => setIsReceiptDialogOpen(false)} className="flex-1" data-testid="button-close-receipt">
+                  Close
+                </Button>
+              </div>
+            </>
+          )}
         </DialogContent>
       </Dialog>
     </div>
