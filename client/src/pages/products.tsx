@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useRef, useEffect, useMemo } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -47,6 +47,9 @@ export default function Products() {
   const { toast } = useToast();
   const { user } = useAuth();
   const canEdit = user?.role === "owner" || user?.role === "stock_manager";
+  const [nameInputValue, setNameInputValue] = useState("");
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  const suggestionsRef = useRef<HTMLDivElement>(null);
 
   const { data: products = [], isLoading } = useQuery<ProductWithCategory[]>({
     queryKey: ["/api/products"],
@@ -140,6 +143,8 @@ export default function Products() {
 
   const handleEditProduct = (product: ProductWithCategory) => {
     setEditingProduct(product);
+    setNameInputValue(product.name);
+    setShowSuggestions(false);
     productForm.reset({
       name: product.name,
       sku: product.sku,
@@ -160,6 +165,39 @@ export default function Products() {
     } else {
       createProductMutation.mutate(data);
     }
+  };
+
+  const nameSuggestions = useMemo(() => {
+    if (!nameInputValue || nameInputValue.length < 1 || editingProduct) return [];
+    const query = nameInputValue.toLowerCase();
+    return products.filter(p => p.name.toLowerCase().includes(query));
+  }, [nameInputValue, products, editingProduct]);
+
+  useEffect(() => {
+    function handleClickOutside(e: MouseEvent) {
+      if (suggestionsRef.current && !suggestionsRef.current.contains(e.target as Node)) {
+        setShowSuggestions(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  const handleSelectSuggestion = (product: ProductWithCategory) => {
+    setShowSuggestions(false);
+    setEditingProduct(product);
+    setNameInputValue(product.name);
+    productForm.reset({
+      name: product.name,
+      sku: product.sku,
+      barcode: product.barcode || "",
+      categoryId: product.categoryId || "",
+      costPrice: product.costPrice,
+      sellingPrice: product.sellingPrice,
+      description: product.description || "",
+      lowStockThreshold: product.lowStockThreshold,
+      currentStock: product.currentStock,
+    });
   };
 
   const filteredProducts = products.filter(p =>
@@ -215,6 +253,8 @@ export default function Products() {
             if (!open) {
               setEditingProduct(null);
               productForm.reset();
+              setNameInputValue("");
+              setShowSuggestions(false);
             }
           }}>
             <DialogTrigger asChild>
@@ -231,9 +271,46 @@ export default function Products() {
                 <form onSubmit={productForm.handleSubmit(onProductSubmit)} className="space-y-4">
                   <div className="grid grid-cols-2 gap-4">
                     <FormField control={productForm.control} name="name" render={({ field }) => (
-                      <FormItem>
+                      <FormItem className="relative">
                         <FormLabel>{t("productName")}</FormLabel>
-                        <FormControl><Input {...field} data-testid="input-product-name" /></FormControl>
+                        <FormControl>
+                          <Input
+                            {...field}
+                            data-testid="input-product-name"
+                            autoComplete="off"
+                            value={field.value}
+                            onChange={(e) => {
+                              field.onChange(e.target.value);
+                              setNameInputValue(e.target.value);
+                              setShowSuggestions(true);
+                            }}
+                            onFocus={() => {
+                              if (nameInputValue && !editingProduct) setShowSuggestions(true);
+                            }}
+                          />
+                        </FormControl>
+                        {showSuggestions && nameSuggestions.length > 0 && (
+                          <div
+                            ref={suggestionsRef}
+                            className="absolute z-50 top-full left-0 right-0 mt-1 bg-popover border border-border rounded-md shadow-lg max-h-48 overflow-y-auto"
+                          >
+                            <div className="px-3 py-2 text-xs text-muted-foreground font-medium border-b">
+                              {t("similarProductsFound")}
+                            </div>
+                            {nameSuggestions.map((p) => (
+                              <button
+                                key={p.id}
+                                type="button"
+                                data-testid={`suggestion-product-${p.id}`}
+                                className="w-full text-left px-3 py-2 hover:bg-accent cursor-pointer flex items-center justify-between text-sm"
+                                onClick={() => handleSelectSuggestion(p)}
+                              >
+                                <span className="font-medium">{p.name}</span>
+                                <span className="text-muted-foreground text-xs">{p.sku} · {t("stock")}: {p.currentStock}</span>
+                              </button>
+                            ))}
+                          </div>
+                        )}
                         <FormMessage />
                       </FormItem>
                     )} />
