@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Link, useLocation } from "wouter";
-import { LayoutDashboard, Package, Users, ShoppingCart, Wallet, BarChart3, Settings, LogOut, Menu, Boxes, AlertTriangle, FileText, Handshake } from "lucide-react";
+import { LayoutDashboard, Package, Users, ShoppingCart, Wallet, BarChart3, Settings, LogOut, Menu, Boxes, AlertTriangle, FileText } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import { useAuth } from "@/components/auth-provider";
@@ -16,7 +16,6 @@ const navigationItems = [
   { labelKey: "inventory" as const, href: "/inventory", icon: Boxes, roles: ["owner", "stock_manager"] },
   { labelKey: "customers" as const, href: "/customers", icon: Users, roles: ["owner", "cashier"] },
   { labelKey: "invoices" as const, href: "/invoices", icon: FileText, roles: ["owner", "cashier"] },
-  { labelKey: "partners" as const, href: "/partners", icon: Handshake, roles: ["owner"] },
   { labelKey: "finance" as const, href: "/finance", icon: Wallet, roles: ["owner"] },
   { labelKey: "reports" as const, href: "/reports", icon: BarChart3, roles: ["owner"] },
   { labelKey: "settings" as const, href: "/settings", icon: Settings, roles: ["owner"] },

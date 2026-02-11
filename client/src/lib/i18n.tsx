@@ -338,7 +338,8 @@ const translations = {
     itemsList: "Items",
     returnProcessing: "Processing return...",
 
-    // Partners
+    // Partners / Store Capital
+    storeCapital: "Store Capital",
     partners: "Partners",
     partner: "Partner",
     addPartner: "Add Partner",
@@ -696,7 +697,8 @@ const translations = {
     itemsList: "المنتجات",
     returnProcessing: "جاري معالجة الإرجاع...",
 
-    // Partners
+    // Partners / Store Capital
+    storeCapital: "رأس مال المتجر",
     partners: "الشركاء",
     partner: "شريك",
     addPartner: "إضافة شريك",

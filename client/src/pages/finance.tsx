@@ -16,8 +16,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
 import { useI18n } from "@/lib/i18n";
 import { queryClient, apiRequest } from "@/lib/queryClient";
-import { Wallet, Plus, ArrowUpCircle, ArrowDownCircle, DollarSign, TrendingUp, Trash2, ShoppingCart, Eye } from "lucide-react";
-import type { Cashbox, CashboxTransaction, Expense, Revenue, SaleWithDetails } from "@shared/schema";
+import { Wallet, Plus, ArrowUpCircle, ArrowDownCircle, DollarSign, TrendingUp, Trash2, ShoppingCart, Eye, Users, Percent, PiggyBank, Edit, Handshake } from "lucide-react";
+import type { Cashbox, CashboxTransaction, Expense, Revenue, SaleWithDetails, Partner, PartnerTransaction } from "@shared/schema";
 import { format } from "date-fns";
 import { SaleInvoiceDialog } from "@/components/sale-invoice-dialog";
 
@@ -36,10 +36,25 @@ const revenueFormSchema = z.object({
   description: z.string().optional(),
 });
 
-const transactionFormSchema = z.object({
+const cashboxTransactionFormSchema = z.object({
   type: z.enum(["deposit", "withdrawal"]),
   amountUSD: z.string().optional(),
   amountLYD: z.string().optional(),
+  description: z.string().optional(),
+});
+
+const partnerFormSchema = z.object({
+  name: z.string().min(1, "Name is required"),
+  phone: z.string().optional(),
+  email: z.string().optional(),
+  ownershipPercentage: z.string().min(1, "Ownership percentage is required"),
+});
+
+const partnerTransactionFormSchema = z.object({
+  partnerId: z.string().min(1, "Partner is required"),
+  type: z.enum(["investment", "withdrawal", "profit_distribution"]),
+  amount: z.string().min(1, "Amount is required"),
+  currency: z.enum(["LYD", "USD"]),
   description: z.string().optional(),
 });
 
@@ -48,6 +63,9 @@ export default function Finance() {
   const [isExpenseDialogOpen, setIsExpenseDialogOpen] = useState(false);
   const [isRevenueDialogOpen, setIsRevenueDialogOpen] = useState(false);
   const [isTransactionDialogOpen, setIsTransactionDialogOpen] = useState(false);
+  const [isPartnerDialogOpen, setIsPartnerDialogOpen] = useState(false);
+  const [isPartnerTxDialogOpen, setIsPartnerTxDialogOpen] = useState(false);
+  const [editingPartner, setEditingPartner] = useState<Partner | null>(null);
   const [selectedSale, setSelectedSale] = useState<SaleWithDetails | null>(null);
   const [invoiceOpen, setInvoiceOpen] = useState(false);
   const { toast } = useToast();
@@ -72,6 +90,14 @@ export default function Finance() {
     queryKey: ["/api/sales"],
   });
 
+  const { data: partnersData = [] } = useQuery<Partner[]>({
+    queryKey: ["/api/partners"],
+  });
+
+  const { data: partnerTransactions = [] } = useQuery<PartnerTransaction[]>({
+    queryKey: ["/api/partner-transactions"],
+  });
+
   const expenseForm = useForm<z.infer<typeof expenseFormSchema>>({
     resolver: zodResolver(expenseFormSchema),
     defaultValues: { category: "other", amount: "", currency: "LYD", description: "", personName: "" },
@@ -82,9 +108,19 @@ export default function Finance() {
     defaultValues: { source: "", amount: "", currency: "LYD", description: "" },
   });
 
-  const transactionForm = useForm<z.infer<typeof transactionFormSchema>>({
-    resolver: zodResolver(transactionFormSchema),
+  const cashboxTxForm = useForm<z.infer<typeof cashboxTransactionFormSchema>>({
+    resolver: zodResolver(cashboxTransactionFormSchema),
     defaultValues: { type: "deposit", amountUSD: "", amountLYD: "", description: "" },
+  });
+
+  const partnerForm = useForm<z.infer<typeof partnerFormSchema>>({
+    resolver: zodResolver(partnerFormSchema),
+    defaultValues: { name: "", phone: "", email: "", ownershipPercentage: "50" },
+  });
+
+  const partnerTxForm = useForm<z.infer<typeof partnerTransactionFormSchema>>({
+    resolver: zodResolver(partnerTransactionFormSchema),
+    defaultValues: { partnerId: "", type: "investment", amount: "", currency: "LYD", description: "" },
   });
 
   const expenseMutation = useMutation({
@@ -123,8 +159,8 @@ export default function Finance() {
     },
   });
 
-  const transactionMutation = useMutation({
-    mutationFn: async (data: z.infer<typeof transactionFormSchema>) => {
+  const cashboxTxMutation = useMutation({
+    mutationFn: async (data: z.infer<typeof cashboxTransactionFormSchema>) => {
       const res = await apiRequest("POST", "/api/cashbox/transactions", data);
       return res.json();
     },
@@ -133,7 +169,7 @@ export default function Finance() {
       queryClient.invalidateQueries({ queryKey: ["/api/cashbox/transactions"] });
       toast({ title: "Transaction recorded successfully" });
       setIsTransactionDialogOpen(false);
-      transactionForm.reset();
+      cashboxTxForm.reset();
     },
     onError: (error: any) => {
       toast({ title: "Error", description: error.message, variant: "destructive" });
@@ -160,11 +196,110 @@ export default function Finance() {
     },
   });
 
+  const createPartnerMutation = useMutation({
+    mutationFn: async (data: z.infer<typeof partnerFormSchema>) => {
+      const res = await apiRequest("POST", "/api/partners", data);
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/partners"] });
+      toast({ title: t("partnerAdded") });
+      setIsPartnerDialogOpen(false);
+      partnerForm.reset();
+    },
+    onError: (error: any) => {
+      toast({ title: t("error"), description: error.message, variant: "destructive" });
+    },
+  });
+
+  const updatePartnerMutation = useMutation({
+    mutationFn: async ({ id, data }: { id: string; data: z.infer<typeof partnerFormSchema> }) => {
+      const res = await apiRequest("PATCH", `/api/partners/${id}`, data);
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/partners"] });
+      toast({ title: t("partnerUpdated") });
+      setIsPartnerDialogOpen(false);
+      setEditingPartner(null);
+      partnerForm.reset();
+    },
+    onError: (error: any) => {
+      toast({ title: t("error"), description: error.message, variant: "destructive" });
+    },
+  });
+
+  const createPartnerTxMutation = useMutation({
+    mutationFn: async (data: z.infer<typeof partnerTransactionFormSchema>) => {
+      const res = await apiRequest("POST", "/api/partner-transactions", data);
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/partner-transactions"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/partners"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/cashbox"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/cashbox/transactions"] });
+      toast({ title: t("transactionRecorded") });
+      setIsPartnerTxDialogOpen(false);
+      partnerTxForm.reset();
+    },
+    onError: (error: any) => {
+      toast({ title: t("error"), description: error.message, variant: "destructive" });
+    },
+  });
+
+  const onPartnerSubmit = (data: z.infer<typeof partnerFormSchema>) => {
+    if (editingPartner) {
+      updatePartnerMutation.mutate({ id: editingPartner.id, data });
+    } else {
+      createPartnerMutation.mutate(data);
+    }
+  };
+
+  const openEditPartner = (partner: Partner) => {
+    setEditingPartner(partner);
+    partnerForm.reset({
+      name: partner.name,
+      phone: partner.phone || "",
+      email: partner.email || "",
+      ownershipPercentage: partner.ownershipPercentage,
+    });
+    setIsPartnerDialogOpen(true);
+  };
+
+  const openAddPartner = () => {
+    setEditingPartner(null);
+    partnerForm.reset({ name: "", phone: "", email: "", ownershipPercentage: "50" });
+    setIsPartnerDialogOpen(true);
+  };
+
   const totalExpenses = expenses.reduce((sum, e) => sum + parseFloat(e.amount), 0);
   const totalRevenues = revenues.reduce((sum, r) => sum + parseFloat(r.amount), 0);
   const completedSales = allSales.filter(s => s.status === "completed");
   const totalSalesLYD = completedSales.filter(s => s.currency === "LYD").reduce((sum, s) => sum + parseFloat(s.amountPaid), 0);
   const totalSalesUSD = completedSales.filter(s => s.currency === "USD").reduce((sum, s) => sum + parseFloat(s.amountPaid), 0);
+  const totalOwnership = partnersData.reduce((sum, p) => sum + parseFloat(p.ownershipPercentage), 0);
+  const totalCapital = partnersData.reduce((sum, p) => sum + parseFloat(p.totalInvested) - parseFloat(p.totalWithdrawn), 0);
+
+  const getPartnerName = (id: string) => partnersData.find(p => p.id === id)?.name || "-";
+
+  const typeColor = (type: string) => {
+    switch (type) {
+      case "investment": return "default";
+      case "withdrawal": return "destructive";
+      case "profit_distribution": return "secondary";
+      default: return "outline";
+    }
+  };
+
+  const typeIcon = (type: string) => {
+    switch (type) {
+      case "investment": return <ArrowUpCircle className="w-3 h-3 mr-1" />;
+      case "withdrawal": return <ArrowDownCircle className="w-3 h-3 mr-1" />;
+      case "profit_distribution": return <PiggyBank className="w-3 h-3 mr-1" />;
+      default: return null;
+    }
+  };
 
   return (
     <div className="p-6 space-y-6">
@@ -175,7 +310,7 @@ export default function Finance() {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         <Card>
           <CardContent className="p-6">
             <div className="flex items-center justify-between">
@@ -213,10 +348,24 @@ export default function Finance() {
             </div>
           </CardContent>
         </Card>
+
+        <Card>
+          <CardContent className="p-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-muted-foreground">{t("storeCapital")}</p>
+                <p className="text-2xl font-bold text-purple-600" data-testid="text-store-capital">
+                  {totalCapital.toFixed(2)}
+                </p>
+              </div>
+              <Handshake className="w-8 h-8 text-purple-500" />
+            </div>
+          </CardContent>
+        </Card>
       </div>
 
       <Tabs defaultValue="cashbox" className="space-y-4">
-        <TabsList>
+        <TabsList className="flex-wrap">
           <TabsTrigger value="cashbox">{t("cashbox")}</TabsTrigger>
           <TabsTrigger value="sales-income" data-testid="tab-sales-income">
             <ShoppingCart className="w-4 h-4 mr-1" />
@@ -224,6 +373,10 @@ export default function Finance() {
           </TabsTrigger>
           <TabsTrigger value="expenses">{t("expenses")} ({expenses.length})</TabsTrigger>
           <TabsTrigger value="revenues">{t("revenues")} ({revenues.length})</TabsTrigger>
+          <TabsTrigger value="store-capital" data-testid="tab-store-capital">
+            <Handshake className="w-4 h-4 mr-1" />
+            {t("storeCapital")}
+          </TabsTrigger>
         </TabsList>
 
         <TabsContent value="cashbox" className="space-y-4">
@@ -245,9 +398,9 @@ export default function Finance() {
                     <DialogHeader>
                       <DialogTitle>{t("addTransaction")}</DialogTitle>
                     </DialogHeader>
-                    <Form {...transactionForm}>
-                      <form onSubmit={transactionForm.handleSubmit((data) => transactionMutation.mutate(data))} className="space-y-4">
-                        <FormField control={transactionForm.control} name="type" render={({ field }) => (
+                    <Form {...cashboxTxForm}>
+                      <form onSubmit={cashboxTxForm.handleSubmit((data) => cashboxTxMutation.mutate(data))} className="space-y-4">
+                        <FormField control={cashboxTxForm.control} name="type" render={({ field }) => (
                           <FormItem>
                             <FormLabel>{t("type")}</FormLabel>
                             <Select onValueChange={field.onChange} value={field.value}>
@@ -261,14 +414,14 @@ export default function Finance() {
                           </FormItem>
                         )} />
                         <div className="grid grid-cols-2 gap-4">
-                          <FormField control={transactionForm.control} name="amountLYD" render={({ field }) => (
+                          <FormField control={cashboxTxForm.control} name="amountLYD" render={({ field }) => (
                             <FormItem>
                               <FormLabel>{t("amountLYD")}</FormLabel>
                               <FormControl><Input type="number" step="0.01" {...field} /></FormControl>
                               <FormMessage />
                             </FormItem>
                           )} />
-                          <FormField control={transactionForm.control} name="amountUSD" render={({ field }) => (
+                          <FormField control={cashboxTxForm.control} name="amountUSD" render={({ field }) => (
                             <FormItem>
                               <FormLabel>{t("amountUSD")}</FormLabel>
                               <FormControl><Input type="number" step="0.01" {...field} /></FormControl>
@@ -276,15 +429,15 @@ export default function Finance() {
                             </FormItem>
                           )} />
                         </div>
-                        <FormField control={transactionForm.control} name="description" render={({ field }) => (
+                        <FormField control={cashboxTxForm.control} name="description" render={({ field }) => (
                           <FormItem>
                             <FormLabel>{t("description")}</FormLabel>
                             <FormControl><Textarea {...field} /></FormControl>
                             <FormMessage />
                           </FormItem>
                         )} />
-                        <Button type="submit" className="w-full" disabled={transactionMutation.isPending}>
-                          {transactionMutation.isPending ? t("saving") : t("addTransaction")}
+                        <Button type="submit" className="w-full" disabled={cashboxTxMutation.isPending}>
+                          {cashboxTxMutation.isPending ? t("saving") : t("addTransaction")}
                         </Button>
                       </form>
                     </Form>
@@ -611,7 +764,276 @@ export default function Finance() {
             </CardContent>
           </Card>
         </TabsContent>
+
+        <TabsContent value="store-capital" className="space-y-4">
+          <div className="flex items-center justify-between">
+            <h2 className="text-lg font-semibold flex items-center gap-2">
+              <Handshake className="w-5 h-5" />
+              {t("storeCapital")} - {t("partners")}
+            </h2>
+            <div className="flex gap-2">
+              <Button onClick={openAddPartner} data-testid="button-add-partner">
+                <Plus className="w-4 h-4 mr-2" />
+                {t("addPartner")}
+              </Button>
+              <Button variant="outline" onClick={() => setIsPartnerTxDialogOpen(true)} data-testid="button-add-partner-transaction" disabled={partnersData.length === 0}>
+                <DollarSign className="w-4 h-4 mr-2" />
+                {t("recordTransaction")}
+              </Button>
+            </div>
+          </div>
+
+          {totalOwnership > 0 && totalOwnership !== 100 && (
+            <div className="p-3 bg-yellow-500/20 border border-yellow-500/30 rounded-md text-yellow-700 dark:text-yellow-400 text-sm">
+              {t("ownershipWarning")} ({totalOwnership}%)
+            </div>
+          )}
+
+          {partnersData.length === 0 ? (
+            <Card>
+              <CardContent className="py-12 text-center text-muted-foreground">
+                <Users className="w-12 h-12 mx-auto mb-4 opacity-50" />
+                <p>{t("noPartnersYet")}</p>
+                <p className="text-sm mt-2">{t("addPartnersToStart")}</p>
+              </CardContent>
+            </Card>
+          ) : (
+            <>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                {partnersData.map((partner) => {
+                  const netBalance = parseFloat(partner.totalInvested) - parseFloat(partner.totalWithdrawn) - parseFloat(partner.totalProfitDistributed);
+                  return (
+                    <Card key={partner.id} className="relative" data-testid={`card-partner-${partner.id}`}>
+                      <CardHeader>
+                        <div className="flex items-center justify-between">
+                          <CardTitle className="flex items-center gap-2">
+                            <Users className="w-5 h-5 text-blue-500" />
+                            {partner.name}
+                          </CardTitle>
+                          <div className="flex items-center gap-2">
+                            <Badge variant="outline" className="text-lg px-3 py-1">
+                              <Percent className="w-4 h-4 mr-1" />
+                              {partner.ownershipPercentage}%
+                            </Badge>
+                            <Button variant="ghost" size="sm" onClick={() => openEditPartner(partner)} data-testid={`button-edit-partner-${partner.id}`}>
+                              <Edit className="w-4 h-4" />
+                            </Button>
+                          </div>
+                        </div>
+                      </CardHeader>
+                      <CardContent className="space-y-4">
+                        {(partner.phone || partner.email) && (
+                          <div className="text-sm text-muted-foreground space-y-1">
+                            {partner.phone && <p>{t("phone")}: {partner.phone}</p>}
+                            {partner.email && <p>{t("email")}: {partner.email}</p>}
+                          </div>
+                        )}
+                        <div className="grid grid-cols-2 gap-3">
+                          <div className="p-3 bg-green-500/10 rounded-lg">
+                            <p className="text-xs text-muted-foreground">{t("totalInvested")}</p>
+                            <p className="text-lg font-bold text-green-600" data-testid={`text-invested-${partner.id}`}>
+                              {parseFloat(partner.totalInvested).toFixed(2)}
+                            </p>
+                          </div>
+                          <div className="p-3 bg-red-500/10 rounded-lg">
+                            <p className="text-xs text-muted-foreground">{t("totalWithdrawn")}</p>
+                            <p className="text-lg font-bold text-red-600" data-testid={`text-withdrawn-${partner.id}`}>
+                              {parseFloat(partner.totalWithdrawn).toFixed(2)}
+                            </p>
+                          </div>
+                          <div className="p-3 bg-blue-500/10 rounded-lg">
+                            <p className="text-xs text-muted-foreground">{t("profitDistributed")}</p>
+                            <p className="text-lg font-bold text-blue-600" data-testid={`text-profit-dist-${partner.id}`}>
+                              {parseFloat(partner.totalProfitDistributed).toFixed(2)}
+                            </p>
+                          </div>
+                          <div className="p-3 bg-purple-500/10 rounded-lg">
+                            <p className="text-xs text-muted-foreground">{t("netBalance")}</p>
+                            <p className={`text-lg font-bold ${netBalance >= 0 ? "text-purple-600" : "text-red-600"}`} data-testid={`text-net-${partner.id}`}>
+                              {netBalance.toFixed(2)}
+                            </p>
+                          </div>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  );
+                })}
+              </div>
+
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <DollarSign className="w-5 h-5" />
+                    {t("partnerTransactions")}
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  {partnerTransactions.length === 0 ? (
+                    <p className="text-center py-8 text-muted-foreground">{t("noTransactionsYet")}</p>
+                  ) : (
+                    <div className="overflow-x-auto">
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead>{t("date")}</TableHead>
+                            <TableHead>{t("partner")}</TableHead>
+                            <TableHead>{t("type")}</TableHead>
+                            <TableHead>{t("amount")}</TableHead>
+                            <TableHead>{t("currency")}</TableHead>
+                            <TableHead>{t("description")}</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {partnerTransactions.map((tx) => (
+                            <TableRow key={tx.id} data-testid={`row-partner-tx-${tx.id}`}>
+                              <TableCell>{format(new Date(tx.createdAt), "PPp")}</TableCell>
+                              <TableCell className="font-medium">{getPartnerName(tx.partnerId)}</TableCell>
+                              <TableCell>
+                                <Badge variant={typeColor(tx.type) as any}>
+                                  {typeIcon(tx.type)}
+                                  {tx.type === "investment" ? t("investment") : tx.type === "withdrawal" ? t("withdrawal") : t("profitDistribution")}
+                                </Badge>
+                              </TableCell>
+                              <TableCell className="font-bold">{tx.amount}</TableCell>
+                              <TableCell>{tx.currency}</TableCell>
+                              <TableCell>{tx.description || "-"}</TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            </>
+          )}
+        </TabsContent>
       </Tabs>
+
+      <Dialog open={isPartnerDialogOpen} onOpenChange={setIsPartnerDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>{editingPartner ? t("editPartner") : t("addPartner")}</DialogTitle>
+          </DialogHeader>
+          <Form {...partnerForm}>
+            <form onSubmit={partnerForm.handleSubmit(onPartnerSubmit)} className="space-y-4">
+              <FormField control={partnerForm.control} name="name" render={({ field }) => (
+                <FormItem>
+                  <FormLabel>{t("name")}</FormLabel>
+                  <FormControl><Input {...field} data-testid="input-partner-name" /></FormControl>
+                  <FormMessage />
+                </FormItem>
+              )} />
+              <FormField control={partnerForm.control} name="ownershipPercentage" render={({ field }) => (
+                <FormItem>
+                  <FormLabel>{t("ownershipPercentage")} (%)</FormLabel>
+                  <FormControl><Input type="number" step="0.01" min="0" max="100" {...field} data-testid="input-ownership" /></FormControl>
+                  <FormMessage />
+                </FormItem>
+              )} />
+              <FormField control={partnerForm.control} name="phone" render={({ field }) => (
+                <FormItem>
+                  <FormLabel>{t("phone")}</FormLabel>
+                  <FormControl><Input {...field} data-testid="input-partner-phone" /></FormControl>
+                  <FormMessage />
+                </FormItem>
+              )} />
+              <FormField control={partnerForm.control} name="email" render={({ field }) => (
+                <FormItem>
+                  <FormLabel>{t("email")}</FormLabel>
+                  <FormControl><Input type="email" {...field} data-testid="input-partner-email" /></FormControl>
+                  <FormMessage />
+                </FormItem>
+              )} />
+              <Button type="submit" className="w-full" disabled={createPartnerMutation.isPending || updatePartnerMutation.isPending} data-testid="button-submit-partner">
+                {editingPartner ? t("update") : t("add")}
+              </Button>
+            </form>
+          </Form>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={isPartnerTxDialogOpen} onOpenChange={setIsPartnerTxDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>{t("recordTransaction")}</DialogTitle>
+          </DialogHeader>
+          <Form {...partnerTxForm}>
+            <form onSubmit={partnerTxForm.handleSubmit((data) => createPartnerTxMutation.mutate(data))} className="space-y-4">
+              <FormField control={partnerTxForm.control} name="partnerId" render={({ field }) => (
+                <FormItem>
+                  <FormLabel>{t("partner")}</FormLabel>
+                  <Select onValueChange={field.onChange} value={field.value}>
+                    <FormControl>
+                      <SelectTrigger data-testid="select-partner">
+                        <SelectValue placeholder={t("selectPartner")} />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      {partnersData.map(p => (
+                        <SelectItem key={p.id} value={p.id}>{p.name} ({p.ownershipPercentage}%)</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <FormMessage />
+                </FormItem>
+              )} />
+              <FormField control={partnerTxForm.control} name="type" render={({ field }) => (
+                <FormItem>
+                  <FormLabel>{t("type")}</FormLabel>
+                  <Select onValueChange={field.onChange} value={field.value}>
+                    <FormControl>
+                      <SelectTrigger data-testid="select-tx-type">
+                        <SelectValue />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      <SelectItem value="investment">{t("investment")}</SelectItem>
+                      <SelectItem value="withdrawal">{t("withdrawal")}</SelectItem>
+                      <SelectItem value="profit_distribution">{t("profitDistribution")}</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <FormMessage />
+                </FormItem>
+              )} />
+              <FormField control={partnerTxForm.control} name="amount" render={({ field }) => (
+                <FormItem>
+                  <FormLabel>{t("amount")}</FormLabel>
+                  <FormControl><Input type="number" step="0.01" min="0" {...field} data-testid="input-tx-amount" /></FormControl>
+                  <FormMessage />
+                </FormItem>
+              )} />
+              <FormField control={partnerTxForm.control} name="currency" render={({ field }) => (
+                <FormItem>
+                  <FormLabel>{t("currency")}</FormLabel>
+                  <Select onValueChange={field.onChange} value={field.value}>
+                    <FormControl>
+                      <SelectTrigger data-testid="select-tx-currency">
+                        <SelectValue />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      <SelectItem value="LYD">LYD</SelectItem>
+                      <SelectItem value="USD">USD</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <FormMessage />
+                </FormItem>
+              )} />
+              <FormField control={partnerTxForm.control} name="description" render={({ field }) => (
+                <FormItem>
+                  <FormLabel>{t("description")}</FormLabel>
+                  <FormControl><Textarea {...field} data-testid="input-tx-description" /></FormControl>
+                  <FormMessage />
+                </FormItem>
+              )} />
+              <Button type="submit" className="w-full" disabled={createPartnerTxMutation.isPending} data-testid="button-submit-transaction">
+                {t("recordTransaction")}
+              </Button>
+            </form>
+          </Form>
+        </DialogContent>
+      </Dialog>
 
       <SaleInvoiceDialog
         sale={selectedSale}

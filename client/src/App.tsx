@@ -19,7 +19,6 @@ import Customers from "@/pages/customers";
 import Finance from "@/pages/finance";
 import Reports from "@/pages/reports";
 import Invoices from "@/pages/invoices";
-import Partners from "@/pages/partners";
 import Settings from "@/pages/settings";
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
@@ -156,12 +155,6 @@ function Router() {
       <Route path="/invoices">
         <RoleProtectedRoute allowedRoles={["owner", "cashier"]}>
           <Invoices />
-        </RoleProtectedRoute>
-      </Route>
-
-      <Route path="/partners">
-        <RoleProtectedRoute allowedRoles={["owner"]}>
-          <Partners />
         </RoleProtectedRoute>
       </Route>
 
