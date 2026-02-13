@@ -9,7 +9,6 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
@@ -17,13 +16,10 @@ import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useI18n } from "@/lib/i18n";
 import { Plus, Pencil, Trash2, Search, Package, AlertTriangle } from "lucide-react";
 import { useAuth } from "@/components/auth-provider";
-import type { ProductWithCategory, Category } from "@shared/schema";
+import type { ProductWithCategory } from "@shared/schema";
 
 const productFormSchema = z.object({
   name: z.string().min(1, "Name is required"),
-  sku: z.string().min(1, "SKU is required"),
-  barcode: z.string().optional(),
-  categoryId: z.string().optional(),
   costPrice: z.string().min(1, "Cost price is required"),
   sellingPrice: z.string().min(1, "Selling price is required"),
   description: z.string().optional(),
@@ -55,17 +51,10 @@ export default function Products() {
     queryKey: ["/api/products"],
   });
 
-  const { data: categories = [] } = useQuery<Category[]>({
-    queryKey: ["/api/categories"],
-  });
-
   const productForm = useForm<ProductFormData>({
     resolver: zodResolver(productFormSchema),
     defaultValues: {
       name: "",
-      sku: "",
-      barcode: "",
-      categoryId: "",
       costPrice: "",
       sellingPrice: "",
       description: "",
@@ -147,9 +136,6 @@ export default function Products() {
     setShowSuggestions(false);
     productForm.reset({
       name: product.name,
-      sku: product.sku,
-      barcode: product.barcode || "",
-      categoryId: product.categoryId || "",
       costPrice: product.costPrice,
       sellingPrice: product.sellingPrice,
       description: product.description || "",
@@ -189,9 +175,6 @@ export default function Products() {
     setNameInputValue(product.name);
     productForm.reset({
       name: product.name,
-      sku: product.sku,
-      barcode: product.barcode || "",
-      categoryId: product.categoryId || "",
       costPrice: product.costPrice,
       sellingPrice: product.sellingPrice,
       description: product.description || "",
@@ -314,40 +297,6 @@ export default function Products() {
                         <FormMessage />
                       </FormItem>
                     )} />
-                    <FormField control={productForm.control} name="sku" render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>{t("sku")}</FormLabel>
-                        <FormControl><Input {...field} data-testid="input-product-sku" /></FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )} />
-                  </div>
-                  <div className="grid grid-cols-2 gap-4">
-                    <FormField control={productForm.control} name="barcode" render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>{t("barcode")}</FormLabel>
-                        <FormControl><Input {...field} data-testid="input-product-barcode" /></FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )} />
-                    <FormField control={productForm.control} name="categoryId" render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>{t("category")}</FormLabel>
-                        <Select onValueChange={field.onChange} value={field.value}>
-                          <FormControl>
-                            <SelectTrigger data-testid="select-product-category">
-                              <SelectValue placeholder="Select category" />
-                            </SelectTrigger>
-                          </FormControl>
-                          <SelectContent>
-                            {categories.map((cat) => (
-                              <SelectItem key={cat.id} value={cat.id}>{cat.name}</SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                        <FormMessage />
-                      </FormItem>
-                    )} />
                   </div>
                   <div className="grid grid-cols-2 gap-4">
                     <FormField control={productForm.control} name="costPrice" render={({ field }) => (
@@ -428,7 +377,6 @@ export default function Products() {
                 <TableRow>
                   <TableHead>{t("product")}</TableHead>
                   <TableHead>{t("sku")}</TableHead>
-                  <TableHead>{t("category")}</TableHead>
                   {canEdit && <TableHead>{t("cost")}</TableHead>}
                   <TableHead>{t("price")}</TableHead>
                   <TableHead>{t("stock")}</TableHead>
@@ -440,7 +388,6 @@ export default function Products() {
                   <TableRow key={product.id} data-testid={`product-row-${product.id}`}>
                     <TableCell className="font-medium">{product.name}</TableCell>
                     <TableCell>{product.sku}</TableCell>
-                    <TableCell>{product.category?.name || "-"}</TableCell>
                     {canEdit && <TableCell>{product.costPrice} LYD</TableCell>}
                     <TableCell>{product.sellingPrice} LYD</TableCell>
                     <TableCell>

@@ -185,7 +185,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post("/api/products", requireInventoryAccess, async (req, res) => {
     try {
-      const data = insertProductSchema.parse(req.body);
+      const allProducts = await storage.getAllProducts();
+      const maxSku = allProducts.reduce((max, p) => {
+        const num = parseInt(p.sku, 10);
+        return !isNaN(num) && num > max ? num : max;
+      }, 0);
+      const nextSku = String(maxSku + 1);
+      const data = insertProductSchema.parse({ ...req.body, sku: nextSku });
       res.json(await storage.createProduct(data));
     } catch (err: any) { res.status(400).json({ message: err.message }); }
   });
