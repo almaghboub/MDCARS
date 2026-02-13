@@ -27,16 +27,16 @@ const SessionStore = MemoryStore(session);
 
 export async function registerRoutes(app: Express): Promise<Server> {
   app.set('trust proxy', 1);
-  const isProduction = process.env.NODE_ENV === 'production';
+  const useSecureCookies = process.env.COOKIE_SECURE === 'true';
   app.use(session({
     secret: process.env.SESSION_SECRET || "md-cars-secret-key-2024",
     resave: false,
     saveUninitialized: false,
     store: new SessionStore({ checkPeriod: 86400000 }),
     cookie: { 
-      secure: isProduction, 
+      secure: useSecureCookies, 
       httpOnly: true, 
-      sameSite: isProduction ? 'none' : 'lax', 
+      sameSite: 'lax', 
       maxAge: 24 * 60 * 60 * 1000 
     },
   }));
