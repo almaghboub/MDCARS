@@ -102,9 +102,6 @@ export default function Login() {
               </Button>
             </form>
           </Form>
-          <div className="mt-4 text-center text-sm text-muted-foreground">
-            <p>{t("defaultCredentials")}</p>
-          </div>
         </CardContent>
       </Card>
     </div>
