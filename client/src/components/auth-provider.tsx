@@ -30,7 +30,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     onSuccess: (data) => {
       setUser(data.user);
       queryClient.setQueryData(["/api/auth/me"], data);
-      queryClient.invalidateQueries();
+      queryClient.invalidateQueries({
+        predicate: (query) => query.queryKey[0] !== "/api/auth/me",
+      });
     },
   });
 
