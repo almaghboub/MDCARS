@@ -24,6 +24,10 @@ export default function Inventory() {
   const [stockQuantity, setStockQuantity] = useState("");
   const [stockReason, setStockReason] = useState("");
   const [stockCost, setStockCost] = useState("");
+  const [purchaseType, setPurchaseType] = useState<"cash" | "credit">("cash");
+  const [stockCurrency, setStockCurrency] = useState<"LYD" | "USD">("LYD");
+  const [supplierName, setSupplierName] = useState("");
+  const [invoiceNumber, setInvoiceNumber] = useState("");
   const { toast } = useToast();
 
   const { data: products = [], isLoading } = useQuery<ProductWithCategory[]>({
@@ -39,19 +43,26 @@ export default function Inventory() {
   });
 
   const stockMutation = useMutation({
-    mutationFn: async ({ productId, type, quantity, reason, costPerUnit }: any) => {
-      const res = await apiRequest("POST", `/api/products/${productId}/stock`, { type, quantity, reason, costPerUnit });
+    mutationFn: async ({ productId, type, quantity, reason, costPerUnit, purchaseType, currency, supplierName, invoiceNumber }: any) => {
+      const res = await apiRequest("POST", `/api/products/${productId}/stock`, { type, quantity, reason, costPerUnit, purchaseType, currency, supplierName, invoiceNumber });
       return res.json();
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/products"] });
       queryClient.invalidateQueries({ queryKey: ["/api/products/low-stock"] });
       queryClient.invalidateQueries({ queryKey: ["/api/stock-movements"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/cashbox"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/cashbox/transactions"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/supplier-payables"] });
       toast({ title: t("stockUpdatedSuccessfully") || "Stock updated successfully" });
       setStockDialogOpen(false);
       setStockQuantity("");
       setStockReason("");
       setStockCost("");
+      setPurchaseType("cash");
+      setStockCurrency("LYD");
+      setSupplierName("");
+      setInvoiceNumber("");
       setSelectedProduct(null);
     },
     onError: (error: any) => {
@@ -72,6 +83,10 @@ export default function Inventory() {
       quantity: parseInt(stockQuantity),
       reason: stockReason,
       costPerUnit: stockCost || null,
+      purchaseType: stockType === "in" ? purchaseType : undefined,
+      currency: stockType === "in" ? stockCurrency : undefined,
+      supplierName: stockType === "in" ? supplierName : undefined,
+      invoiceNumber: stockType === "in" ? invoiceNumber : undefined,
     });
   };
 
@@ -79,6 +94,10 @@ export default function Inventory() {
     setSelectedProduct(product);
     setStockType(type);
     setStockCost(product.costPrice);
+    setPurchaseType("cash");
+    setStockCurrency("LYD");
+    setSupplierName("");
+    setInvoiceNumber("");
     setStockDialogOpen(true);
   };
 
@@ -302,23 +321,77 @@ export default function Inventory() {
                 />
               </div>
               {stockType === "in" && (
-                <div>
-                  <label className="text-sm font-medium">Cost per Unit (LYD)</label>
-                  <Input
-                    type="number"
-                    step="0.01"
-                    value={stockCost}
-                    onChange={(e) => setStockCost(e.target.value)}
-                    data-testid="input-stock-cost"
-                  />
-                </div>
+                <>
+                  <div>
+                    <label className="text-sm font-medium">{t("costPerUnit")}</label>
+                    <Input
+                      type="number"
+                      step="0.01"
+                      value={stockCost}
+                      onChange={(e) => setStockCost(e.target.value)}
+                      data-testid="input-stock-cost"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-sm font-medium">{t("purchaseType")}</label>
+                    <Select value={purchaseType} onValueChange={(v: "cash" | "credit") => setPurchaseType(v)}>
+                      <SelectTrigger data-testid="select-purchase-type">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="cash">{t("paidNow")}</SelectItem>
+                        <SelectItem value="credit">{t("onCredit")}</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div>
+                    <label className="text-sm font-medium">{t("currency")}</label>
+                    <Select value={stockCurrency} onValueChange={(v: "LYD" | "USD") => setStockCurrency(v)}>
+                      <SelectTrigger data-testid="select-stock-currency">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="LYD">LYD</SelectItem>
+                        <SelectItem value="USD">USD</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div>
+                    <label className="text-sm font-medium">{t("supplierName")} ({t("optional")})</label>
+                    <Input
+                      value={supplierName}
+                      onChange={(e) => setSupplierName(e.target.value)}
+                      placeholder={t("supplierName")}
+                      data-testid="input-supplier-name"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-sm font-medium">{t("invoiceNo")} ({t("optional")})</label>
+                    <Input
+                      value={invoiceNumber}
+                      onChange={(e) => setInvoiceNumber(e.target.value)}
+                      placeholder={t("invoiceNo")}
+                      data-testid="input-invoice-number"
+                    />
+                  </div>
+                  {stockQuantity && stockCost && (
+                    <div className="p-3 bg-blue-50 dark:bg-blue-950 rounded border border-blue-200 dark:border-blue-800">
+                      <p className="text-sm font-medium text-blue-800 dark:text-blue-200">
+                        {t("totalCost")}: {(parseFloat(stockCost) * parseInt(stockQuantity || "0")).toFixed(2)} {stockCurrency}
+                      </p>
+                      <p className="text-xs text-blue-600 dark:text-blue-400 mt-1">
+                        {purchaseType === "cash" ? t("willDeductFromCashbox") : t("willRecordAsPayable")}
+                      </p>
+                    </div>
+                  )}
+                </>
               )}
               <div>
-                <label className="text-sm font-medium">{t("reason")} (Optional)</label>
+                <label className="text-sm font-medium">{t("reason")} ({t("optional")})</label>
                 <Input
                   value={stockReason}
                   onChange={(e) => setStockReason(e.target.value)}
-                  placeholder="Enter reason for stock change"
+                  placeholder={t("reason")}
                   data-testid="input-stock-reason"
                 />
               </div>

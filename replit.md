@@ -16,7 +16,7 @@ The frontend is a React 18 TypeScript SPA using Wouter for routing, TanStack Que
 - **Dashboard**: Key metrics, today's sales/revenue, low stock alerts, cashbox balance, best sellers
 - **POS (Point of Sale)**: Cart-based sales interface with product search, customer selection, dual currency, partial payments
 - **Products**: Product catalog with categories, CRUD operations, SKU/barcode support
-- **Inventory**: Stock levels, low stock alerts, stock in/out/adjustment tracking, movement history
+- **Inventory**: Stock levels, low stock alerts, stock in/out/adjustment tracking, movement history, stock-in financial integration (cash/credit purchases with cashbox deduction)
 - **Customers**: Customer database with purchase history, balance tracking, payment recording
 - **Invoices**: Dedicated invoice history page with search, status filter, and full invoice details
 - **Partners**: Partner management with ownership percentages, investment/withdrawal tracking, profit distribution
@@ -48,7 +48,8 @@ PostgreSQL with Drizzle ORM. Schema includes:
 - **users**: Staff with roles (owner, cashier, stock_manager)
 - **categories**: Product categories
 - **products**: Product catalog with SKU, barcode, cost/selling prices, stock levels
-- **stockMovements**: Stock in/out/adjustment history
+- **stockMovements**: Stock in/out/adjustment history with purchase type, currency, supplier info
+- **supplierPayables**: Supplier credit tracking for stock purchases on credit
 - **customers**: Customer database with balance tracking
 - **sales**: Sales transactions with items
 - **saleItems**: Individual sale line items with profit tracking

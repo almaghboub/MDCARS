@@ -211,14 +211,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/products/:id/stock", requireInventoryAccess, async (req, res) => {
     try {
       const { id } = req.params;
-      const { type, quantity, reason, costPerUnit } = req.body;
+      const { type, reason, supplierName, invoiceNumber } = req.body;
+      const quantity = parseInt(req.body.quantity);
+      const costPerUnit = req.body.costPerUnit ? String(req.body.costPerUnit) : null;
+      const purchaseType = req.body.purchaseType;
+      const currency = req.body.currency;
+      if (!type || !["in", "out", "adjustment"].includes(type)) return res.status(400).json({ message: "Invalid stock movement type" });
+      if (isNaN(quantity) || quantity <= 0) return res.status(400).json({ message: "Quantity must be a positive number" });
+      if (purchaseType && !["cash", "credit"].includes(purchaseType)) return res.status(400).json({ message: "Invalid purchase type" });
+      if (currency && !["LYD", "USD"].includes(currency)) return res.status(400).json({ message: "Invalid currency" });
       const product = await storage.getProduct(id);
       if (!product) return res.status(404).json({ message: "Product not found" });
       const previousStock = product.currentStock;
       const newStock = type === "in" ? previousStock + quantity : type === "out" ? previousStock - quantity : quantity;
       if (newStock < 0) return res.status(400).json({ message: "Insufficient stock" });
       await storage.updateProductStock(id, newStock);
-      await storage.createStockMovement({
+      const movement = await storage.createStockMovement({
         productId: id,
         type,
         quantity,
@@ -226,8 +234,47 @@ export async function registerRoutes(app: Express): Promise<Server> {
         newStock,
         costPerUnit,
         reason,
+        purchaseType: type === "in" ? (purchaseType || "cash") : null,
+        currency: type === "in" ? (currency || "LYD") : null,
+        supplierName: type === "in" ? (supplierName || null) : null,
+        invoiceNumber: type === "in" ? (invoiceNumber || null) : null,
         createdByUserId: (req.user as any).id,
       });
+
+      if (type === "in" && costPerUnit && quantity > 0) {
+        const totalCost = (parseFloat(costPerUnit) * quantity).toFixed(2);
+        const effectiveCurrency = currency || "LYD";
+        const effectivePurchaseType = purchaseType || "cash";
+
+        if (effectivePurchaseType === "cash") {
+          const box = await storage.getCashbox();
+          if (box) {
+            const amountUSD = effectiveCurrency === "USD" ? totalCost : "0";
+            const amountLYD = effectiveCurrency === "LYD" ? totalCost : "0";
+            await storage.updateCashboxBalance(amountUSD, amountLYD, false);
+            await storage.createCashboxTransaction({
+              cashboxId: box.id,
+              type: "purchase",
+              amountUSD,
+              amountLYD,
+              description: `Stock purchase: ${product.name} x${quantity} @ ${costPerUnit} ${effectiveCurrency}${supplierName ? ` from ${supplierName}` : ""}${invoiceNumber ? ` (Inv# ${invoiceNumber})` : ""}`,
+              referenceType: "stock_movement",
+              referenceId: movement.id,
+              createdByUserId: (req.user as any).id,
+            });
+          }
+        } else if (effectivePurchaseType === "credit") {
+          await storage.createSupplierPayable({
+            supplierName: supplierName || "Unknown Supplier",
+            amount: totalCost,
+            currency: effectiveCurrency,
+            description: `Stock purchase: ${product.name} x${quantity} @ ${costPerUnit} ${effectiveCurrency}${invoiceNumber ? ` (Inv# ${invoiceNumber})` : ""}`,
+            stockMovementId: movement.id,
+            createdByUserId: (req.user as any).id,
+          });
+        }
+      }
+
       res.json(await storage.getProduct(id));
     } catch (err: any) { res.status(400).json({ message: err.message }); }
   });
@@ -456,6 +503,39 @@ export async function registerRoutes(app: Express): Promise<Server> {
     const deleted = await storage.deleteRevenue(req.params.id);
     if (!deleted) return res.status(404).json({ message: "Revenue not found" });
     res.json({ message: "Revenue deleted" });
+  });
+
+  app.get("/api/supplier-payables", requireAuth, async (req, res) => {
+    res.json(await storage.getAllSupplierPayables());
+  });
+
+  app.post("/api/supplier-payables/:id/pay", requireFinanceAccess, async (req, res) => {
+    try {
+      const allPayables = await storage.getAllSupplierPayables();
+      const existing = allPayables.find(p => p.id === req.params.id);
+      if (!existing) return res.status(404).json({ message: "Payable not found" });
+      if (existing.isPaid) return res.status(400).json({ message: "This payable has already been paid" });
+      const payable = await storage.markSupplierPayablePaid(req.params.id);
+      if (!payable) return res.status(404).json({ message: "Payable not found" });
+
+      const box = await storage.getCashbox();
+      if (box) {
+        const amountUSD = payable.currency === "USD" ? payable.amount : "0";
+        const amountLYD = payable.currency === "LYD" ? payable.amount : "0";
+        await storage.updateCashboxBalance(amountUSD, amountLYD, false);
+        await storage.createCashboxTransaction({
+          cashboxId: box.id,
+          type: "purchase",
+          amountUSD,
+          amountLYD,
+          description: `Supplier payment: ${payable.supplierName} - ${payable.description}`,
+          referenceType: "supplier_payable",
+          referenceId: payable.id,
+          createdByUserId: (req.user as any).id,
+        });
+      }
+      res.json(payable);
+    } catch (err: any) { res.status(400).json({ message: err.message }); }
   });
 
   app.get("/api/partners", requireOwner, async (req, res) => {

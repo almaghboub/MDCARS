@@ -12,10 +12,11 @@ import {
   type Revenue, type InsertRevenue,
   type Partner, type InsertPartner,
   type PartnerTransaction, type InsertPartnerTransaction,
+  type SupplierPayable, type InsertSupplierPayable,
   type Setting, type InsertSetting,
   users, categories, products, stockMovements, customers,
   sales, saleItems, cashbox, cashboxTransactions, expenses, revenues,
-  partners, partnerTransactions, settings,
+  partners, partnerTransactions, supplierPayables, settings,
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, desc, sql, or, ilike, and, gte, lte } from "drizzle-orm";
@@ -94,6 +95,10 @@ export interface IStorage {
   deletePartner(id: string): Promise<boolean>;
   getPartnerTransactions(partnerId?: string): Promise<PartnerTransaction[]>;
   createPartnerTransaction(transaction: InsertPartnerTransaction): Promise<PartnerTransaction>;
+
+  getAllSupplierPayables(): Promise<SupplierPayable[]>;
+  createSupplierPayable(payable: InsertSupplierPayable): Promise<SupplierPayable>;
+  markSupplierPayablePaid(id: string): Promise<SupplierPayable | undefined>;
 
   getSetting(key: string): Promise<Setting | undefined>;
   getAllSettings(): Promise<Setting[]>;
@@ -717,6 +722,20 @@ export class DatabaseStorage implements IStorage {
       }
     }
     return created;
+  }
+
+  async getAllSupplierPayables(): Promise<SupplierPayable[]> {
+    return db.select().from(supplierPayables).orderBy(desc(supplierPayables.createdAt));
+  }
+
+  async createSupplierPayable(payable: InsertSupplierPayable): Promise<SupplierPayable> {
+    const [created] = await db.insert(supplierPayables).values(payable).returning();
+    return created;
+  }
+
+  async markSupplierPayablePaid(id: string): Promise<SupplierPayable | undefined> {
+    const [updated] = await db.update(supplierPayables).set({ isPaid: true, paidAt: new Date() }).where(eq(supplierPayables.id, id)).returning();
+    return updated;
   }
 
   async initializeDefaultData(): Promise<void> {

@@ -9,8 +9,9 @@ export const paymentMethodEnum = pgEnum("payment_method", ["cash", "partial"]);
 export const saleStatusEnum = pgEnum("sale_status", ["completed", "pending", "cancelled", "returned"]);
 export const stockMovementTypeEnum = pgEnum("stock_movement_type", ["in", "out", "adjustment"]);
 export const expenseCategoryEnum = pgEnum("expense_category", ["rent", "utilities", "salaries", "supplies", "maintenance", "marketing", "other"]);
-export const transactionTypeEnum = pgEnum("transaction_type", ["sale", "expense", "deposit", "withdrawal", "adjustment", "refund"]);
+export const transactionTypeEnum = pgEnum("transaction_type", ["sale", "expense", "deposit", "withdrawal", "adjustment", "refund", "purchase"]);
 export const partnerTransactionTypeEnum = pgEnum("partner_transaction_type", ["investment", "withdrawal", "profit_distribution"]);
+export const purchaseTypeEnum = pgEnum("purchase_type", ["cash", "credit"]);
 
 export const users = pgTable("users", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
@@ -60,6 +61,23 @@ export const stockMovements = pgTable("stock_movements", {
   reason: text("reason"),
   referenceType: text("reference_type"),
   referenceId: varchar("reference_id"),
+  purchaseType: text("purchase_type"),
+  currency: text("currency"),
+  supplierName: text("supplier_name"),
+  invoiceNumber: text("invoice_number"),
+  createdByUserId: varchar("created_by_user_id").notNull().references(() => users.id),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+export const supplierPayables = pgTable("supplier_payables", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  supplierName: text("supplier_name").notNull(),
+  amount: decimal("amount", { precision: 15, scale: 2 }).notNull(),
+  currency: text("currency").notNull().default("LYD"),
+  description: text("description"),
+  stockMovementId: varchar("stock_movement_id"),
+  isPaid: boolean("is_paid").notNull().default(false),
+  paidAt: timestamp("paid_at"),
   createdByUserId: varchar("created_by_user_id").notNull().references(() => users.id),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
@@ -210,6 +228,7 @@ export const insertExpenseSchema = createInsertSchema(expenses).omit({ id: true,
 export const insertRevenueSchema = createInsertSchema(revenues).omit({ id: true, createdAt: true });
 export const insertPartnerSchema = createInsertSchema(partners).omit({ id: true, createdAt: true });
 export const insertPartnerTransactionSchema = createInsertSchema(partnerTransactions).omit({ id: true, createdAt: true });
+export const insertSupplierPayableSchema = createInsertSchema(supplierPayables).omit({ id: true, createdAt: true });
 export const insertSettingSchema = createInsertSchema(settings).omit({ id: true, createdAt: true, updatedAt: true });
 
 export type InsertUser = z.infer<typeof insertUserSchema>;
@@ -225,6 +244,7 @@ export type InsertExpense = z.infer<typeof insertExpenseSchema>;
 export type InsertRevenue = z.infer<typeof insertRevenueSchema>;
 export type InsertPartner = z.infer<typeof insertPartnerSchema>;
 export type InsertPartnerTransaction = z.infer<typeof insertPartnerTransactionSchema>;
+export type InsertSupplierPayable = z.infer<typeof insertSupplierPayableSchema>;
 export type InsertSetting = z.infer<typeof insertSettingSchema>;
 
 export type User = typeof users.$inferSelect;
@@ -240,6 +260,7 @@ export type Expense = typeof expenses.$inferSelect;
 export type Revenue = typeof revenues.$inferSelect;
 export type Partner = typeof partners.$inferSelect;
 export type PartnerTransaction = typeof partnerTransactions.$inferSelect;
+export type SupplierPayable = typeof supplierPayables.$inferSelect;
 export type Setting = typeof settings.$inferSelect;
 
 export type ProductWithCategory = Product & { category: Category | null };
