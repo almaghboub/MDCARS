@@ -217,24 +217,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           createdByUserId: (req.user as any).id,
         });
 
-        if (effectivePurchaseType === "cash") {
-          const box = await storage.getCashbox();
-          if (box) {
-            const amountUSD = effectiveCurrency === "USD" ? totalCost : "0";
-            const amountLYD = effectiveCurrency === "LYD" ? totalCost : "0";
-            await storage.updateCashboxBalance(amountUSD, amountLYD, false);
-            await storage.createCashboxTransaction({
-              cashboxId: box.id,
-              type: "purchase",
-              amountUSD,
-              amountLYD,
-              description: `Initial stock: ${product.name} x${initialStock} @ ${costPrice} ${effectiveCurrency}${supplierName ? ` from ${supplierName}` : ""}${invoiceNumber ? ` (Inv# ${invoiceNumber})` : ""}`,
-              referenceType: "stock_movement",
-              referenceId: movement.id,
-              createdByUserId: (req.user as any).id,
-            });
-          }
-        } else if (effectivePurchaseType === "credit") {
+        if (effectivePurchaseType === "credit") {
           await storage.createSupplierPayable({
             supplierName: supplierName || "Unknown Supplier",
             amount: totalCost,
@@ -300,24 +283,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         const effectiveCurrency = currency || "LYD";
         const effectivePurchaseType = purchaseType || "cash";
 
-        if (effectivePurchaseType === "cash") {
-          const box = await storage.getCashbox();
-          if (box) {
-            const amountUSD = effectiveCurrency === "USD" ? totalCost : "0";
-            const amountLYD = effectiveCurrency === "LYD" ? totalCost : "0";
-            await storage.updateCashboxBalance(amountUSD, amountLYD, false);
-            await storage.createCashboxTransaction({
-              cashboxId: box.id,
-              type: "purchase",
-              amountUSD,
-              amountLYD,
-              description: `Stock purchase: ${product.name} x${quantity} @ ${costPerUnit} ${effectiveCurrency}${supplierName ? ` from ${supplierName}` : ""}${invoiceNumber ? ` (Inv# ${invoiceNumber})` : ""}`,
-              referenceType: "stock_movement",
-              referenceId: movement.id,
-              createdByUserId: (req.user as any).id,
-            });
-          }
-        } else if (effectivePurchaseType === "credit") {
+        if (effectivePurchaseType === "credit") {
           await storage.createSupplierPayable({
             supplierName: supplierName || "Unknown Supplier",
             amount: totalCost,
@@ -690,6 +656,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
       setting = await storage.updateSetting(req.params.key, value);
     }
     res.json(setting);
+  });
+
+  app.get("/api/goods-capital", requireAuth, async (req, res) => {
+    const products = await storage.getAllProducts();
+    const totalCapitalLYD = products.reduce((sum, p) => sum + parseFloat(p.costPrice) * p.currentStock, 0);
+    res.json({ totalCapitalLYD: totalCapitalLYD.toFixed(2) });
   });
 
   app.get("/api/dashboard/stats", requireAuth, async (req, res) => {

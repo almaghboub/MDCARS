@@ -84,8 +84,7 @@ export default function Products() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/products"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/cashbox"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/cashbox/transactions"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/goods-capital"] });
       queryClient.invalidateQueries({ queryKey: ["/api/supplier-payables"] });
       queryClient.invalidateQueries({ queryKey: ["/api/stock-movements"] });
       toast({ title: t("productCreated") });

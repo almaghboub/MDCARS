@@ -51,8 +51,7 @@ export default function Inventory() {
       queryClient.invalidateQueries({ queryKey: ["/api/products"] });
       queryClient.invalidateQueries({ queryKey: ["/api/products/low-stock"] });
       queryClient.invalidateQueries({ queryKey: ["/api/stock-movements"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/cashbox"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/cashbox/transactions"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/goods-capital"] });
       queryClient.invalidateQueries({ queryKey: ["/api/supplier-payables"] });
       toast({ title: t("stockUpdatedSuccessfully") || "Stock updated successfully" });
       setStockDialogOpen(false);

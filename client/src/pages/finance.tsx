@@ -98,6 +98,10 @@ export default function Finance() {
     queryKey: ["/api/partner-transactions"],
   });
 
+  const { data: goodsCapitalData } = useQuery<{ totalCapitalLYD: string }>({
+    queryKey: ["/api/goods-capital"],
+  });
+
   const expenseForm = useForm<z.infer<typeof expenseFormSchema>>({
     resolver: zodResolver(expenseFormSchema),
     defaultValues: { category: "other", amount: "", currency: "LYD", description: "", personName: "" },
@@ -310,7 +314,7 @@ export default function Finance() {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
         <Card>
           <CardContent className="p-6">
             <div className="flex items-center justify-between">
@@ -331,6 +335,20 @@ export default function Finance() {
                 <p className="text-2xl font-bold" data-testid="text-cashbox-usd">${cashbox?.balanceUSD || "0.00"}</p>
               </div>
               <DollarSign className="w-8 h-8 text-green-500" />
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardContent className="p-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-muted-foreground">{t("goodsCapital")}</p>
+                <p className="text-2xl font-bold text-orange-600" data-testid="text-goods-capital">
+                  {goodsCapitalData?.totalCapitalLYD || "0.00"} LYD
+                </p>
+              </div>
+              <ShoppingCart className="w-8 h-8 text-orange-500" />
             </div>
           </CardContent>
         </Card>

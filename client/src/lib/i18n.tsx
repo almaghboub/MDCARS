@@ -363,6 +363,7 @@ const translations = {
 
     // Partners / Store Capital
     storeCapital: "Store Capital",
+    goodsCapital: "Capital of Goods",
     partners: "Partners",
     partner: "Partner",
     addPartner: "Add Partner",
@@ -745,6 +746,7 @@ const translations = {
 
     // Partners / Store Capital
     storeCapital: "رأس مال المتجر",
+    goodsCapital: "رأس مال البضاعة",
     partners: "الشركاء",
     partner: "شريك",
     addPartner: "إضافة شريك",
