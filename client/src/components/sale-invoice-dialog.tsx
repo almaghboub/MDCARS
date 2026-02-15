@@ -49,6 +49,92 @@ export function SaleInvoiceDialog({ sale, open, onOpenChange }: SaleInvoiceDialo
 
   const profit = sale.items?.reduce((sum, item) => sum + parseFloat(item.profit || "0"), 0) || 0;
 
+  const printStyles = `
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; color: #1a1a2e; background: white; }
+    .invoice-wrapper { max-width: 800px; margin: 0 auto; padding: 0; }
+
+    .invoice-header {
+      background: linear-gradient(135deg, #1e3a5f 0%, #0f2341 100%);
+      color: white;
+      padding: 30px 35px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .header-brand { display: flex; align-items: center; gap: 14px; }
+    .header-brand img { height: 65px; filter: brightness(1.2); }
+    .brand-text h1 { font-size: 28px; font-weight: 900; letter-spacing: 3px; color: #fff; }
+    .brand-text p { font-size: 11px; color: #93c5fd; letter-spacing: 2px; text-transform: uppercase; margin-top: 2px; }
+    .header-right { text-align: right; }
+    .header-right .invoice-label { font-size: 32px; font-weight: 900; letter-spacing: 4px; text-transform: uppercase; color: #60a5fa; }
+    .header-right .invoice-num { font-size: 13px; color: #93c5fd; margin-top: 4px; font-weight: 500; }
+
+    .blue-bar { height: 4px; background: linear-gradient(90deg, #2563eb, #60a5fa, #2563eb); }
+
+    .invoice-body { padding: 28px 35px; }
+
+    .info-row { display: flex; gap: 20px; margin-bottom: 24px; }
+    .info-card { flex: 1; border: 1px solid #e2e8f0; border-radius: 10px; overflow: hidden; }
+    .info-card-header { background: #f0f4ff; padding: 10px 16px; border-bottom: 1px solid #e2e8f0; }
+    .info-card-header h4 { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 1.5px; color: #1e3a5f; }
+    .info-card-body { padding: 14px 16px; }
+    .info-line { display: flex; justify-content: space-between; padding: 4px 0; font-size: 13px; }
+    .info-line .label { color: #64748b; }
+    .info-line .value { font-weight: 600; color: #1e293b; }
+
+    .items-section { margin-bottom: 24px; }
+    .items-table { width: 100%; border-collapse: separate; border-spacing: 0; border-radius: 10px; overflow: hidden; border: 1px solid #e2e8f0; }
+    .items-table thead th { background: linear-gradient(135deg, #1e3a5f 0%, #0f2341 100%); color: white; padding: 12px 16px; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; }
+    .items-table thead th:first-child { text-align: center; width: 40px; }
+    .items-table thead th:nth-child(3) { text-align: center; }
+    .items-table thead th:nth-child(4), .items-table thead th:last-child { text-align: right; }
+    .items-table tbody td { padding: 12px 16px; font-size: 13px; border-bottom: 1px solid #f1f5f9; }
+    .items-table tbody td:first-child { text-align: center; color: #94a3b8; font-size: 12px; }
+    .items-table tbody td:nth-child(2) { font-weight: 600; color: #1e293b; }
+    .items-table tbody td:nth-child(3) { text-align: center; }
+    .items-table tbody td:nth-child(4) { text-align: right; color: #475569; }
+    .items-table tbody td:last-child { text-align: right; font-weight: 700; color: #1e293b; }
+    .items-table tbody tr:nth-child(even) { background: #f8fafc; }
+    .items-table tbody tr:last-child td { border-bottom: none; }
+
+    .totals-section { display: flex; justify-content: flex-end; margin-bottom: 24px; }
+    .totals-box { width: 320px; border: 1px solid #e2e8f0; border-radius: 10px; overflow: hidden; }
+    .total-row { display: flex; justify-content: space-between; padding: 10px 18px; font-size: 13px; border-bottom: 1px solid #f1f5f9; }
+    .total-row .label { color: #64748b; }
+    .total-row .value { font-weight: 600; }
+    .total-row.discount .value { color: #ef4444; }
+    .total-row.grand-total { background: linear-gradient(135deg, #1e3a5f 0%, #0f2341 100%); border-bottom: none; }
+    .total-row.grand-total .label { color: #93c5fd; font-weight: 700; font-size: 15px; text-transform: uppercase; letter-spacing: 1px; }
+    .total-row.grand-total .value { color: #fff; font-weight: 900; font-size: 18px; }
+    .total-row.paid .value { color: #16a34a; font-weight: 700; }
+    .total-row.due .value { color: #ea580c; font-weight: 700; }
+
+    .status-pill { display: inline-block; padding: 5px 16px; border-radius: 20px; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; }
+    .status-completed { background: #dcfce7; color: #166534; }
+    .status-returned { background: #fecaca; color: #991b1b; }
+    .status-pending { background: #fef3c7; color: #92400e; }
+
+    .notes-box { background: #fffbeb; border: 1px solid #fde68a; border-radius: 10px; padding: 14px 18px; margin-bottom: 24px; }
+    .notes-box .notes-title { font-size: 10px; text-transform: uppercase; letter-spacing: 1.5px; color: #92400e; font-weight: 700; margin-bottom: 6px; }
+    .notes-box p { font-size: 13px; color: #78350f; }
+
+    .invoice-footer {
+      text-align: center;
+      padding: 20px 35px;
+      border-top: 1px solid #e2e8f0;
+      background: #f8fafc;
+    }
+    .footer-thank { font-size: 16px; font-weight: 800; color: #1e3a5f; margin-bottom: 4px; }
+    .footer-company { font-size: 12px; color: #64748b; letter-spacing: 1px; }
+    .footer-line { width: 60px; height: 3px; background: linear-gradient(90deg, #2563eb, #60a5fa); margin: 10px auto 0; border-radius: 2px; }
+
+    @media print {
+      body { padding: 0; margin: 0; }
+      .invoice-wrapper { max-width: 100%; }
+    }
+  `;
+
   const handlePrint = () => {
     const printContent = invoiceRef.current;
     if (!printContent) return;
@@ -59,50 +145,7 @@ export function SaleInvoiceDialog({ sale, open, onOpenChange }: SaleInvoiceDialo
       <html>
       <head>
         <title>Invoice ${sale.saleNumber}</title>
-        <style>
-          * { margin: 0; padding: 0; box-sizing: border-box; }
-          body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; color: #1a1a1a; padding: 20px; }
-          .invoice-print { max-width: 800px; margin: 0 auto; }
-          .header { display: flex; justify-content: space-between; align-items: flex-start; padding-bottom: 20px; border-bottom: 3px solid #1e40af; margin-bottom: 20px; }
-          .header-left { display: flex; align-items: center; gap: 12px; }
-          .header-left img { height: 60px; }
-          .company-name { font-size: 24px; font-weight: 800; color: #1e40af; }
-          .company-sub { font-size: 12px; color: #64748b; }
-          .invoice-title { text-align: right; }
-          .invoice-title h2 { font-size: 28px; font-weight: 800; color: #1e40af; text-transform: uppercase; letter-spacing: 2px; }
-          .invoice-number { font-size: 14px; color: #64748b; margin-top: 4px; }
-          .meta-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 24px; }
-          .meta-box { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 16px; }
-          .meta-box h4 { font-size: 11px; text-transform: uppercase; letter-spacing: 1px; color: #64748b; margin-bottom: 8px; font-weight: 600; }
-          .meta-box p { font-size: 14px; color: #1a1a1a; line-height: 1.6; }
-          .meta-box .value { font-weight: 600; }
-          .items-table { width: 100%; border-collapse: collapse; margin-bottom: 24px; }
-          .items-table th { background: #1e40af; color: white; padding: 10px 12px; text-align: left; font-size: 12px; text-transform: uppercase; letter-spacing: 0.5px; }
-          .items-table th:first-child { border-radius: 6px 0 0 0; }
-          .items-table th:last-child { border-radius: 0 6px 0 0; text-align: right; }
-          .items-table td { padding: 10px 12px; border-bottom: 1px solid #e2e8f0; font-size: 13px; }
-          .items-table td:last-child { text-align: right; font-weight: 600; }
-          .items-table tr:nth-child(even) { background: #f8fafc; }
-          .items-table .qty { text-align: center; }
-          .items-table th.qty { text-align: center; }
-          .summary { display: flex; justify-content: flex-end; margin-bottom: 20px; }
-          .summary-box { width: 300px; }
-          .summary-row { display: flex; justify-content: space-between; padding: 6px 0; font-size: 13px; }
-          .summary-row.total { border-top: 2px solid #1e40af; padding-top: 10px; margin-top: 6px; font-size: 16px; font-weight: 800; color: #1e40af; }
-          .summary-row.paid { color: #16a34a; font-weight: 600; }
-          .summary-row.due { color: #ea580c; font-weight: 700; }
-          .status-badge { display: inline-block; padding: 4px 12px; border-radius: 20px; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; }
-          .status-completed { background: #dcfce7; color: #166534; }
-          .status-returned { background: #fecaca; color: #991b1b; }
-          .status-pending { background: #fef3c7; color: #92400e; }
-          .notes { background: #fffbeb; border: 1px solid #fde68a; border-radius: 8px; padding: 12px 16px; margin-bottom: 20px; }
-          .notes-label { font-size: 11px; text-transform: uppercase; letter-spacing: 1px; color: #92400e; font-weight: 600; margin-bottom: 4px; }
-          .notes p { font-size: 13px; color: #78350f; }
-          .footer { text-align: center; padding-top: 20px; border-top: 2px solid #e2e8f0; }
-          .footer p { font-size: 12px; color: #94a3b8; }
-          .footer .thank-you { font-size: 15px; font-weight: 700; color: #1e40af; margin-bottom: 4px; }
-          @media print { body { padding: 0; } }
-        </style>
+        <style>${printStyles}</style>
       </head>
       <body>
         ${printContent.innerHTML}
@@ -111,7 +154,7 @@ export function SaleInvoiceDialog({ sale, open, onOpenChange }: SaleInvoiceDialo
     `);
     printWindow.document.close();
     printWindow.focus();
-    setTimeout(() => { printWindow.print(); printWindow.close(); }, 300);
+    setTimeout(() => { printWindow.print(); printWindow.close(); }, 400);
   };
 
   const statusColor = (status: string) => {
@@ -176,137 +219,154 @@ export function SaleInvoiceDialog({ sale, open, onOpenChange }: SaleInvoiceDialo
             </div>
           </div>
 
-          <div ref={invoiceRef} className="invoice-print p-6">
-            <div className="flex items-start justify-between pb-5 mb-5" style={{ borderBottom: "3px solid #1e40af" }}>
-              <div className="flex items-center gap-3">
-                <img src={logoPath} alt="MD Cars" className="h-14" />
-                <div>
-                  <h1 className="text-2xl font-extrabold text-blue-700 tracking-tight">MD CARS</h1>
-                  <p className="text-xs text-muted-foreground">Car Accessories & Parts</p>
+          <div ref={invoiceRef} className="invoice-wrapper">
+            <div className="invoice-header" style={{ background: "linear-gradient(135deg, #1e3a5f 0%, #0f2341 100%)", color: "white", padding: "30px 35px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <div className="header-brand" style={{ display: "flex", alignItems: "center", gap: "14px" }}>
+                <img src={logoPath} alt="MD Cars" style={{ height: "65px", filter: "brightness(1.2)" }} />
+                <div className="brand-text">
+                  <h1 style={{ fontSize: "28px", fontWeight: 900, letterSpacing: "3px", color: "#fff", margin: 0 }}>MD CARS</h1>
+                  <p style={{ fontSize: "11px", color: "#93c5fd", letterSpacing: "2px", textTransform: "uppercase", marginTop: "2px" }}>Car Accessories & Parts</p>
                 </div>
               </div>
-              <div className="text-right">
-                <h2 className="text-2xl font-extrabold text-blue-700 tracking-widest uppercase">
+              <div className="header-right" style={{ textAlign: "right" }}>
+                <div className="invoice-label" style={{ fontSize: "32px", fontWeight: 900, letterSpacing: "4px", textTransform: "uppercase", color: "#60a5fa" }}>
                   {t("invoice")}
-                </h2>
-                <p className="text-sm text-muted-foreground mt-1">{sale.saleNumber}</p>
-                <span className={`status-badge ${statusClass(sale.status)} inline-block mt-2 px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wide ${
-                  sale.status === "completed" ? "bg-green-100 text-green-800" :
-                  sale.status === "returned" ? "bg-red-100 text-red-800" :
-                  "bg-yellow-100 text-yellow-800"
-                }`}>
-                  {statusLabel(sale.status)}
-                </span>
+                </div>
+                <div className="invoice-num" style={{ fontSize: "13px", color: "#93c5fd", marginTop: "4px", fontWeight: 500 }}>
+                  {sale.saleNumber}
+                </div>
+                <div style={{ marginTop: "8px" }}>
+                  <span className={`status-pill ${statusClass(sale.status)}`} style={{
+                    display: "inline-block",
+                    padding: "5px 16px",
+                    borderRadius: "20px",
+                    fontSize: "11px",
+                    fontWeight: 700,
+                    textTransform: "uppercase",
+                    letterSpacing: "1px",
+                    ...(sale.status === "completed" ? { background: "#dcfce7", color: "#166534" } :
+                      sale.status === "returned" ? { background: "#fecaca", color: "#991b1b" } :
+                      { background: "#fef3c7", color: "#92400e" })
+                  }}>
+                    {statusLabel(sale.status)}
+                  </span>
+                </div>
               </div>
             </div>
 
-            <div className="grid grid-cols-2 gap-4 mb-6">
-              <div className="bg-slate-50 dark:bg-slate-800/50 border rounded-lg p-4">
-                <h4 className="text-[11px] uppercase tracking-wider text-muted-foreground font-semibold mb-2">{t("invoiceDetails")}</h4>
-                <div className="space-y-1 text-sm">
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">{t("date")}:</span>
-                    <span className="font-medium">{format(new Date(sale.createdAt), "PPp")}</span>
+            <div className="blue-bar" style={{ height: "4px", background: "linear-gradient(90deg, #2563eb, #60a5fa, #2563eb)" }} />
+
+            <div className="invoice-body" style={{ padding: "28px 35px" }}>
+              <div className="info-row" style={{ display: "flex", gap: "20px", marginBottom: "24px" }}>
+                <div className="info-card" style={{ flex: 1, border: "1px solid #e2e8f0", borderRadius: "10px", overflow: "hidden" }}>
+                  <div className="info-card-header" style={{ background: "#f0f4ff", padding: "10px 16px", borderBottom: "1px solid #e2e8f0" }}>
+                    <h4 style={{ fontSize: "10px", fontWeight: 700, textTransform: "uppercase", letterSpacing: "1.5px", color: "#1e3a5f", margin: 0 }}>{t("invoiceDetails")}</h4>
                   </div>
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">{t("paymentMethod")}:</span>
-                    <span className="font-medium">{sale.paymentMethod === "cash" ? t("cash") : t("partial")}</span>
+                  <div className="info-card-body" style={{ padding: "14px 16px" }}>
+                    <div className="info-line" style={{ display: "flex", justifyContent: "space-between", padding: "4px 0", fontSize: "13px" }}>
+                      <span className="label" style={{ color: "#64748b" }}>{t("date")}</span>
+                      <span className="value" style={{ fontWeight: 600, color: "#1e293b" }}>{format(new Date(sale.createdAt), "dd/MM/yyyy HH:mm")}</span>
+                    </div>
+                    <div className="info-line" style={{ display: "flex", justifyContent: "space-between", padding: "4px 0", fontSize: "13px" }}>
+                      <span className="label" style={{ color: "#64748b" }}>{t("paymentMethod")}</span>
+                      <span className="value" style={{ fontWeight: 600, color: "#1e293b" }}>{sale.paymentMethod === "cash" ? t("cash") : t("partial")}</span>
+                    </div>
+                    <div className="info-line" style={{ display: "flex", justifyContent: "space-between", padding: "4px 0", fontSize: "13px" }}>
+                      <span className="label" style={{ color: "#64748b" }}>{t("currency")}</span>
+                      <span className="value" style={{ fontWeight: 600, color: "#1e293b" }}>{sale.currency}</span>
+                    </div>
                   </div>
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">{t("currency")}:</span>
-                    <span className="font-semibold">{sale.currency}</span>
+                </div>
+
+                <div className="info-card" style={{ flex: 1, border: "1px solid #e2e8f0", borderRadius: "10px", overflow: "hidden" }}>
+                  <div className="info-card-header" style={{ background: "#f0f4ff", padding: "10px 16px", borderBottom: "1px solid #e2e8f0" }}>
+                    <h4 style={{ fontSize: "10px", fontWeight: 700, textTransform: "uppercase", letterSpacing: "1.5px", color: "#1e3a5f", margin: 0 }}>{t("customerInfo")}</h4>
+                  </div>
+                  <div className="info-card-body" style={{ padding: "14px 16px" }}>
+                    <div className="info-line" style={{ display: "flex", justifyContent: "space-between", padding: "4px 0", fontSize: "13px" }}>
+                      <span className="label" style={{ color: "#64748b" }}>{t("customer")}</span>
+                      <span className="value" style={{ fontWeight: 600, color: "#1e293b" }}>{sale.customer?.name || t("walkin")}</span>
+                    </div>
+                    {sale.customer?.phone && (
+                      <div className="info-line" style={{ display: "flex", justifyContent: "space-between", padding: "4px 0", fontSize: "13px" }}>
+                        <span className="label" style={{ color: "#64748b" }}>{t("phone")}</span>
+                        <span className="value" style={{ fontWeight: 600, color: "#1e293b" }}>{sale.customer.phone}</span>
+                      </div>
+                    )}
+                    <div className="info-line" style={{ display: "flex", justifyContent: "space-between", padding: "4px 0", fontSize: "13px" }}>
+                      <span className="label" style={{ color: "#64748b" }}>{t("soldBy")}</span>
+                      <span className="value" style={{ fontWeight: 600, color: "#1e293b" }}>{sale.createdBy?.firstName} {sale.createdBy?.lastName}</span>
+                    </div>
                   </div>
                 </div>
               </div>
-              <div className="bg-slate-50 dark:bg-slate-800/50 border rounded-lg p-4">
-                <h4 className="text-[11px] uppercase tracking-wider text-muted-foreground font-semibold mb-2">{t("customerInfo")}</h4>
-                <div className="space-y-1 text-sm">
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">{t("customer")}:</span>
-                    <span className="font-medium">{sale.customer?.name || t("walkin")}</span>
+
+              <div className="items-section" style={{ marginBottom: "24px" }}>
+                <table className="items-table" style={{ width: "100%", borderCollapse: "collapse", borderRadius: "10px", overflow: "hidden", border: "1px solid #e2e8f0" }}>
+                  <thead>
+                    <tr>
+                      <th style={{ background: "linear-gradient(135deg, #1e3a5f 0%, #0f2341 100%)", color: "white", padding: "12px 16px", fontSize: "11px", fontWeight: 700, textTransform: "uppercase", letterSpacing: "1px", textAlign: "center", width: "40px" }}>#</th>
+                      <th style={{ background: "linear-gradient(135deg, #1e3a5f 0%, #0f2341 100%)", color: "white", padding: "12px 16px", fontSize: "11px", fontWeight: 700, textTransform: "uppercase", letterSpacing: "1px", textAlign: "left" }}>{t("product")}</th>
+                      <th style={{ background: "linear-gradient(135deg, #1e3a5f 0%, #0f2341 100%)", color: "white", padding: "12px 16px", fontSize: "11px", fontWeight: 700, textTransform: "uppercase", letterSpacing: "1px", textAlign: "center" }}>{t("quantity")}</th>
+                      <th style={{ background: "linear-gradient(135deg, #1e3a5f 0%, #0f2341 100%)", color: "white", padding: "12px 16px", fontSize: "11px", fontWeight: 700, textTransform: "uppercase", letterSpacing: "1px", textAlign: "right" }}>{t("unitPrice")}</th>
+                      <th style={{ background: "linear-gradient(135deg, #1e3a5f 0%, #0f2341 100%)", color: "white", padding: "12px 16px", fontSize: "11px", fontWeight: 700, textTransform: "uppercase", letterSpacing: "1px", textAlign: "right" }}>{t("totalPrice")}</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {sale.items?.map((item, index) => (
+                      <tr key={item.id} data-testid={`invoice-item-${item.id}`} style={{ background: index % 2 === 0 ? "#ffffff" : "#f8fafc" }}>
+                        <td style={{ padding: "12px 16px", fontSize: "12px", textAlign: "center", color: "#94a3b8", borderBottom: "1px solid #f1f5f9" }}>{index + 1}</td>
+                        <td style={{ padding: "12px 16px", fontSize: "13px", fontWeight: 600, color: "#1e293b", borderBottom: "1px solid #f1f5f9" }}>{item.productName}</td>
+                        <td style={{ padding: "12px 16px", fontSize: "13px", textAlign: "center", borderBottom: "1px solid #f1f5f9" }}>{item.quantity}</td>
+                        <td style={{ padding: "12px 16px", fontSize: "13px", textAlign: "right", color: "#475569", borderBottom: "1px solid #f1f5f9" }}>{parseFloat(item.unitPrice).toFixed(2)} {sale.currency}</td>
+                        <td style={{ padding: "12px 16px", fontSize: "13px", textAlign: "right", fontWeight: 700, color: "#1e293b", borderBottom: "1px solid #f1f5f9" }}>{parseFloat(item.totalPrice).toFixed(2)} {sale.currency}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+
+              <div className="totals-section" style={{ display: "flex", justifyContent: "flex-end", marginBottom: "24px" }}>
+                <div className="totals-box" style={{ width: "320px", border: "1px solid #e2e8f0", borderRadius: "10px", overflow: "hidden" }}>
+                  <div className="total-row" style={{ display: "flex", justifyContent: "space-between", padding: "10px 18px", fontSize: "13px", borderBottom: "1px solid #f1f5f9" }}>
+                    <span style={{ color: "#64748b" }}>{t("subtotal")}</span>
+                    <span style={{ fontWeight: 600 }}>{parseFloat(sale.subtotal).toFixed(2)} {sale.currency}</span>
                   </div>
-                  {sale.customer?.phone && (
-                    <div className="flex justify-between">
-                      <span className="text-muted-foreground">{t("phone")}:</span>
-                      <span className="font-medium">{sale.customer.phone}</span>
+                  {parseFloat(sale.discount) > 0 && (
+                    <div className="total-row discount" style={{ display: "flex", justifyContent: "space-between", padding: "10px 18px", fontSize: "13px", borderBottom: "1px solid #f1f5f9" }}>
+                      <span style={{ color: "#64748b" }}>{t("discount")}</span>
+                      <span style={{ fontWeight: 600, color: "#ef4444" }}>-{parseFloat(sale.discount).toFixed(2)} {sale.currency}</span>
                     </div>
                   )}
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">{t("soldBy")}:</span>
-                    <span className="font-medium">{sale.createdBy?.firstName} {sale.createdBy?.lastName}</span>
+                  <div className="total-row grand-total" style={{ display: "flex", justifyContent: "space-between", padding: "14px 18px", background: "linear-gradient(135deg, #1e3a5f 0%, #0f2341 100%)" }}>
+                    <span style={{ color: "#93c5fd", fontWeight: 700, fontSize: "15px", textTransform: "uppercase", letterSpacing: "1px" }}>{t("total")}</span>
+                    <span style={{ color: "#fff", fontWeight: 900, fontSize: "18px" }}>{parseFloat(sale.totalAmount).toFixed(2)} {sale.currency}</span>
                   </div>
+                  <div className="total-row paid" style={{ display: "flex", justifyContent: "space-between", padding: "10px 18px", fontSize: "13px", borderBottom: "1px solid #f1f5f9" }}>
+                    <span style={{ color: "#64748b" }}>{t("paid")}</span>
+                    <span style={{ fontWeight: 700, color: "#16a34a" }}>{parseFloat(sale.amountPaid).toFixed(2)} {sale.currency}</span>
+                  </div>
+                  {parseFloat(sale.amountDue) > 0 && (
+                    <div className="total-row due" style={{ display: "flex", justifyContent: "space-between", padding: "10px 18px", fontSize: "13px", borderBottom: "1px solid #f1f5f9" }}>
+                      <span style={{ color: "#64748b" }}>{t("amountDue")}</span>
+                      <span style={{ fontWeight: 700, color: "#ea580c" }}>{parseFloat(sale.amountDue).toFixed(2)} {sale.currency}</span>
+                    </div>
+                  )}
                 </div>
               </div>
+
+              {sale.notes && (
+                <div className="notes-box" style={{ background: "#fffbeb", border: "1px solid #fde68a", borderRadius: "10px", padding: "14px 18px", marginBottom: "24px" }}>
+                  <div className="notes-title" style={{ fontSize: "10px", textTransform: "uppercase", letterSpacing: "1.5px", color: "#92400e", fontWeight: 700, marginBottom: "6px" }}>{t("notes")}</div>
+                  <p style={{ fontSize: "13px", color: "#78350f", margin: 0 }}>{sale.notes}</p>
+                </div>
+              )}
             </div>
 
-            <div className="mb-6">
-              <table className="w-full text-sm" style={{ borderCollapse: "collapse" }}>
-                <thead>
-                  <tr className="bg-blue-700 text-white">
-                    <th className="text-left py-2.5 px-3 rounded-tl-md font-semibold text-xs uppercase tracking-wider">#</th>
-                    <th className="text-left py-2.5 px-3 font-semibold text-xs uppercase tracking-wider">{t("product")}</th>
-                    <th className="text-center py-2.5 px-3 font-semibold text-xs uppercase tracking-wider">{t("quantity")}</th>
-                    <th className="text-right py-2.5 px-3 font-semibold text-xs uppercase tracking-wider">{t("unitPrice")}</th>
-                    <th className="text-right py-2.5 px-3 rounded-tr-md font-semibold text-xs uppercase tracking-wider">{t("totalPrice")}</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {sale.items?.map((item, index) => (
-                    <tr key={item.id} data-testid={`invoice-item-${item.id}`} className={index % 2 === 0 ? "bg-white dark:bg-transparent" : "bg-slate-50 dark:bg-slate-800/30"} style={{ borderBottom: "1px solid #e2e8f0" }}>
-                      <td className="py-2.5 px-3 text-muted-foreground">{index + 1}</td>
-                      <td className="py-2.5 px-3 font-medium">{item.productName}</td>
-                      <td className="py-2.5 px-3 text-center">{item.quantity}</td>
-                      <td className="py-2.5 px-3 text-right">{item.unitPrice} {sale.currency}</td>
-                      <td className="py-2.5 px-3 text-right font-semibold">{item.totalPrice} {sale.currency}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-
-            <div className="flex justify-end mb-6">
-              <div className="w-72 space-y-1">
-                <div className="flex justify-between text-sm py-1">
-                  <span className="text-muted-foreground">{t("subtotal")}</span>
-                  <span className="font-medium">{sale.subtotal} {sale.currency}</span>
-                </div>
-                {parseFloat(sale.discount) > 0 && (
-                  <div className="flex justify-between text-sm py-1 text-red-600">
-                    <span>{t("discount")}</span>
-                    <span>-{sale.discount} {sale.currency}</span>
-                  </div>
-                )}
-                <div className="flex justify-between py-2 mt-1 font-extrabold text-lg text-blue-700" style={{ borderTop: "2px solid #1e40af" }}>
-                  <span>{t("total")}</span>
-                  <span>{sale.totalAmount} {sale.currency}</span>
-                </div>
-                <div className="flex justify-between text-sm py-1 text-green-600 font-semibold">
-                  <span>{t("paid")}</span>
-                  <span>{sale.amountPaid} {sale.currency}</span>
-                </div>
-                {parseFloat(sale.amountDue) > 0 && (
-                  <div className="flex justify-between text-sm py-1 text-orange-600 font-bold">
-                    <span>{t("amountDue")}</span>
-                    <span>{sale.amountDue} {sale.currency}</span>
-                  </div>
-                )}
-                <div className="flex justify-between text-sm py-1 text-green-700 font-semibold" style={{ borderTop: "1px solid #e2e8f0" }}>
-                  <span>{t("profit")}</span>
-                  <span>{profit.toFixed(2)} {sale.currency}</span>
-                </div>
-              </div>
-            </div>
-
-            {sale.notes && (
-              <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg p-4 mb-6">
-                <p className="text-[11px] uppercase tracking-wider text-amber-700 dark:text-amber-400 font-semibold mb-1">{t("notes")}</p>
-                <p className="text-sm text-amber-900 dark:text-amber-300">{sale.notes}</p>
-              </div>
-            )}
-
-            <div className="text-center pt-5" style={{ borderTop: "2px solid #e2e8f0" }}>
-              <p className="text-sm font-bold text-blue-700 mb-1">{t("thankYou")}</p>
-              <p className="text-xs text-muted-foreground">MD CARS - Car Accessories & Parts</p>
+            <div className="invoice-footer" style={{ textAlign: "center", padding: "20px 35px", borderTop: "1px solid #e2e8f0", background: "#f8fafc" }}>
+              <p className="footer-thank" style={{ fontSize: "16px", fontWeight: 800, color: "#1e3a5f", marginBottom: "4px" }}>{t("thankYou")}</p>
+              <p className="footer-company" style={{ fontSize: "12px", color: "#64748b", letterSpacing: "1px", margin: 0 }}>MD CARS - Car Accessories & Parts</p>
+              <div className="footer-line" style={{ width: "60px", height: "3px", background: "linear-gradient(90deg, #2563eb, #60a5fa)", margin: "10px auto 0", borderRadius: "2px" }} />
             </div>
           </div>
         </DialogContent>
