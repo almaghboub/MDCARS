@@ -23,7 +23,9 @@ export default function Invoices() {
     queryKey: ["/api/sales"],
   });
 
-  const filteredSales = sales.filter((sale) => {
+  const nonReturnedSales = sales.filter((sale) => sale.status !== "returned");
+
+  const filteredSales = nonReturnedSales.filter((sale) => {
     const matchesSearch =
       searchQuery === "" ||
       sale.saleNumber?.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -50,7 +52,6 @@ export default function Invoices() {
     }, 0);
 
   const completedCount = filteredSales.filter((s) => s.status === "completed").length;
-  const returnedCount = filteredSales.filter((s) => s.status === "returned").length;
   const pendingCount = filteredSales.filter((s) => s.status === "pending").length;
 
   const statusColor = (status: string) => {
@@ -137,7 +138,6 @@ export default function Invoices() {
                   <SelectItem value="all">{t("allStatuses")}</SelectItem>
                   <SelectItem value="completed">{t("completed")}</SelectItem>
                   <SelectItem value="pending">{t("pending")}</SelectItem>
-                  <SelectItem value="returned">{t("returned")}</SelectItem>
                   <SelectItem value="cancelled">{t("cancelled")}</SelectItem>
                 </SelectContent>
               </Select>
@@ -215,10 +215,9 @@ export default function Invoices() {
 
           {filteredSales.length > 0 && (
             <div className="mt-4 flex items-center justify-between text-sm text-muted-foreground border-t pt-4">
-              <span>{t("showing")} {filteredSales.length} {t("invoicesOf")} {sales.length}</span>
+              <span>{t("showing")} {filteredSales.length} {t("invoicesOf")} {nonReturnedSales.length}</span>
               <div className="flex gap-4">
                 <span>{t("completed")}: {completedCount}</span>
-                <span>{t("returned")}: {returnedCount}</span>
                 <span>{t("pending")}: {pendingCount}</span>
               </div>
             </div>

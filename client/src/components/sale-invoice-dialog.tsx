@@ -30,6 +30,8 @@ export function SaleInvoiceDialog({ sale, open, onOpenChange }: SaleInvoiceDialo
       return res.json();
     },
     onSuccess: () => {
+      setShowReturnConfirm(false);
+      onOpenChange(false);
       queryClient.invalidateQueries({ queryKey: ["/api/sales"] });
       queryClient.invalidateQueries({ queryKey: ["/api/cashbox"] });
       queryClient.invalidateQueries({ queryKey: ["/api/cashbox/transactions"] });
@@ -37,17 +39,15 @@ export function SaleInvoiceDialog({ sale, open, onOpenChange }: SaleInvoiceDialo
       queryClient.invalidateQueries({ queryKey: ["/api/customers"] });
       queryClient.invalidateQueries({ queryKey: ["/api/dashboard/stats"] });
       toast({ title: t("saleReturned") });
-      setShowReturnConfirm(false);
-      onOpenChange(false);
     },
     onError: (error: any) => {
       toast({ title: "Error", description: error.message, variant: "destructive" });
     },
   });
 
-  if (!sale) return null;
+  const profit = sale?.items?.reduce((sum, item) => sum + parseFloat(item.profit || "0"), 0) || 0;
 
-  const profit = sale.items?.reduce((sum, item) => sum + parseFloat(item.profit || "0"), 0) || 0;
+  if (!sale) return null;
 
   const printStyles = `
     * { margin: 0; padding: 0; box-sizing: border-box; }
