@@ -199,7 +199,7 @@ export default function Products() {
     p.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
     p.sku.toLowerCase().includes(searchQuery.toLowerCase()) ||
     (p.barcode && p.barcode.toLowerCase().includes(searchQuery.toLowerCase()))
-  );
+  ).sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
 
   return (
     <div className="p-6 space-y-6">
@@ -444,6 +444,7 @@ export default function Products() {
             <Table>
               <TableHeader>
                 <TableRow>
+                  <TableHead className="w-12">#</TableHead>
                   <TableHead>{t("product")}</TableHead>
                   <TableHead>{t("sku")}</TableHead>
                   {canEdit && <TableHead>{t("cost")}</TableHead>}
@@ -453,8 +454,9 @@ export default function Products() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {filteredProducts.map((product) => (
+                {filteredProducts.map((product, index) => (
                   <TableRow key={product.id} data-testid={`product-row-${product.id}`}>
+                    <TableCell className="text-muted-foreground font-medium">{index + 1}</TableCell>
                     <TableCell className="font-medium">{product.name}</TableCell>
                     <TableCell>{product.sku}</TableCell>
                     {canEdit && <TableCell>{product.costPrice} LYD</TableCell>}
