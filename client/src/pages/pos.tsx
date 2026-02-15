@@ -83,35 +83,138 @@ export default function POS() {
   });
 
   const handlePrintReceipt = () => {
-    if (receiptRef.current) {
-      const printWindow = window.open('', '_blank');
-      if (printWindow) {
-        printWindow.document.write(`
-          <html><head><title>Invoice - MD CARS</title>
-          <style>
-            body { font-family: Arial, sans-serif; padding: 20px; max-width: 400px; margin: 0 auto; }
-            table { width: 100%; border-collapse: collapse; }
-            th, td { padding: 6px 4px; text-align: left; border-bottom: 1px solid #ddd; font-size: 13px; }
-            th { font-weight: bold; }
-            .text-right { text-align: right; }
-            .text-center { text-align: center; }
-            .bold { font-weight: bold; }
-            .border-top { border-top: 2px solid #000; }
-            .mb { margin-bottom: 10px; }
-            .mt { margin-top: 10px; }
-            h2 { margin: 5px 0; }
-            p { margin: 3px 0; font-size: 13px; }
-            .logo { text-align: center; margin-bottom: 10px; }
-            .logo img { height: 60px; }
-            @media print { body { padding: 0; } }
-          </style></head><body>
-          ${receiptRef.current.innerHTML}
-          <script>window.print(); window.close();</script>
-          </body></html>
-        `);
-        printWindow.document.close();
-      }
-    }
+    if (!lastSale) return;
+    const sale = lastSale;
+    const printWindow = window.open('', '_blank');
+    if (!printWindow) return;
+
+    const itemRows = sale.items?.map((item: any, i: number) => `
+      <tr style="background:${i % 2 === 0 ? '#ffffff' : '#f8fafc'}">
+        <td style="padding:10px 14px;font-size:12px;text-align:center;color:#94a3b8;border-bottom:1px solid #f1f5f9">${i + 1}</td>
+        <td style="padding:10px 14px;font-size:13px;font-weight:600;color:#1e293b;border-bottom:1px solid #f1f5f9">${item.productName}</td>
+        <td style="padding:10px 14px;font-size:13px;text-align:center;border-bottom:1px solid #f1f5f9">${item.quantity}</td>
+        <td style="padding:10px 14px;font-size:13px;text-align:right;color:#475569;border-bottom:1px solid #f1f5f9">${parseFloat(item.unitPrice).toFixed(2)} ${sale.currency}</td>
+        <td style="padding:10px 14px;font-size:13px;text-align:right;font-weight:700;color:#1e293b;border-bottom:1px solid #f1f5f9">${parseFloat(item.totalPrice).toFixed(2)} ${sale.currency}</td>
+      </tr>
+    `).join('') || '';
+
+    const discountRow = parseFloat(sale.discount) > 0 ? `
+      <div style="display:flex;justify-content:space-between;padding:10px 18px;font-size:13px;border-bottom:1px solid #f1f5f9">
+        <span style="color:#64748b">${t("discount")}</span>
+        <span style="font-weight:600;color:#ef4444">-${parseFloat(sale.discount).toFixed(2)} ${sale.currency}</span>
+      </div>` : '';
+
+    const dueRow = parseFloat(sale.amountDue) > 0 ? `
+      <div style="display:flex;justify-content:space-between;padding:10px 18px;font-size:13px">
+        <span style="color:#64748b">${t("amountDue")}</span>
+        <span style="font-weight:700;color:#ea580c">${parseFloat(sale.amountDue).toFixed(2)} ${sale.currency}</span>
+      </div>` : '';
+
+    const changeAmount = parseFloat(sale.amountPaid) - parseFloat(sale.totalAmount);
+    const changeRow = changeAmount > 0 ? `
+      <div style="display:flex;justify-content:space-between;padding:10px 18px;font-size:13px">
+        <span style="color:#64748b">${t("change")}</span>
+        <span style="font-weight:700;color:#16a34a">${changeAmount.toFixed(2)} ${sale.currency}</span>
+      </div>` : '';
+
+    const statusStyle = sale.status === 'completed' ? 'background:#dcfce7;color:#166534' : sale.status === 'returned' ? 'background:#fecaca;color:#991b1b' : 'background:#fef3c7;color:#92400e';
+    const statusLabel = sale.status === 'completed' ? t("completed") : sale.status === 'returned' ? t("returned") : t("pending");
+    const dateStr = new Date(sale.createdAt).toLocaleDateString() + ' ' + new Date(sale.createdAt).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'});
+
+    const logoUrl = new URL(logoPath, window.location.origin).href;
+
+    printWindow.document.write(`<!DOCTYPE html><html><head><title>Invoice ${sale.saleNumber} - MD CARS</title>
+    <style>
+      * { margin:0; padding:0; box-sizing:border-box; }
+      body { font-family:'Segoe UI',Tahoma,Geneva,Verdana,sans-serif; color:#1a1a2e; background:white; }
+      @media print { body { padding:0; margin:0; } @page { margin:0.4in; size:A4; } }
+    </style></head><body>
+    <div style="max-width:800px;margin:0 auto">
+      <div style="background:linear-gradient(135deg,#1e3a5f 0%,#0f2341 100%);color:white;padding:28px 32px;display:flex;justify-content:space-between;align-items:center">
+        <div style="display:flex;align-items:center;gap:14px">
+          <img src="${logoUrl}" alt="MD Cars" style="height:60px;filter:brightness(1.2)" />
+          <div>
+            <h1 style="font-size:26px;font-weight:900;letter-spacing:3px;color:#fff">MD CARS</h1>
+            <p style="font-size:11px;color:#93c5fd;letter-spacing:2px;text-transform:uppercase;margin-top:2px">Car Accessories & Parts</p>
+          </div>
+        </div>
+        <div style="text-align:right">
+          <div style="font-size:28px;font-weight:900;letter-spacing:4px;text-transform:uppercase;color:#60a5fa">${t("invoice")}</div>
+          <div style="font-size:13px;color:#93c5fd;margin-top:4px;font-weight:500">${sale.saleNumber}</div>
+          <div style="margin-top:8px"><span style="display:inline-block;padding:4px 14px;border-radius:20px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1px;${statusStyle}">${statusLabel}</span></div>
+        </div>
+      </div>
+      <div style="height:4px;background:linear-gradient(90deg,#2563eb,#60a5fa,#2563eb)"></div>
+
+      <div style="padding:24px 32px">
+        <div style="display:flex;gap:18px;margin-bottom:22px">
+          <div style="flex:1;border:1px solid #e2e8f0;border-radius:10px;overflow:hidden">
+            <div style="background:#f0f4ff;padding:9px 14px;border-bottom:1px solid #e2e8f0">
+              <h4 style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1.5px;color:#1e3a5f">${t("invoiceDetails")}</h4>
+            </div>
+            <div style="padding:12px 14px">
+              <div style="display:flex;justify-content:space-between;padding:3px 0;font-size:13px"><span style="color:#64748b">${t("date")}</span><span style="font-weight:600;color:#1e293b">${dateStr}</span></div>
+              <div style="display:flex;justify-content:space-between;padding:3px 0;font-size:13px"><span style="color:#64748b">${t("paymentMethod")}</span><span style="font-weight:600;color:#1e293b">${sale.paymentMethod === 'cash' ? t("cash") : t("partial")}</span></div>
+              <div style="display:flex;justify-content:space-between;padding:3px 0;font-size:13px"><span style="color:#64748b">${t("currency")}</span><span style="font-weight:600;color:#1e293b">${sale.currency}</span></div>
+            </div>
+          </div>
+          <div style="flex:1;border:1px solid #e2e8f0;border-radius:10px;overflow:hidden">
+            <div style="background:#f0f4ff;padding:9px 14px;border-bottom:1px solid #e2e8f0">
+              <h4 style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1.5px;color:#1e3a5f">${t("customerInfo")}</h4>
+            </div>
+            <div style="padding:12px 14px">
+              <div style="display:flex;justify-content:space-between;padding:3px 0;font-size:13px"><span style="color:#64748b">${t("customer")}</span><span style="font-weight:600;color:#1e293b">${sale.customer?.name || t("walkin")}</span></div>
+              ${sale.customer?.phone ? `<div style="display:flex;justify-content:space-between;padding:3px 0;font-size:13px"><span style="color:#64748b">${t("phone")}</span><span style="font-weight:600;color:#1e293b">${sale.customer.phone}</span></div>` : ''}
+              <div style="display:flex;justify-content:space-between;padding:3px 0;font-size:13px"><span style="color:#64748b">${t("soldBy")}</span><span style="font-weight:600;color:#1e293b">${sale.createdBy?.firstName || ''} ${sale.createdBy?.lastName || ''}</span></div>
+            </div>
+          </div>
+        </div>
+
+        <div style="margin-bottom:22px">
+          <table style="width:100%;border-collapse:collapse;border-radius:10px;overflow:hidden;border:1px solid #e2e8f0">
+            <thead>
+              <tr>
+                <th style="background:linear-gradient(135deg,#1e3a5f,#0f2341);color:white;padding:11px 14px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;text-align:center;width:36px">#</th>
+                <th style="background:linear-gradient(135deg,#1e3a5f,#0f2341);color:white;padding:11px 14px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;text-align:left">${t("product")}</th>
+                <th style="background:linear-gradient(135deg,#1e3a5f,#0f2341);color:white;padding:11px 14px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;text-align:center">${t("quantity")}</th>
+                <th style="background:linear-gradient(135deg,#1e3a5f,#0f2341);color:white;padding:11px 14px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;text-align:right">${t("unitPrice")}</th>
+                <th style="background:linear-gradient(135deg,#1e3a5f,#0f2341);color:white;padding:11px 14px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;text-align:right">${t("totalPrice")}</th>
+              </tr>
+            </thead>
+            <tbody>${itemRows}</tbody>
+          </table>
+        </div>
+
+        <div style="display:flex;justify-content:flex-end;margin-bottom:22px">
+          <div style="width:300px;border:1px solid #e2e8f0;border-radius:10px;overflow:hidden">
+            <div style="display:flex;justify-content:space-between;padding:10px 18px;font-size:13px;border-bottom:1px solid #f1f5f9">
+              <span style="color:#64748b">${t("subtotal")}</span>
+              <span style="font-weight:600">${parseFloat(sale.subtotal).toFixed(2)} ${sale.currency}</span>
+            </div>
+            ${discountRow}
+            <div style="display:flex;justify-content:space-between;padding:14px 18px;background:linear-gradient(135deg,#1e3a5f,#0f2341)">
+              <span style="color:#93c5fd;font-weight:700;font-size:15px;text-transform:uppercase;letter-spacing:1px">${t("total")}</span>
+              <span style="color:#fff;font-weight:900;font-size:18px">${parseFloat(sale.totalAmount).toFixed(2)} ${sale.currency}</span>
+            </div>
+            <div style="display:flex;justify-content:space-between;padding:10px 18px;font-size:13px;border-bottom:1px solid #f1f5f9">
+              <span style="color:#64748b">${t("paid")}</span>
+              <span style="font-weight:700;color:#16a34a">${parseFloat(sale.amountPaid).toFixed(2)} ${sale.currency}</span>
+            </div>
+            ${dueRow}
+            ${changeRow}
+          </div>
+        </div>
+      </div>
+
+      <div style="text-align:center;padding:18px 32px;border-top:1px solid #e2e8f0;background:#f8fafc">
+        <p style="font-size:16px;font-weight:800;color:#1e3a5f;margin-bottom:4px">${t("thankYou")}</p>
+        <p style="font-size:12px;color:#64748b;letter-spacing:1px">MD CARS - Car Accessories & Parts</p>
+        <div style="width:60px;height:3px;background:linear-gradient(90deg,#2563eb,#60a5fa);margin:10px auto 0;border-radius:2px"></div>
+      </div>
+    </div>
+    <script>setTimeout(function(){window.print();window.close();},400);</script>
+    </body></html>`);
+    printWindow.document.close();
   };
 
   const createCustomerMutation = useMutation({
@@ -475,105 +578,148 @@ export default function POS() {
       </Dialog>
 
       <Dialog open={isReceiptDialogOpen} onOpenChange={setIsReceiptDialogOpen}>
-        <DialogContent className="max-w-md">
-          <DialogHeader>
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto p-0 gap-0">
+          <DialogHeader className="sr-only">
             <DialogTitle>{t("invoiceReceipt")}</DialogTitle>
           </DialogHeader>
           {lastSale && (
             <>
-              <div ref={receiptRef} className="space-y-3 text-sm">
-                <div className="text-center border-b pb-3">
-                  <div className="logo">
-                    <img src={logoPath} alt="MD Cars" className="h-14 mx-auto" />
+              <div ref={receiptRef}>
+                <div style={{ background: "linear-gradient(135deg, #1e3a5f 0%, #0f2341 100%)", color: "white", padding: "24px 28px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+                    <img src={logoPath} alt="MD Cars" style={{ height: "55px", filter: "brightness(1.2)" }} />
+                    <div>
+                      <h1 style={{ fontSize: "24px", fontWeight: 900, letterSpacing: "3px", color: "#fff", margin: 0 }}>MD CARS</h1>
+                      <p style={{ fontSize: "10px", color: "#93c5fd", letterSpacing: "2px", textTransform: "uppercase", marginTop: "2px" }}>Car Accessories & Parts</p>
+                    </div>
                   </div>
-                  <h2 className="text-lg font-bold">MD CARS</h2>
-                  <p className="text-muted-foreground text-xs">Car Accessories</p>
+                  <div style={{ textAlign: "right" }}>
+                    <div style={{ fontSize: "24px", fontWeight: 900, letterSpacing: "3px", textTransform: "uppercase", color: "#60a5fa" }}>{t("invoice")}</div>
+                    <div style={{ fontSize: "12px", color: "#93c5fd", marginTop: "3px" }} data-testid="text-receipt-number">{lastSale.saleNumber}</div>
+                    <div style={{ marginTop: "6px" }}>
+                      <span style={{
+                        display: "inline-block", padding: "4px 12px", borderRadius: "20px", fontSize: "10px", fontWeight: 700, textTransform: "uppercase", letterSpacing: "1px",
+                        ...(lastSale.status === "completed" ? { background: "#dcfce7", color: "#166534" } : lastSale.status === "returned" ? { background: "#fecaca", color: "#991b1b" } : { background: "#fef3c7", color: "#92400e" })
+                      }}>
+                        {lastSale.status === "completed" ? t("completed") : lastSale.status === "returned" ? t("returned") : t("pending")}
+                      </span>
+                    </div>
+                  </div>
                 </div>
 
-                <div className="space-y-1">
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">{t("invoiceNumber")}:</span>
-                    <span className="font-bold" data-testid="text-receipt-number">{lastSale.saleNumber}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">{t("date")}:</span>
-                    <span>{new Date(lastSale.createdAt).toLocaleDateString()} {new Date(lastSale.createdAt).toLocaleTimeString()}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">{t("soldBy")}:</span>
-                    <span className="font-medium" data-testid="text-receipt-seller">
-                      {lastSale.createdBy?.firstName} {lastSale.createdBy?.lastName}
-                    </span>
-                  </div>
-                  {lastSale.customer && (
-                    <div className="flex justify-between">
-                      <span className="text-muted-foreground">{t("customer")}:</span>
-                      <span>{lastSale.customer.name}</span>
+                <div style={{ height: "3px", background: "linear-gradient(90deg, #2563eb, #60a5fa, #2563eb)" }} />
+
+                <div style={{ padding: "20px 28px" }}>
+                  <div style={{ display: "flex", gap: "16px", marginBottom: "18px" }}>
+                    <div style={{ flex: 1, border: "1px solid #e2e8f0", borderRadius: "8px", overflow: "hidden" }}>
+                      <div style={{ background: "#f0f4ff", padding: "8px 12px", borderBottom: "1px solid #e2e8f0" }}>
+                        <h4 style={{ fontSize: "10px", fontWeight: 700, textTransform: "uppercase", letterSpacing: "1.5px", color: "#1e3a5f", margin: 0 }}>{t("invoiceDetails")}</h4>
+                      </div>
+                      <div style={{ padding: "10px 12px" }}>
+                        <div style={{ display: "flex", justifyContent: "space-between", padding: "3px 0", fontSize: "12px" }}>
+                          <span style={{ color: "#64748b" }}>{t("date")}</span>
+                          <span style={{ fontWeight: 600, color: "#1e293b" }}>{new Date(lastSale.createdAt).toLocaleDateString()} {new Date(lastSale.createdAt).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'})}</span>
+                        </div>
+                        <div style={{ display: "flex", justifyContent: "space-between", padding: "3px 0", fontSize: "12px" }}>
+                          <span style={{ color: "#64748b" }}>{t("paymentMethod")}</span>
+                          <span style={{ fontWeight: 600, color: "#1e293b" }}>{lastSale.paymentMethod === "cash" ? t("cash") : t("partial")}</span>
+                        </div>
+                        <div style={{ display: "flex", justifyContent: "space-between", padding: "3px 0", fontSize: "12px" }}>
+                          <span style={{ color: "#64748b" }}>{t("currency")}</span>
+                          <span style={{ fontWeight: 600, color: "#1e293b" }}>{lastSale.currency}</span>
+                        </div>
+                      </div>
                     </div>
-                  )}
+                    <div style={{ flex: 1, border: "1px solid #e2e8f0", borderRadius: "8px", overflow: "hidden" }}>
+                      <div style={{ background: "#f0f4ff", padding: "8px 12px", borderBottom: "1px solid #e2e8f0" }}>
+                        <h4 style={{ fontSize: "10px", fontWeight: 700, textTransform: "uppercase", letterSpacing: "1.5px", color: "#1e3a5f", margin: 0 }}>{t("customerInfo")}</h4>
+                      </div>
+                      <div style={{ padding: "10px 12px" }}>
+                        <div style={{ display: "flex", justifyContent: "space-between", padding: "3px 0", fontSize: "12px" }}>
+                          <span style={{ color: "#64748b" }}>{t("customer")}</span>
+                          <span style={{ fontWeight: 600, color: "#1e293b" }}>{lastSale.customer?.name || t("walkin")}</span>
+                        </div>
+                        {lastSale.customer?.phone && (
+                          <div style={{ display: "flex", justifyContent: "space-between", padding: "3px 0", fontSize: "12px" }}>
+                            <span style={{ color: "#64748b" }}>{t("phone")}</span>
+                            <span style={{ fontWeight: 600, color: "#1e293b" }}>{lastSale.customer.phone}</span>
+                          </div>
+                        )}
+                        <div style={{ display: "flex", justifyContent: "space-between", padding: "3px 0", fontSize: "12px" }}>
+                          <span style={{ color: "#64748b" }}>{t("soldBy")}</span>
+                          <span style={{ fontWeight: 600, color: "#1e293b" }} data-testid="text-receipt-seller">{lastSale.createdBy?.firstName} {lastSale.createdBy?.lastName}</span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <table style={{ width: "100%", borderCollapse: "collapse", borderRadius: "8px", overflow: "hidden", border: "1px solid #e2e8f0", marginBottom: "18px" }}>
+                    <thead>
+                      <tr>
+                        <th style={{ background: "linear-gradient(135deg, #1e3a5f, #0f2341)", color: "white", padding: "10px 12px", fontSize: "10px", fontWeight: 700, textTransform: "uppercase", letterSpacing: "1px", textAlign: "center", width: "32px" }}>#</th>
+                        <th style={{ background: "linear-gradient(135deg, #1e3a5f, #0f2341)", color: "white", padding: "10px 12px", fontSize: "10px", fontWeight: 700, textTransform: "uppercase", letterSpacing: "1px", textAlign: "left" }}>{t("product")}</th>
+                        <th style={{ background: "linear-gradient(135deg, #1e3a5f, #0f2341)", color: "white", padding: "10px 12px", fontSize: "10px", fontWeight: 700, textTransform: "uppercase", letterSpacing: "1px", textAlign: "center" }}>{t("quantity")}</th>
+                        <th style={{ background: "linear-gradient(135deg, #1e3a5f, #0f2341)", color: "white", padding: "10px 12px", fontSize: "10px", fontWeight: 700, textTransform: "uppercase", letterSpacing: "1px", textAlign: "right" }}>{t("unitPrice")}</th>
+                        <th style={{ background: "linear-gradient(135deg, #1e3a5f, #0f2341)", color: "white", padding: "10px 12px", fontSize: "10px", fontWeight: 700, textTransform: "uppercase", letterSpacing: "1px", textAlign: "right" }}>{t("totalPrice")}</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {lastSale.items?.map((item: any, idx: number) => (
+                        <tr key={idx} style={{ background: idx % 2 === 0 ? "#ffffff" : "#f8fafc" }}>
+                          <td style={{ padding: "9px 12px", fontSize: "11px", textAlign: "center", color: "#94a3b8", borderBottom: "1px solid #f1f5f9" }}>{idx + 1}</td>
+                          <td style={{ padding: "9px 12px", fontSize: "12px", fontWeight: 600, color: "#1e293b", borderBottom: "1px solid #f1f5f9" }}>{item.productName}</td>
+                          <td style={{ padding: "9px 12px", fontSize: "12px", textAlign: "center", borderBottom: "1px solid #f1f5f9" }}>{item.quantity}</td>
+                          <td style={{ padding: "9px 12px", fontSize: "12px", textAlign: "right", color: "#475569", borderBottom: "1px solid #f1f5f9" }}>{parseFloat(item.unitPrice).toFixed(2)} {lastSale.currency}</td>
+                          <td style={{ padding: "9px 12px", fontSize: "12px", textAlign: "right", fontWeight: 700, color: "#1e293b", borderBottom: "1px solid #f1f5f9" }}>{parseFloat(item.totalPrice).toFixed(2)} {lastSale.currency}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+
+                  <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: "18px" }}>
+                    <div style={{ width: "280px", border: "1px solid #e2e8f0", borderRadius: "8px", overflow: "hidden" }}>
+                      <div style={{ display: "flex", justifyContent: "space-between", padding: "9px 16px", fontSize: "12px", borderBottom: "1px solid #f1f5f9" }}>
+                        <span style={{ color: "#64748b" }}>{t("subtotal")}</span>
+                        <span style={{ fontWeight: 600 }}>{parseFloat(lastSale.subtotal).toFixed(2)} {lastSale.currency}</span>
+                      </div>
+                      {parseFloat(lastSale.discount) > 0 && (
+                        <div style={{ display: "flex", justifyContent: "space-between", padding: "9px 16px", fontSize: "12px", borderBottom: "1px solid #f1f5f9" }}>
+                          <span style={{ color: "#64748b" }}>{t("discount")}</span>
+                          <span style={{ fontWeight: 600, color: "#ef4444" }}>-{parseFloat(lastSale.discount).toFixed(2)} {lastSale.currency}</span>
+                        </div>
+                      )}
+                      <div style={{ display: "flex", justifyContent: "space-between", padding: "12px 16px", background: "linear-gradient(135deg, #1e3a5f, #0f2341)" }}>
+                        <span style={{ color: "#93c5fd", fontWeight: 700, fontSize: "14px", textTransform: "uppercase", letterSpacing: "1px" }}>{t("total")}</span>
+                        <span style={{ color: "#fff", fontWeight: 900, fontSize: "16px" }}>{parseFloat(lastSale.totalAmount).toFixed(2)} {lastSale.currency}</span>
+                      </div>
+                      <div style={{ display: "flex", justifyContent: "space-between", padding: "9px 16px", fontSize: "12px", borderBottom: "1px solid #f1f5f9" }}>
+                        <span style={{ color: "#64748b" }}>{t("paid")}</span>
+                        <span style={{ fontWeight: 700, color: "#16a34a" }}>{parseFloat(lastSale.amountPaid).toFixed(2)} {lastSale.currency}</span>
+                      </div>
+                      {parseFloat(lastSale.amountDue) > 0 && (
+                        <div style={{ display: "flex", justifyContent: "space-between", padding: "9px 16px", fontSize: "12px" }}>
+                          <span style={{ color: "#64748b" }}>{t("amountDue")}</span>
+                          <span style={{ fontWeight: 700, color: "#ea580c" }}>{parseFloat(lastSale.amountDue).toFixed(2)} {lastSale.currency}</span>
+                        </div>
+                      )}
+                      {parseFloat(lastSale.amountPaid) > parseFloat(lastSale.totalAmount) && (
+                        <div style={{ display: "flex", justifyContent: "space-between", padding: "9px 16px", fontSize: "12px" }}>
+                          <span style={{ color: "#64748b" }}>{t("change")}</span>
+                          <span style={{ fontWeight: 700, color: "#16a34a" }}>{(parseFloat(lastSale.amountPaid) - parseFloat(lastSale.totalAmount)).toFixed(2)} {lastSale.currency}</span>
+                        </div>
+                      )}
+                    </div>
+                  </div>
                 </div>
 
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead className="text-xs">{t("item")}</TableHead>
-                      <TableHead className="text-xs text-center">{t("quantity")}</TableHead>
-                      <TableHead className="text-xs text-right">{t("price")}</TableHead>
-                      <TableHead className="text-xs text-right">{t("total")}</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {lastSale.items?.map((item: any, idx: number) => (
-                      <TableRow key={idx}>
-                        <TableCell className="text-xs py-1">{item.productName}</TableCell>
-                        <TableCell className="text-xs text-center py-1">{item.quantity}</TableCell>
-                        <TableCell className="text-xs text-right py-1">{parseFloat(item.unitPrice).toFixed(2)}</TableCell>
-                        <TableCell className="text-xs text-right py-1">{parseFloat(item.totalPrice).toFixed(2)}</TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-
-                <div className="border-t pt-2 space-y-1">
-                  <div className="flex justify-between">
-                    <span>{t("subtotal")}:</span>
-                    <span>{parseFloat(lastSale.subtotal).toFixed(2)} {lastSale.currency}</span>
-                  </div>
-                  {parseFloat(lastSale.discount) > 0 && (
-                    <div className="flex justify-between text-destructive">
-                      <span>{t("discount")}:</span>
-                      <span>-{parseFloat(lastSale.discount).toFixed(2)} {lastSale.currency}</span>
-                    </div>
-                  )}
-                  <div className="flex justify-between font-bold text-base border-t pt-1">
-                    <span>{t("total")}:</span>
-                    <span>{parseFloat(lastSale.totalAmount).toFixed(2)} {lastSale.currency}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span>{t("paid")}:</span>
-                    <span>{parseFloat(lastSale.amountPaid).toFixed(2)} {lastSale.currency}</span>
-                  </div>
-                  {parseFloat(lastSale.amountDue) > 0 && (
-                    <div className="flex justify-between text-destructive font-medium">
-                      <span>{t("amountDue")}:</span>
-                      <span>{parseFloat(lastSale.amountDue).toFixed(2)} {lastSale.currency}</span>
-                    </div>
-                  )}
-                  {parseFloat(lastSale.amountPaid) > parseFloat(lastSale.totalAmount) && (
-                    <div className="flex justify-between text-green-600 font-medium">
-                      <span>{t("change")}:</span>
-                      <span>{(parseFloat(lastSale.amountPaid) - parseFloat(lastSale.totalAmount)).toFixed(2)} {lastSale.currency}</span>
-                    </div>
-                  )}
-                </div>
-
-                <div className="text-center border-t pt-2 text-xs text-muted-foreground">
-                  <p>{t("thankYou")}</p>
-                  <p>MD CARS - Car Accessories</p>
+                <div style={{ textAlign: "center", padding: "16px 28px", borderTop: "1px solid #e2e8f0", background: "#f8fafc" }}>
+                  <p style={{ fontSize: "14px", fontWeight: 800, color: "#1e3a5f", marginBottom: "3px" }}>{t("thankYou")}</p>
+                  <p style={{ fontSize: "11px", color: "#64748b", letterSpacing: "1px", margin: 0 }}>MD CARS - Car Accessories & Parts</p>
+                  <div style={{ width: "50px", height: "3px", background: "linear-gradient(90deg, #2563eb, #60a5fa)", margin: "8px auto 0", borderRadius: "2px" }} />
                 </div>
               </div>
 
-              <div className="flex gap-2 mt-2">
+              <div className="flex gap-2 p-4 border-t">
                 <Button onClick={handlePrintReceipt} className="flex-1" data-testid="button-print-receipt">
                   <Printer className="w-4 h-4 mr-2" />
                   {t("printInvoice")}
