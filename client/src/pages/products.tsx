@@ -9,6 +9,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
@@ -25,6 +26,10 @@ const productFormSchema = z.object({
   description: z.string().optional(),
   lowStockThreshold: z.number().min(0).default(5),
   currentStock: z.number().min(0).default(0),
+  purchaseType: z.enum(["cash", "credit"]).default("cash"),
+  stockCurrency: z.enum(["LYD", "USD"]).default("LYD"),
+  supplierName: z.string().optional(),
+  invoiceNumber: z.string().optional(),
 });
 
 type ProductFormData = z.infer<typeof productFormSchema>;
@@ -60,6 +65,10 @@ export default function Products() {
       description: "",
       lowStockThreshold: 5,
       currentStock: 0,
+      purchaseType: "cash",
+      stockCurrency: "LYD",
+      supplierName: "",
+      invoiceNumber: "",
     },
   });
 
@@ -75,6 +84,10 @@ export default function Products() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/products"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/cashbox"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/cashbox/transactions"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/supplier-payables"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/stock-movements"] });
       toast({ title: t("productCreated") });
       setIsProductDialogOpen(false);
       productForm.reset();
@@ -330,6 +343,63 @@ export default function Products() {
                       </FormItem>
                     )} />
                   </div>
+                  {!editingProduct && productForm.watch("currentStock") > 0 && (
+                    <div className="border rounded-lg p-4 space-y-3 bg-muted/30">
+                      <p className="text-sm font-medium text-muted-foreground">{t("purchaseType")}</p>
+                      <div className="grid grid-cols-2 gap-4">
+                        <FormField control={productForm.control} name="purchaseType" render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>{t("purchaseType")}</FormLabel>
+                            <Select onValueChange={field.onChange} value={field.value}>
+                              <FormControl>
+                                <SelectTrigger data-testid="select-purchase-type">
+                                  <SelectValue />
+                                </SelectTrigger>
+                              </FormControl>
+                              <SelectContent>
+                                <SelectItem value="cash">{t("paidNow")}</SelectItem>
+                                <SelectItem value="credit">{t("onCredit")}</SelectItem>
+                              </SelectContent>
+                            </Select>
+                            <FormMessage />
+                          </FormItem>
+                        )} />
+                        <FormField control={productForm.control} name="stockCurrency" render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>{t("currency")}</FormLabel>
+                            <Select onValueChange={field.onChange} value={field.value}>
+                              <FormControl>
+                                <SelectTrigger data-testid="select-stock-currency">
+                                  <SelectValue />
+                                </SelectTrigger>
+                              </FormControl>
+                              <SelectContent>
+                                <SelectItem value="LYD">LYD</SelectItem>
+                                <SelectItem value="USD">USD</SelectItem>
+                              </SelectContent>
+                            </Select>
+                            <FormMessage />
+                          </FormItem>
+                        )} />
+                      </div>
+                      <div className="grid grid-cols-2 gap-4">
+                        <FormField control={productForm.control} name="supplierName" render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>{t("supplierName")}</FormLabel>
+                            <FormControl><Input {...field} placeholder={t("optional")} data-testid="input-supplier-name" /></FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )} />
+                        <FormField control={productForm.control} name="invoiceNumber" render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>{t("invoiceNumber")}</FormLabel>
+                            <FormControl><Input {...field} placeholder={t("optional")} data-testid="input-invoice-number" /></FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )} />
+                      </div>
+                    </div>
+                  )}
                   <FormField control={productForm.control} name="description" render={({ field }) => (
                     <FormItem>
                       <FormLabel>{t("description")}</FormLabel>

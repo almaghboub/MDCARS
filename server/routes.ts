@@ -191,8 +191,62 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return !isNaN(num) && num > max ? num : max;
       }, 0);
       const nextSku = String(maxSku + 1);
-      const data = insertProductSchema.parse({ ...req.body, sku: nextSku });
-      res.json(await storage.createProduct(data));
+      const { purchaseType, stockCurrency, supplierName, invoiceNumber, ...productFields } = req.body;
+      const data = insertProductSchema.parse({ ...productFields, sku: nextSku });
+      const product = await storage.createProduct(data);
+
+      const initialStock = data.currentStock || 0;
+      const costPrice = parseFloat(data.costPrice || "0");
+      if (initialStock > 0 && costPrice > 0 && !isNaN(costPrice)) {
+        const effectivePurchaseType = purchaseType && ["cash", "credit"].includes(purchaseType) ? purchaseType : "cash";
+        const effectiveCurrency = stockCurrency && ["LYD", "USD"].includes(stockCurrency) ? stockCurrency : "LYD";
+        const totalCost = (costPrice * initialStock).toFixed(2);
+
+        const movement = await storage.createStockMovement({
+          productId: product.id,
+          type: "in",
+          quantity: initialStock,
+          previousStock: 0,
+          newStock: initialStock,
+          costPerUnit: String(costPrice),
+          reason: "Initial stock",
+          purchaseType: effectivePurchaseType,
+          currency: effectiveCurrency,
+          supplierName: supplierName || null,
+          invoiceNumber: invoiceNumber || null,
+          createdByUserId: (req.user as any).id,
+        });
+
+        if (effectivePurchaseType === "cash") {
+          const box = await storage.getCashbox();
+          if (box) {
+            const amountUSD = effectiveCurrency === "USD" ? totalCost : "0";
+            const amountLYD = effectiveCurrency === "LYD" ? totalCost : "0";
+            await storage.updateCashboxBalance(amountUSD, amountLYD, false);
+            await storage.createCashboxTransaction({
+              cashboxId: box.id,
+              type: "purchase",
+              amountUSD,
+              amountLYD,
+              description: `Initial stock: ${product.name} x${initialStock} @ ${costPrice} ${effectiveCurrency}${supplierName ? ` from ${supplierName}` : ""}${invoiceNumber ? ` (Inv# ${invoiceNumber})` : ""}`,
+              referenceType: "stock_movement",
+              referenceId: movement.id,
+              createdByUserId: (req.user as any).id,
+            });
+          }
+        } else if (effectivePurchaseType === "credit") {
+          await storage.createSupplierPayable({
+            supplierName: supplierName || "Unknown Supplier",
+            amount: totalCost,
+            currency: effectiveCurrency,
+            description: `Initial stock: ${product.name} x${initialStock} @ ${costPrice} ${effectiveCurrency}${invoiceNumber ? ` (Inv# ${invoiceNumber})` : ""}`,
+            stockMovementId: movement.id,
+            createdByUserId: (req.user as any).id,
+          });
+        }
+      }
+
+      res.json(product);
     } catch (err: any) { res.status(400).json({ message: err.message }); }
   });
 
