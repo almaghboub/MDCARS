@@ -7,10 +7,11 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { useToast } from "@/hooks/use-toast";
 import { useI18n } from "@/lib/i18n";
 import { queryClient, apiRequest } from "@/lib/queryClient";
-import { Printer, RotateCcw, X } from "lucide-react";
+import { Printer, RotateCcw, X, Pencil } from "lucide-react";
 import { format } from "date-fns";
 import type { SaleWithDetails } from "@shared/schema";
 import logoPath from "@assets/MD-removebg-preview_1770139105370.png";
+import { EditInvoiceDialog } from "./edit-invoice-dialog";
 
 interface SaleInvoiceDialogProps {
   sale: SaleWithDetails | null;
@@ -22,6 +23,7 @@ export function SaleInvoiceDialog({ sale, open, onOpenChange }: SaleInvoiceDialo
   const { t } = useI18n();
   const { toast } = useToast();
   const [showReturnConfirm, setShowReturnConfirm] = useState(false);
+  const [showEditDialog, setShowEditDialog] = useState(false);
   const invoiceRef = useRef<HTMLDivElement>(null);
 
   const returnMutation = useMutation({
@@ -202,16 +204,27 @@ export function SaleInvoiceDialog({ sale, open, onOpenChange }: SaleInvoiceDialo
                 {t("printInvoice")}
               </Button>
               {sale.status === "completed" && (
-                <Button
-                  variant="destructive"
-                  size="sm"
-                  onClick={() => setShowReturnConfirm(true)}
-                  disabled={returnMutation.isPending}
-                  data-testid="button-return-sale"
-                >
-                  <RotateCcw className="w-4 h-4 mr-2" />
-                  {returnMutation.isPending ? t("returnProcessing") : t("returnSale")}
-                </Button>
+                <>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setShowEditDialog(true)}
+                    data-testid="button-edit-invoice"
+                  >
+                    <Pencil className="w-4 h-4 mr-2" />
+                    {t("editInvoice")}
+                  </Button>
+                  <Button
+                    variant="destructive"
+                    size="sm"
+                    onClick={() => setShowReturnConfirm(true)}
+                    disabled={returnMutation.isPending}
+                    data-testid="button-return-sale"
+                  >
+                    <RotateCcw className="w-4 h-4 mr-2" />
+                    {returnMutation.isPending ? t("returnProcessing") : t("returnSale")}
+                  </Button>
+                </>
               )}
               <Button variant="ghost" size="sm" onClick={() => onOpenChange(false)}>
                 <X className="w-4 h-4" />
@@ -371,6 +384,8 @@ export function SaleInvoiceDialog({ sale, open, onOpenChange }: SaleInvoiceDialo
           </div>
         </DialogContent>
       </Dialog>
+
+      {sale && <EditInvoiceDialog sale={sale} open={showEditDialog} onOpenChange={setShowEditDialog} />}
 
       <AlertDialog open={showReturnConfirm} onOpenChange={setShowReturnConfirm}>
         <AlertDialogContent>

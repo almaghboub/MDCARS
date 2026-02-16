@@ -67,6 +67,7 @@ export interface IStorage {
   createSale(sale: InsertSale, items: InsertSaleItem[]): Promise<SaleWithDetails>;
   updateSaleStatus(id: string, status: string): Promise<Sale | undefined>;
   returnSale(id: string, userId: string): Promise<SaleWithDetails | undefined>;
+  editSale(id: string, returnItemIds: string[], newItems: InsertSaleItem[], userId: string): Promise<SaleWithDetails | undefined>;
   deleteSale(id: string): Promise<boolean>;
   getNextSaleNumber(): Promise<string>;
 
@@ -443,6 +444,141 @@ export class DatabaseStorage implements IStorage {
       if (customer) {
         const newTotal = Math.max(0, parseFloat(customer.totalPurchases) - parseFloat(sale.totalAmount));
         await this.updateCustomer(sale.customerId, { totalPurchases: newTotal.toFixed(2) });
+      }
+    }
+
+    return this.getSale(id);
+  }
+
+  async editSale(id: string, returnItemIds: string[], newItems: InsertSaleItem[], userId: string): Promise<SaleWithDetails | undefined> {
+    const sale = await this.getSale(id);
+    if (!sale) return undefined;
+    if (sale.status !== "completed") return undefined;
+
+    const returnedItems = sale.items.filter(item => returnItemIds.includes(item.id));
+    const keptItems = sale.items.filter(item => !returnItemIds.includes(item.id));
+
+    for (const item of returnedItems) {
+      const [product] = await db.select().from(products).where(eq(products.id, item.productId));
+      if (product) {
+        const newStock = product.currentStock + item.quantity;
+        await db.update(products).set({ currentStock: newStock, updatedAt: new Date() }).where(eq(products.id, item.productId));
+        await db.insert(stockMovements).values({
+          productId: item.productId,
+          type: "in",
+          quantity: item.quantity,
+          previousStock: product.currentStock,
+          newStock,
+          reason: `Edit return - Sale ${sale.saleNumber}`,
+          referenceType: "sale_edit",
+          referenceId: sale.id,
+          createdByUserId: userId,
+        });
+      }
+      await db.delete(saleItems).where(eq(saleItems.id, item.id));
+    }
+
+    const stockNeeded = new Map<string, number>();
+    for (const item of newItems) {
+      stockNeeded.set(item.productId, (stockNeeded.get(item.productId) || 0) + item.quantity);
+    }
+    for (const [productId, qty] of stockNeeded.entries()) {
+      const [product] = await db.select().from(products).where(eq(products.id, productId));
+      if (!product || product.currentStock < qty) {
+        throw new Error(`Insufficient stock for product ${product?.name || productId}`);
+      }
+    }
+
+    const createdNewItems: SaleItem[] = [];
+    for (const item of newItems) {
+      const [saleItem] = await db.insert(saleItems).values({ ...item, saleId: sale.id }).returning();
+      createdNewItems.push(saleItem);
+      const [product] = await db.select().from(products).where(eq(products.id, item.productId));
+      if (product) {
+        const newStock = product.currentStock - item.quantity;
+        await db.update(products).set({ currentStock: newStock, updatedAt: new Date() }).where(eq(products.id, item.productId));
+        await db.insert(stockMovements).values({
+          productId: item.productId,
+          type: "out",
+          quantity: item.quantity,
+          previousStock: product.currentStock,
+          newStock,
+          reason: `Edit add - Sale ${sale.saleNumber}`,
+          referenceType: "sale_edit",
+          referenceId: sale.id,
+          createdByUserId: userId,
+        });
+      }
+    }
+
+    const allItems = [...keptItems, ...createdNewItems];
+    const newSubtotal = allItems.reduce((sum, item) => sum + parseFloat(item.totalPrice), 0);
+    const oldSubtotal = parseFloat(sale.subtotal);
+    const discountRatio = oldSubtotal > 0 ? parseFloat(sale.discount) / oldSubtotal : 0;
+    const newDiscount = (newSubtotal * discountRatio).toFixed(2);
+    const newTotalAmount = (newSubtotal - parseFloat(newDiscount)).toFixed(2);
+    const oldAmountPaid = parseFloat(sale.amountPaid);
+    const newTotal = parseFloat(newTotalAmount);
+    let finalAmountPaid = oldAmountPaid;
+    let finalAmountDue = 0;
+    let cashboxDelta = 0;
+
+    if (newTotal <= oldAmountPaid) {
+      finalAmountPaid = newTotal;
+      finalAmountDue = 0;
+      cashboxDelta = -(oldAmountPaid - newTotal);
+    } else {
+      if (sale.paymentMethod === "cash") {
+        finalAmountPaid = newTotal;
+        finalAmountDue = 0;
+        cashboxDelta = newTotal - oldAmountPaid;
+      } else {
+        finalAmountPaid = oldAmountPaid;
+        finalAmountDue = newTotal - oldAmountPaid;
+      }
+    }
+
+    await db.update(sales).set({
+      subtotal: newSubtotal.toFixed(2),
+      discount: newDiscount,
+      totalAmount: newTotalAmount,
+      amountPaid: finalAmountPaid.toFixed(2),
+      amountDue: finalAmountDue.toFixed(2),
+    }).where(eq(sales.id, id));
+
+    if (cashboxDelta !== 0) {
+      const isIncrease = cashboxDelta > 0;
+      const absAmount = Math.abs(cashboxDelta).toFixed(2);
+      const amountUSD = sale.currency === "USD" ? absAmount : "0";
+      const amountLYD = sale.currency === "LYD" ? absAmount : "0";
+      await this.updateCashboxBalance(amountUSD, amountLYD, isIncrease);
+      const box = await this.getCashbox();
+      if (box) {
+        await this.createCashboxTransaction({
+          cashboxId: box.id,
+          type: isIncrease ? "sale" : "refund",
+          amountUSD,
+          amountLYD,
+          exchangeRate: sale.exchangeRate,
+          description: isIncrease ? `Edit charge - Sale ${sale.saleNumber}` : `Edit refund - Sale ${sale.saleNumber}`,
+          referenceType: "sale_edit",
+          referenceId: sale.id,
+          createdByUserId: userId,
+        });
+      }
+    }
+
+    if (sale.customerId) {
+      const oldDue = parseFloat(sale.amountDue);
+      const dueDelta = finalAmountDue - oldDue;
+      if (dueDelta !== 0) {
+        await this.updateCustomerBalance(sale.customerId, Math.abs(dueDelta).toFixed(2), dueDelta > 0);
+      }
+      const customer = await this.getCustomer(sale.customerId);
+      if (customer) {
+        const totalDelta = newTotal - parseFloat(sale.totalAmount);
+        const updatedPurchases = Math.max(0, parseFloat(customer.totalPurchases) + totalDelta);
+        await this.updateCustomer(sale.customerId, { totalPurchases: updatedPurchases.toFixed(2) });
       }
     }
 

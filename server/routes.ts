@@ -395,6 +395,28 @@ export async function registerRoutes(app: Express): Promise<Server> {
     res.json(sale);
   });
 
+  app.post("/api/sales/:id/edit", requireSalesAccess, async (req, res) => {
+    try {
+      const { returnItemIds = [], newItems = [] } = req.body;
+      if (!Array.isArray(returnItemIds) || !Array.isArray(newItems)) {
+        return res.status(400).json({ message: "Invalid request format" });
+      }
+      const validatedNewItems = newItems.map((item: any) => ({
+        productId: String(item.productId),
+        productName: String(item.productName || ""),
+        productSku: String(item.productSku || ""),
+        quantity: parseInt(String(item.quantity)) || 1,
+        unitPrice: String(parseFloat(String(item.unitPrice)) || 0),
+        costPrice: String(parseFloat(String(item.costPrice)) || 0),
+        totalPrice: String(parseFloat(String(item.totalPrice)) || 0),
+        profit: String(parseFloat(String(item.profit)) || 0),
+      }));
+      const sale = await storage.editSale(req.params.id, returnItemIds, validatedNewItems, (req.user as any).id);
+      if (!sale) return res.status(400).json({ message: "Sale not found or cannot be edited" });
+      res.json(sale);
+    } catch (err: any) { res.status(400).json({ message: err.message }); }
+  });
+
   app.post("/api/sales/:id/return", requireSalesAccess, async (req, res) => {
     try {
       const sale = await storage.returnSale(req.params.id, (req.user as any).id);
