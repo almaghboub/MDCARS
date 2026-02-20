@@ -259,9 +259,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
 
       if (type === "in" && costPerUnit && quantity > 0) {
-        const totalCost = (parseFloat(costPerUnit) * quantity).toFixed(2);
+        const newCostPerUnit = parseFloat(costPerUnit);
+        const totalCost = (newCostPerUnit * quantity).toFixed(2);
         const effectiveCurrency = currency || "LYD";
         const effectivePurchaseType = purchaseType || "cash";
+
+        const oldCostPrice = parseFloat(product.costPrice || "0");
+        if (previousStock > 0 && oldCostPrice > 0 && newCostPerUnit !== oldCostPrice) {
+          const weightedAvgCost = ((oldCostPrice * previousStock) + (newCostPerUnit * quantity)) / (previousStock + quantity);
+          await storage.updateProduct(id, { costPrice: weightedAvgCost.toFixed(2) });
+        } else if (previousStock === 0 || oldCostPrice === 0) {
+          await storage.updateProduct(id, { costPrice: newCostPerUnit.toFixed(2) });
+        }
 
         if (effectivePurchaseType === "credit") {
           await storage.createSupplierPayable({
