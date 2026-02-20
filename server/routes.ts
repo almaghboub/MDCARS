@@ -662,13 +662,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.get("/api/goods-capital", requireAuth, async (req, res) => {
     const products = await storage.getAllProducts();
-    let totalCapitalLYD = 0;
+    let totalCostCapital = 0;
+    let totalSellingCapital = 0;
     for (const p of products) {
       const cost = parseFloat(p.costPrice || "0");
+      const selling = parseFloat(p.sellingPrice || "0");
       const stock = p.currentStock || 0;
-      totalCapitalLYD += cost * stock;
+      totalCostCapital += cost * stock;
+      totalSellingCapital += selling * stock;
     }
-    res.json({ totalCapitalLYD: totalCapitalLYD.toFixed(2) });
+    res.json({
+      totalCapitalLYD: totalCostCapital.toFixed(2),
+      totalCostPrice: totalCostCapital.toFixed(2),
+      totalSellingPrice: totalSellingCapital.toFixed(2),
+    });
   });
 
   app.get("/api/dashboard/stats", requireAuth, async (req, res) => {

@@ -98,7 +98,7 @@ export default function Finance() {
     queryKey: ["/api/partner-transactions"],
   });
 
-  const { data: goodsCapitalData } = useQuery<{ totalCapitalLYD: string }>({
+  const { data: goodsCapitalData } = useQuery<{ totalCapitalLYD: string; totalCostPrice: string; totalSellingPrice: string }>({
     queryKey: ["/api/goods-capital"],
   });
 
@@ -338,7 +338,7 @@ export default function Finance() {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-6 gap-4">
         <Card>
           <CardContent className="p-6">
             <div className="flex items-center justify-between">
@@ -367,9 +367,9 @@ export default function Finance() {
           <CardContent className="p-6">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-muted-foreground">{t("goodsCapital")}</p>
-                <p className="text-2xl font-bold text-orange-600" data-testid="text-goods-capital">
-                  {goodsCapitalData?.totalCapitalLYD || "0.00"} LYD
+                <p className="text-sm text-muted-foreground">{t("totalCostPrice")}</p>
+                <p className="text-2xl font-bold text-orange-600" data-testid="text-total-cost">
+                  {goodsCapitalData?.totalCostPrice || "0.00"} LYD
                 </p>
               </div>
               <ShoppingCart className="w-8 h-8 text-orange-500" />
@@ -381,12 +381,26 @@ export default function Finance() {
           <CardContent className="p-6">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-muted-foreground">Net (Rev - Exp)</p>
-                <p className={`text-2xl font-bold ${totalRevenues - totalExpenses >= 0 ? 'text-green-500' : 'text-destructive'}`} data-testid="text-net">
-                  {(totalRevenues - totalExpenses).toFixed(2)} LYD
+                <p className="text-sm text-muted-foreground">{t("totalSellingPrice")}</p>
+                <p className="text-2xl font-bold text-green-600" data-testid="text-total-selling">
+                  {goodsCapitalData?.totalSellingPrice || "0.00"} LYD
                 </p>
               </div>
-              <TrendingUp className="w-8 h-8 text-blue-500" />
+              <TrendingUp className="w-8 h-8 text-green-500" />
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardContent className="p-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-muted-foreground">{t("expectedProfit")}</p>
+                <p className="text-2xl font-bold text-blue-600" data-testid="text-expected-profit">
+                  {((parseFloat(goodsCapitalData?.totalSellingPrice || "0") - parseFloat(goodsCapitalData?.totalCostPrice || "0"))).toFixed(2)} LYD
+                </p>
+              </div>
+              <PiggyBank className="w-8 h-8 text-blue-500" />
             </div>
           </CardContent>
         </Card>
