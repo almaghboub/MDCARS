@@ -17,7 +17,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useI18n } from "@/lib/i18n";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { Wallet, Plus, ArrowUpCircle, ArrowDownCircle, DollarSign, TrendingUp, Trash2, ShoppingCart, Eye, Users, Percent, PiggyBank, Edit, Handshake } from "lucide-react";
-import type { Cashbox, CashboxTransaction, Expense, Revenue, SaleWithDetails, Partner, PartnerTransaction } from "@shared/schema";
+import type { Cashbox, CashboxTransaction, Expense, Revenue, SaleWithDetails, Partner, PartnerTransaction, SupplierPayable } from "@shared/schema";
 import { format } from "date-fns";
 import { SaleInvoiceDialog } from "@/components/sale-invoice-dialog";
 
@@ -100,6 +100,10 @@ export default function Finance() {
 
   const { data: goodsCapitalData } = useQuery<{ totalCapitalLYD: string }>({
     queryKey: ["/api/goods-capital"],
+  });
+
+  const { data: supplierPayables = [] } = useQuery<SupplierPayable[]>({
+    queryKey: ["/api/supplier-payables"],
   });
 
   const expenseForm = useForm<z.infer<typeof expenseFormSchema>>({
@@ -200,6 +204,22 @@ export default function Finance() {
     },
   });
 
+  const markPayablePaidMutation = useMutation({
+    mutationFn: async (id: string) => {
+      const res = await apiRequest("POST", `/api/supplier-payables/${id}/pay`);
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/supplier-payables"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/cashbox"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/cashbox/transactions"] });
+      toast({ title: t("payableMarkedPaid") });
+    },
+    onError: (error: any) => {
+      toast({ title: t("error"), description: error.message, variant: "destructive" });
+    },
+  });
+
   const createPartnerMutation = useMutation({
     mutationFn: async (data: z.infer<typeof partnerFormSchema>) => {
       const res = await apiRequest("POST", "/api/partners", data);
@@ -280,6 +300,10 @@ export default function Finance() {
   const totalExpenses = expenses.reduce((sum, e) => sum + parseFloat(e.amount), 0);
   const totalRevenues = revenues.reduce((sum, r) => sum + parseFloat(r.amount), 0);
   const completedSales = allSales.filter(s => s.status === "completed");
+  const unpaidPayables = supplierPayables.filter(p => !p.isPaid);
+  const paidPayables = supplierPayables.filter(p => p.isPaid);
+  const totalUnpaidLYD = unpaidPayables.filter(p => p.currency === "LYD").reduce((sum, p) => sum + parseFloat(p.amount), 0);
+  const totalUnpaidUSD = unpaidPayables.filter(p => p.currency === "USD").reduce((sum, p) => sum + parseFloat(p.amount), 0);
   const totalSalesLYD = completedSales.filter(s => s.currency === "LYD").reduce((sum, s) => sum + parseFloat(s.amountPaid), 0);
   const totalSalesUSD = completedSales.filter(s => s.currency === "USD").reduce((sum, s) => sum + parseFloat(s.amountPaid), 0);
   const totalOwnership = partnersData.reduce((sum, p) => sum + parseFloat(p.ownershipPercentage), 0);
@@ -391,6 +415,10 @@ export default function Finance() {
           </TabsTrigger>
           <TabsTrigger value="expenses">{t("expenses")} ({expenses.length})</TabsTrigger>
           <TabsTrigger value="revenues">{t("revenues")} ({revenues.length})</TabsTrigger>
+          <TabsTrigger value="supplier-payables" data-testid="tab-supplier-payables">
+            <DollarSign className="w-4 h-4 mr-1" />
+            {t("supplierPayables")} ({unpaidPayables.length})
+          </TabsTrigger>
           <TabsTrigger value="store-capital" data-testid="tab-store-capital">
             <Handshake className="w-4 h-4 mr-1" />
             {t("storeCapital")}
@@ -781,6 +809,125 @@ export default function Finance() {
               )}
             </CardContent>
           </Card>
+        </TabsContent>
+
+        <TabsContent value="supplier-payables" className="space-y-4">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+            <Card>
+              <CardContent className="p-4">
+                <p className="text-sm text-muted-foreground">{t("totalUnpaid")} (LYD)</p>
+                <p className="text-xl font-bold text-red-600" data-testid="text-unpaid-lyd">{totalUnpaidLYD.toFixed(2)} LYD</p>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardContent className="p-4">
+                <p className="text-sm text-muted-foreground">{t("totalUnpaid")} (USD)</p>
+                <p className="text-xl font-bold text-red-600" data-testid="text-unpaid-usd">{totalUnpaidUSD.toFixed(2)} USD</p>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardContent className="p-4">
+                <p className="text-sm text-muted-foreground">{t("totalRecords")}</p>
+                <p className="text-xl font-bold" data-testid="text-payable-count">{unpaidPayables.length} {t("unpaid")} / {paidPayables.length} {t("paid")}</p>
+              </CardContent>
+            </Card>
+          </div>
+
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <DollarSign className="w-5 h-5" />
+                {t("unpaidSupplierDebts")}
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              {unpaidPayables.length === 0 ? (
+                <p className="text-center text-muted-foreground py-8">{t("noUnpaidDebts")}</p>
+              ) : (
+                <div className="overflow-x-auto">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>#</TableHead>
+                        <TableHead>{t("supplierName")}</TableHead>
+                        <TableHead>{t("amount")}</TableHead>
+                        <TableHead>{t("currency")}</TableHead>
+                        <TableHead>{t("description")}</TableHead>
+                        <TableHead>{t("date")}</TableHead>
+                        <TableHead>{t("actions")}</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {unpaidPayables.map((payable, idx) => (
+                        <TableRow key={payable.id} data-testid={`row-payable-${payable.id}`}>
+                          <TableCell>{idx + 1}</TableCell>
+                          <TableCell className="font-medium">{payable.supplierName}</TableCell>
+                          <TableCell className="font-bold text-red-600">{parseFloat(payable.amount).toFixed(2)}</TableCell>
+                          <TableCell><Badge variant="outline">{payable.currency}</Badge></TableCell>
+                          <TableCell>{payable.description || "-"}</TableCell>
+                          <TableCell>{payable.createdAt ? format(new Date(payable.createdAt), "yyyy-MM-dd") : "-"}</TableCell>
+                          <TableCell>
+                            <Button
+                              size="sm"
+                              onClick={() => markPayablePaidMutation.mutate(payable.id)}
+                              disabled={markPayablePaidMutation.isPending}
+                              data-testid={`button-pay-${payable.id}`}
+                            >
+                              <DollarSign className="w-3 h-3 mr-1" />
+                              {t("markAsPaid")}
+                            </Button>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          {paidPayables.length > 0 && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <TrendingUp className="w-5 h-5" />
+                  {t("paidSupplierDebts")}
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="overflow-x-auto">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>#</TableHead>
+                        <TableHead>{t("supplierName")}</TableHead>
+                        <TableHead>{t("amount")}</TableHead>
+                        <TableHead>{t("currency")}</TableHead>
+                        <TableHead>{t("description")}</TableHead>
+                        <TableHead>{t("date")}</TableHead>
+                        <TableHead>{t("paidDate")}</TableHead>
+                        <TableHead>{t("status")}</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {paidPayables.map((payable, idx) => (
+                        <TableRow key={payable.id} data-testid={`row-paid-${payable.id}`}>
+                          <TableCell>{idx + 1}</TableCell>
+                          <TableCell className="font-medium">{payable.supplierName}</TableCell>
+                          <TableCell>{parseFloat(payable.amount).toFixed(2)}</TableCell>
+                          <TableCell><Badge variant="outline">{payable.currency}</Badge></TableCell>
+                          <TableCell>{payable.description || "-"}</TableCell>
+                          <TableCell>{payable.createdAt ? format(new Date(payable.createdAt), "yyyy-MM-dd") : "-"}</TableCell>
+                          <TableCell>{payable.paidAt ? format(new Date(payable.paidAt), "yyyy-MM-dd") : "-"}</TableCell>
+                          <TableCell><Badge variant="secondary">{t("paid")}</Badge></TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+              </CardContent>
+            </Card>
+          )}
         </TabsContent>
 
         <TabsContent value="store-capital" className="space-y-4">
