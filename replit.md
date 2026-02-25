@@ -70,6 +70,15 @@ PostgreSQL with Drizzle ORM. Schema includes:
 
 ## Key Features
 
+### Global Price Markup System
+- Adjustable markup percentage applied dynamically to all selling prices
+- Base prices stored unchanged in database; markup calculated on display
+- Formula: Final Price = Base Price × (1 + Markup % / 100)
+- Optional USD exchange rate for USD-based pricing
+- Configured in Settings > Pricing tab (owner only)
+- Settings stored in `settings` table: `markup_percentage`, `usd_exchange_rate`
+- Hook: `client/src/hooks/use-markup.ts`
+
 ### Dual Currency Support (LYD/USD)
 - Cashbox tracks both LYD and USD balances
 - Sales can be made in either currency

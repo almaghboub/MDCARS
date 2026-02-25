@@ -15,8 +15,9 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useI18n } from "@/lib/i18n";
-import { Settings as SettingsIcon, Users, Plus, Pencil, Trash2, Key, Shield, Globe } from "lucide-react";
+import { Settings as SettingsIcon, Users, Plus, Pencil, Trash2, Key, Shield, Globe, DollarSign, Percent } from "lucide-react";
 import type { User } from "@shared/schema";
+import { useMarkup } from "@/hooks/use-markup";
 
 const userFormSchema = z.object({
   username: z.string().min(3, "Username must be at least 3 characters"),
@@ -43,6 +44,17 @@ export default function Settings() {
   const [editingUser, setEditingUser] = useState<User | null>(null);
   const { toast } = useToast();
   const { t, lang, setLang } = useI18n();
+
+  const { markupPercentage, usdExchangeRate } = useMarkup();
+  const [markupInput, setMarkupInput] = useState("");
+  const [usdRateInput, setUsdRateInput] = useState("");
+  const [markupInitialized, setMarkupInitialized] = useState(false);
+
+  if (!markupInitialized && (markupPercentage > 0 || usdExchangeRate > 0)) {
+    setMarkupInput(markupPercentage > 0 ? String(markupPercentage) : "");
+    setUsdRateInput(usdExchangeRate > 0 ? String(usdExchangeRate) : "");
+    setMarkupInitialized(true);
+  }
 
   const { data: users = [], isLoading } = useQuery<User[]>({
     queryKey: ["/api/users"],
@@ -132,6 +144,20 @@ export default function Settings() {
     },
   });
 
+  const saveMarkupMutation = useMutation({
+    mutationFn: async () => {
+      await apiRequest("PATCH", "/api/settings/markup_percentage", { value: markupInput || "0" });
+      await apiRequest("PATCH", "/api/settings/usd_exchange_rate", { value: usdRateInput || "0" });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/settings"] });
+      toast({ title: t("markupSaved") });
+    },
+    onError: (error: any) => {
+      toast({ title: "Error", description: error.message, variant: "destructive" });
+    },
+  });
+
   const handleEditUser = (user: User) => {
     setEditingUser(user);
     userForm.reset({
@@ -186,6 +212,7 @@ export default function Settings() {
       <Tabs defaultValue="users" className="space-y-4">
         <TabsList>
           <TabsTrigger value="users">{t("userManagement")}</TabsTrigger>
+          <TabsTrigger value="pricing">{t("pricing")}</TabsTrigger>
           <TabsTrigger value="security">{t("security")}</TabsTrigger>
           <TabsTrigger value="system">{t("systemInfo")}</TabsTrigger>
           <TabsTrigger value="language">{t("language")}</TabsTrigger>
@@ -319,6 +346,86 @@ export default function Settings() {
                   </TableBody>
                 </Table>
               )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="pricing" className="space-y-4">
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Percent className="w-5 h-5" />
+                {t("priceMarkup")}
+              </CardTitle>
+              <CardDescription>{t("priceMarkupDesc")}</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">{t("markupPercentage")}</label>
+                  <div className="flex items-center gap-2">
+                    <Input
+                      type="number"
+                      min="0"
+                      max="200"
+                      step="0.5"
+                      value={markupInput}
+                      onChange={(e) => setMarkupInput(e.target.value)}
+                      placeholder="0"
+                      className="max-w-[200px]"
+                      data-testid="input-markup-percentage"
+                    />
+                    <span className="text-muted-foreground">%</span>
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">{t("usdExchangeRate")}</label>
+                  <div className="flex items-center gap-2">
+                    <span className="text-muted-foreground">1 USD =</span>
+                    <Input
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      value={usdRateInput}
+                      onChange={(e) => setUsdRateInput(e.target.value)}
+                      placeholder="0"
+                      className="max-w-[200px]"
+                      data-testid="input-usd-exchange-rate"
+                    />
+                    <span className="text-muted-foreground">LYD</span>
+                  </div>
+                  <p className="text-xs text-muted-foreground">{t("usdExchangeRateDesc")}</p>
+                </div>
+              </div>
+
+              {parseFloat(markupInput || "0") > 0 && (
+                <div className="p-4 bg-muted rounded-lg space-y-2">
+                  <p className="text-sm font-medium">{t("markupExample")}</p>
+                  <div className="flex items-center gap-4">
+                    <div>
+                      <p className="text-xs text-muted-foreground">{t("basePrice")}</p>
+                      <p className="font-medium">100.00 LYD</p>
+                    </div>
+                    <span className="text-muted-foreground">→</span>
+                    <div>
+                      <p className="text-xs text-muted-foreground">{t("finalPrice")}</p>
+                      <p className="font-bold text-primary">{(100 * (1 + parseFloat(markupInput) / 100)).toFixed(2)} LYD</p>
+                    </div>
+                  </div>
+                  <Badge className="bg-green-600 mt-2" data-testid="badge-markup-active">
+                    {t("markupActive")}: +{markupInput}%
+                  </Badge>
+                </div>
+              )}
+
+              <Button
+                onClick={() => saveMarkupMutation.mutate()}
+                disabled={saveMarkupMutation.isPending}
+                data-testid="button-save-pricing"
+              >
+                <DollarSign className="w-4 h-4 mr-2" />
+                {saveMarkupMutation.isPending ? t("saving") : t("savePricing")}
+              </Button>
             </CardContent>
           </Card>
         </TabsContent>

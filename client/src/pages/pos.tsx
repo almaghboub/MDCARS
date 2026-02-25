@@ -14,6 +14,7 @@ import { useAuth } from "@/components/auth-provider";
 import { ShoppingCart, Search, Plus, Minus, Trash2, User, Receipt, X, Printer } from "lucide-react";
 import logoPath from "@assets/MD-removebg-preview_1770139105370.png";
 import type { ProductWithCategory, Customer, SaleWithDetails } from "@shared/schema";
+import { useMarkup } from "@/hooks/use-markup";
 
 interface CartItem {
   product: ProductWithCategory;
@@ -42,6 +43,7 @@ export default function POS() {
   const { toast } = useToast();
   const { user } = useAuth();
   const receiptRef = useRef<HTMLDivElement>(null);
+  const { applyMarkup, hasMarkup, markupPercentage } = useMarkup();
 
   const { data: products = [] } = useQuery<ProductWithCategory[]>({
     queryKey: ["/api/products"],
@@ -267,7 +269,7 @@ export default function POS() {
       setCart([...cart, {
         product,
         quantity: 1,
-        unitPrice: parseFloat(product.sellingPrice),
+        unitPrice: applyMarkup(product.sellingPrice),
         costPrice: parseFloat(product.costPrice),
       }]);
     }
@@ -385,7 +387,7 @@ export default function POS() {
                   <h3 className="font-medium truncate">{product.name}</h3>
                   <p className="text-sm text-muted-foreground">{product.sku}</p>
                   <div className="flex justify-between items-center mt-2">
-                    <span className="font-bold text-primary">{product.sellingPrice} LYD</span>
+                    <span className="font-bold text-primary">{applyMarkup(product.sellingPrice).toFixed(2)} LYD</span>
                     <Badge variant={product.currentStock > product.lowStockThreshold ? "secondary" : "destructive"}>
                       {product.currentStock}
                     </Badge>

@@ -16,6 +16,7 @@ import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useI18n } from "@/lib/i18n";
 import { Plus, Pencil, Trash2, Search, Package, AlertTriangle } from "lucide-react";
 import { useAuth } from "@/components/auth-provider";
+import { useMarkup } from "@/hooks/use-markup";
 import type { ProductWithCategory } from "@shared/schema";
 
 const productFormSchema = z.object({
@@ -42,6 +43,7 @@ export default function Products() {
   const [editingProduct, setEditingProduct] = useState<ProductWithCategory | null>(null);
   const { toast } = useToast();
   const { user } = useAuth();
+  const { applyMarkup, hasMarkup } = useMarkup();
   const canEdit = user?.role === "owner" || user?.role === "stock_manager";
   const [nameInputValue, setNameInputValue] = useState("");
   const [showSuggestions, setShowSuggestions] = useState(false);
@@ -394,7 +396,16 @@ export default function Products() {
                     <TableCell className="font-medium">{product.name}</TableCell>
                     <TableCell>{product.sku}</TableCell>
                     {canEdit && <TableCell>{product.costPrice} LYD</TableCell>}
-                    <TableCell>{product.sellingPrice} LYD</TableCell>
+                    <TableCell>
+                      {hasMarkup ? (
+                        <span>
+                          <span className="font-medium">{applyMarkup(product.sellingPrice).toFixed(2)} LYD</span>
+                          <span className="text-xs text-muted-foreground ml-1">({product.sellingPrice})</span>
+                        </span>
+                      ) : (
+                        <span>{product.sellingPrice} LYD</span>
+                      )}
+                    </TableCell>
                     <TableCell>
                       <div className="flex items-center gap-2">
                         <span>{product.currentStock}</span>

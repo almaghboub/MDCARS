@@ -414,6 +414,22 @@ const translations = {
     noPartnersYet: "No partners added yet",
     addPartnersToStart: "Add your business partners to start tracking investments and profits",
     noTransactionsYet: "No transactions recorded yet",
+
+    // Pricing & Markup
+    pricing: "Pricing",
+    priceMarkup: "Price Markup",
+    priceMarkupDesc: "Apply a global percentage increase to all selling prices to protect against exchange rate changes",
+    markupPercentage: "Markup Percentage (%)",
+    usdExchangeRate: "USD to LYD Exchange Rate",
+    usdExchangeRateDesc: "Used to convert USD-based product prices to LYD",
+    basePrice: "Base Price",
+    finalPrice: "Final Price",
+    markupActive: "Markup Active",
+    noMarkup: "No Markup",
+    markupSaved: "Markup settings saved successfully",
+    markupExample: "Example: Product at 100 LYD with markup",
+    savePricing: "Save Pricing Settings",
+    saving: "Saving...",
   },
   ar: {
     // Common
@@ -826,6 +842,22 @@ const translations = {
     noPartnersYet: "لم يتم إضافة شركاء بعد",
     addPartnersToStart: "أضف شركاء عملك لبدء تتبع الاستثمارات والأرباح",
     noTransactionsYet: "لم يتم تسجيل معاملات بعد",
+
+    // Pricing & Markup
+    pricing: "التسعير",
+    priceMarkup: "هامش الربح",
+    priceMarkupDesc: "تطبيق نسبة زيادة عامة على جميع أسعار البيع للحماية من تغيرات سعر الصرف",
+    markupPercentage: "نسبة الزيادة (%)",
+    usdExchangeRate: "سعر صرف الدولار إلى الدينار",
+    usdExchangeRateDesc: "يستخدم لتحويل أسعار المنتجات بالدولار إلى الدينار الليبي",
+    basePrice: "السعر الأساسي",
+    finalPrice: "السعر النهائي",
+    markupActive: "الزيادة مفعلة",
+    noMarkup: "بدون زيادة",
+    markupSaved: "تم حفظ إعدادات التسعير بنجاح",
+    markupExample: "مثال: منتج بسعر 100 د.ل مع الزيادة",
+    savePricing: "حفظ إعدادات التسعير",
+    saving: "جاري الحفظ...",
   },
 } as const;
 
