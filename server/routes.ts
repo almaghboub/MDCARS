@@ -6,6 +6,7 @@ import session from "express-session";
 import MemoryStore from "memorystore";
 import { z } from "zod";
 import { storage } from "./storage";
+import { pool } from "./db";
 import { hashPassword, verifyPassword } from "./auth";
 import { requireAuth, requireOwner, requireSalesAccess, requireInventoryAccess, requireFinanceAccess } from "./middleware";
 import {
@@ -25,7 +26,44 @@ import {
 
 const SessionStore = MemoryStore(session);
 
+async function runMigrations() {
+  const client = await pool.connect();
+  try {
+    console.log("Running database migrations...");
+    await client.query(`ALTER TABLE stock_movements ADD COLUMN IF NOT EXISTS purchase_type text`);
+    await client.query(`ALTER TABLE stock_movements ADD COLUMN IF NOT EXISTS currency text`);
+    await client.query(`ALTER TABLE stock_movements ADD COLUMN IF NOT EXISTS supplier_name text`);
+    await client.query(`ALTER TABLE stock_movements ADD COLUMN IF NOT EXISTS invoice_number text`);
+    await client.query(`ALTER TABLE stock_movements ADD COLUMN IF NOT EXISTS cost_per_unit decimal(10, 2)`);
+    await client.query(`ALTER TABLE stock_movements ADD COLUMN IF NOT EXISTS reference_type text`);
+    await client.query(`ALTER TABLE stock_movements ADD COLUMN IF NOT EXISTS reference_id varchar`);
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS supplier_payables (
+        id varchar PRIMARY KEY DEFAULT gen_random_uuid(),
+        supplier_name text NOT NULL,
+        amount decimal(15, 2) NOT NULL,
+        currency text NOT NULL DEFAULT 'LYD',
+        description text,
+        stock_movement_id varchar,
+        is_paid boolean NOT NULL DEFAULT false,
+        paid_at timestamp,
+        created_by_user_id varchar NOT NULL REFERENCES users(id),
+        created_at timestamp NOT NULL DEFAULT now()
+      )
+    `);
+    await client.query(`ALTER TABLE sales ADD COLUMN IF NOT EXISTS original_total decimal(15, 2)`);
+    await client.query(`ALTER TABLE sales ADD COLUMN IF NOT EXISTS edit_note text`);
+    await client.query(`ALTER TABLE sales ADD COLUMN IF NOT EXISTS edited_at timestamp`);
+    console.log("Database migrations completed successfully.");
+  } catch (err) {
+    console.error("Migration error (non-fatal):", err);
+  } finally {
+    client.release();
+  }
+}
+
 export async function registerRoutes(app: Express): Promise<Server> {
+  await runMigrations();
   app.set('trust proxy', true);
   app.use(session({
     secret: process.env.SESSION_SECRET || "md-cars-secret-key-2024",
