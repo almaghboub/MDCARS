@@ -11,7 +11,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useI18n } from "@/lib/i18n";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useAuth } from "@/components/auth-provider";
-import { ShoppingCart, Search, Plus, Minus, Trash2, User, Receipt, X, Printer } from "lucide-react";
+import { ShoppingCart, Search, Plus, Minus, Trash2, User, Receipt, X, Printer, Pencil, Check } from "lucide-react";
 import logoPath from "@assets/MD-removebg-preview_1770139105370.png";
 import type { ProductWithCategory, Customer, SaleWithDetails } from "@shared/schema";
 import { useMarkup } from "@/hooks/use-markup";
@@ -21,6 +21,7 @@ interface CartItem {
   quantity: number;
   unitPrice: number;
   costPrice: number;
+  customPrice?: number; // user-overridden price
 }
 
 export default function POS() {
@@ -33,12 +34,15 @@ export default function POS() {
   const [lastSale, setLastSale] = useState<SaleWithDetails | null>(null);
   const [lastCartItems, setLastCartItems] = useState<CartItem[]>([]);
   const [paymentMethod, setPaymentMethod] = useState<"cash" | "partial">("cash");
+  const [saleType, setSaleType] = useState<"cash" | "credit">("cash"); // credit = sell on credit (no payment now)
   const [amountPaid, setAmountPaid] = useState("");
   const [currency, setCurrency] = useState<"LYD" | "USD">("LYD");
   const [discount, setDiscount] = useState("0");
   const [customerSearch, setCustomerSearch] = useState("");
   const [newCustomerName, setNewCustomerName] = useState("");
   const [newCustomerPhone, setNewCustomerPhone] = useState("");
+  const [editingPriceId, setEditingPriceId] = useState<string | null>(null);
+  const [editingPriceValue, setEditingPriceValue] = useState("");
   const { t } = useI18n();
   const { toast } = useToast();
   const { user } = useAuth();
@@ -294,8 +298,32 @@ export default function POS() {
     setCart(cart.filter(item => item.product.id !== productId));
   };
 
+  const startEditPrice = (item: CartItem) => {
+    setEditingPriceId(item.product.id);
+    setEditingPriceValue((item.customPrice ?? item.unitPrice).toFixed(2));
+  };
+
+  const commitEditPrice = (productId: string) => {
+    const newPrice = parseFloat(editingPriceValue);
+    if (!isNaN(newPrice) && newPrice >= 0) {
+      setCart(cart.map(item =>
+        item.product.id === productId ? { ...item, customPrice: newPrice } : item
+      ));
+    }
+    setEditingPriceId(null);
+    setEditingPriceValue("");
+  };
+
+  const resetPrice = (productId: string) => {
+    setCart(cart.map(item =>
+      item.product.id === productId ? { ...item, customPrice: undefined } : item
+    ));
+  };
+
+  const effectivePrice = (item: CartItem) => item.customPrice ?? item.unitPrice;
+
   const subtotal = useMemo(() => {
-    return cart.reduce((sum, item) => sum + (item.unitPrice * item.quantity), 0);
+    return cart.reduce((sum, item) => sum + (effectivePrice(item) * item.quantity), 0);
   }, [cart]);
 
   const discountAmount = parseFloat(discount) || 0;
@@ -308,21 +336,32 @@ export default function POS() {
       toast({ title: t("cartIsEmpty"), variant: "destructive" });
       return;
     }
-    if (paid <= 0) {
+    if (saleType === "credit" && !selectedCustomer) {
+      toast({ title: t("selectCustomer"), description: "Credit sales require a customer", variant: "destructive" });
+      return;
+    }
+    if (saleType === "cash" && paid <= 0) {
       toast({ title: "Please enter amount paid", variant: "destructive" });
       return;
     }
 
-    const items = cart.map(item => ({
-      productId: item.product.id,
-      productName: item.product.name,
-      productSku: item.product.sku,
-      quantity: item.quantity,
-      unitPrice: item.unitPrice.toFixed(2),
-      costPrice: item.costPrice.toFixed(2),
-      totalPrice: (item.unitPrice * item.quantity).toFixed(2),
-      profit: ((item.unitPrice - item.costPrice) * item.quantity).toFixed(2),
-    }));
+    const finalPaid = saleType === "credit" ? 0 : paid;
+    const finalDue = saleType === "credit" ? total : Math.max(0, total - paid);
+    const finalPaymentMethod = saleType === "credit" ? "credit" : (paid >= total ? "cash" : "partial");
+
+    const items = cart.map(item => {
+      const ep = effectivePrice(item);
+      return {
+        productId: item.product.id,
+        productName: item.product.name,
+        productSku: item.product.sku,
+        quantity: item.quantity,
+        unitPrice: ep.toFixed(2),
+        costPrice: item.costPrice.toFixed(2),
+        totalPrice: (ep * item.quantity).toFixed(2),
+        profit: ((ep - item.costPrice) * item.quantity).toFixed(2),
+      };
+    });
 
     createSaleMutation.mutate({
       sale: {
@@ -330,9 +369,9 @@ export default function POS() {
         subtotal: subtotal.toFixed(2),
         discount: discountAmount.toFixed(2),
         totalAmount: total.toFixed(2),
-        amountPaid: paid.toFixed(2),
-        amountDue: amountDue.toFixed(2),
-        paymentMethod: paid >= total ? "cash" : "partial",
+        amountPaid: finalPaid.toFixed(2),
+        amountDue: finalDue.toFixed(2),
+        paymentMethod: finalPaymentMethod,
         currency,
       },
       items,
@@ -411,26 +450,68 @@ export default function POS() {
                 <p className="text-center py-8 text-muted-foreground">{t("cartIsEmpty")}</p>
               ) : (
                 <div className="space-y-2">
-                  {cart.map((item) => (
-                    <div key={item.product.id} className="flex items-center justify-between p-2 bg-muted rounded" data-testid={`cart-item-${item.product.id}`}>
-                      <div className="flex-1 min-w-0">
-                        <p className="font-medium truncate">{item.product.name}</p>
-                        <p className="text-sm text-muted-foreground">{item.unitPrice.toFixed(2)} LYD x {item.quantity}</p>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => updateQuantity(item.product.id, -1)}>
-                          <Minus className="w-3 h-3" />
-                        </Button>
-                        <span className="w-8 text-center">{item.quantity}</span>
-                        <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => updateQuantity(item.product.id, 1)}>
-                          <Plus className="w-3 h-3" />
-                        </Button>
-                        <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => removeFromCart(item.product.id)}>
-                          <Trash2 className="w-3 h-3 text-destructive" />
-                        </Button>
+                  {cart.map((item) => {
+                    const ep = effectivePrice(item);
+                    const isEditing = editingPriceId === item.product.id;
+                    const isPriceEdited = item.customPrice !== undefined;
+                    return (
+                    <div key={item.product.id} className="p-2 bg-muted rounded" data-testid={`cart-item-${item.product.id}`}>
+                      <div className="flex items-center justify-between">
+                        <div className="flex-1 min-w-0">
+                          <p className="font-medium truncate">{item.product.name}</p>
+                          <div className="flex items-center gap-2 mt-1">
+                            {isEditing ? (
+                              <div className="flex items-center gap-1">
+                                <Input
+                                  type="number"
+                                  value={editingPriceValue}
+                                  onChange={(e) => setEditingPriceValue(e.target.value)}
+                                  className="h-7 w-24 text-sm"
+                                  autoFocus
+                                  onKeyDown={(e) => { if (e.key === "Enter") commitEditPrice(item.product.id); if (e.key === "Escape") setEditingPriceId(null); }}
+                                  data-testid={`input-price-edit-${item.product.id}`}
+                                />
+                                <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => commitEditPrice(item.product.id)}>
+                                  <Check className="w-3 h-3 text-green-600" />
+                                </Button>
+                              </div>
+                            ) : (
+                              <div className="flex items-center gap-1">
+                                <span className={`text-sm ${isPriceEdited ? "text-orange-600 font-medium" : "text-muted-foreground"}`}>
+                                  {ep.toFixed(2)} LYD
+                                  {isPriceEdited && (
+                                    <span className="ml-1 text-xs line-through text-muted-foreground">{item.unitPrice.toFixed(2)}</span>
+                                  )}
+                                </span>
+                                <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => startEditPrice(item)} title={t("editPrice")} data-testid={`button-edit-price-${item.product.id}`}>
+                                  <Pencil className="w-3 h-3 text-muted-foreground" />
+                                </Button>
+                                {isPriceEdited && (
+                                  <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => resetPrice(item.product.id)} title={t("originalPrice")}>
+                                    <X className="w-3 h-3 text-muted-foreground" />
+                                  </Button>
+                                )}
+                              </div>
+                            )}
+                            <span className="text-sm text-muted-foreground">× {item.quantity} = <span className="font-medium text-foreground">{(ep * item.quantity).toFixed(2)}</span></span>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-1 ml-2">
+                          <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => updateQuantity(item.product.id, -1)}>
+                            <Minus className="w-3 h-3" />
+                          </Button>
+                          <span className="w-8 text-center font-medium">{item.quantity}</span>
+                          <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => updateQuantity(item.product.id, 1)}>
+                            <Plus className="w-3 h-3" />
+                          </Button>
+                          <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => removeFromCart(item.product.id)}>
+                            <Trash2 className="w-3 h-3 text-destructive" />
+                          </Button>
+                        </div>
                       </div>
                     </div>
-                  ))}
+                    );
+                  })}
                 </div>
               )}
             </div>
@@ -459,6 +540,7 @@ export default function POS() {
                 size="lg"
                 disabled={cart.length === 0}
                 onClick={() => {
+                  setSaleType("cash");
                   setAmountPaid(total.toFixed(2));
                   setIsCheckoutDialogOpen(true);
                 }}
@@ -533,6 +615,33 @@ export default function POS() {
               <div className="flex justify-between"><span>{t("discount")}:</span><span>-{discountAmount.toFixed(2)} LYD</span></div>
               <div className="flex justify-between text-lg font-bold"><span>{t("total")}:</span><span>{total.toFixed(2)} LYD</span></div>
             </div>
+
+            {/* Payment Type: Cash vs Credit */}
+            <div>
+              <label className="text-sm font-medium">{t("paymentType")}</label>
+              <div className="flex gap-2 mt-1">
+                <Button
+                  variant={saleType === "cash" ? "default" : "outline"}
+                  className="flex-1"
+                  onClick={() => setSaleType("cash")}
+                  data-testid="button-sale-type-cash"
+                >
+                  {t("cashSale")}
+                </Button>
+                <Button
+                  variant={saleType === "credit" ? "default" : "outline"}
+                  className={`flex-1 ${saleType === "credit" ? "bg-orange-600 hover:bg-orange-700" : ""}`}
+                  onClick={() => setSaleType("credit")}
+                  data-testid="button-sale-type-credit"
+                >
+                  {t("creditSale")}
+                </Button>
+              </div>
+              {saleType === "credit" && !selectedCustomer && (
+                <p className="text-xs text-destructive mt-1">{t("selectCustomer")} — {t("creditSale")}</p>
+              )}
+            </div>
+
             <div>
               <label className="text-sm font-medium">{t("currency")}</label>
               <Select value={currency} onValueChange={(v) => setCurrency(v as "LYD" | "USD")}>
@@ -545,27 +654,39 @@ export default function POS() {
                 </SelectContent>
               </Select>
             </div>
-            <div>
-              <label className="text-sm font-medium">{t("amountPaid")}</label>
-              <Input
-                type="number"
-                value={amountPaid}
-                onChange={(e) => setAmountPaid(e.target.value)}
-                className="text-lg"
-                data-testid="input-amount-paid"
-              />
-            </div>
-            {amountDue > 0 && (
-              <div className="p-3 bg-destructive/10 rounded">
-                <p className="text-destructive font-medium">{t("amountDue")}: {amountDue.toFixed(2)} LYD</p>
+
+            {saleType === "credit" ? (
+              <div className="p-3 bg-orange-500/10 border border-orange-500/30 rounded">
+                <p className="text-orange-700 dark:text-orange-400 font-medium">{t("creditSale")}</p>
                 <p className="text-sm text-muted-foreground">{t("addedToCustomerBalance")}</p>
+                <p className="text-lg font-bold mt-1">{t("amountDue")}: {total.toFixed(2)} {currency}</p>
               </div>
+            ) : (
+              <>
+                <div>
+                  <label className="text-sm font-medium">{t("amountPaid")}</label>
+                  <Input
+                    type="number"
+                    value={amountPaid}
+                    onChange={(e) => setAmountPaid(e.target.value)}
+                    className="text-lg"
+                    data-testid="input-amount-paid"
+                  />
+                </div>
+                {amountDue > 0 && (
+                  <div className="p-3 bg-destructive/10 rounded">
+                    <p className="text-destructive font-medium">{t("amountDue")}: {amountDue.toFixed(2)} {currency}</p>
+                    <p className="text-sm text-muted-foreground">{t("addedToCustomerBalance")}</p>
+                  </div>
+                )}
+                {paid > total && (
+                  <div className="p-3 bg-green-500/10 rounded">
+                    <p className="text-green-600 font-medium">{t("change")}: {(paid - total).toFixed(2)} {currency}</p>
+                  </div>
+                )}
+              </>
             )}
-            {paid > total && (
-              <div className="p-3 bg-green-500/10 rounded">
-                <p className="text-green-600 font-medium">{t("change")}: {(paid - total).toFixed(2)} LYD</p>
-              </div>
-            )}
+
             <Button
               className="w-full"
               size="lg"

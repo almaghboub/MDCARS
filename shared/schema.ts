@@ -5,9 +5,9 @@ import { z } from "zod";
 
 export const userRoleEnum = pgEnum("user_role", ["owner", "cashier", "stock_manager"]);
 export const currencyEnum = pgEnum("currency", ["USD", "LYD"]);
-export const paymentMethodEnum = pgEnum("payment_method", ["cash", "partial"]);
+export const paymentMethodEnum = pgEnum("payment_method", ["cash", "partial", "credit"]);
 export const saleStatusEnum = pgEnum("sale_status", ["completed", "pending", "cancelled", "returned"]);
-export const stockMovementTypeEnum = pgEnum("stock_movement_type", ["in", "out", "adjustment"]);
+export const stockMovementTypeEnum = pgEnum("stock_movement_type", ["in", "out", "adjustment", "damaged"]);
 export const expenseCategoryEnum = pgEnum("expense_category", ["rent", "utilities", "salaries", "supplies", "maintenance", "marketing", "other"]);
 export const transactionTypeEnum = pgEnum("transaction_type", ["sale", "expense", "deposit", "withdrawal", "adjustment", "refund", "purchase"]);
 export const partnerTransactionTypeEnum = pgEnum("partner_transaction_type", ["investment", "withdrawal", "profit_distribution"]);
@@ -45,6 +45,7 @@ export const products = pgTable("products", {
   description: text("description"),
   lowStockThreshold: integer("low_stock_threshold").notNull().default(5),
   currentStock: integer("current_stock").notNull().default(0),
+  damagedStock: integer("damaged_stock").notNull().default(0),
   isActive: boolean("is_active").notNull().default(true),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),

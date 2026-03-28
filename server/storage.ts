@@ -45,7 +45,7 @@ export interface IStorage {
   createProduct(product: InsertProduct): Promise<Product>;
   updateProduct(id: string, product: Partial<InsertProduct>): Promise<Product | undefined>;
   deleteProduct(id: string): Promise<boolean>;
-  updateProductStock(id: string, quantity: number): Promise<Product | undefined>;
+  updateProductStock(id: string, quantity: number, damagedStock?: number): Promise<Product | undefined>;
 
   getStockMovements(productId?: string): Promise<StockMovement[]>;
   createStockMovement(movement: InsertStockMovement): Promise<StockMovement>;
@@ -236,9 +236,11 @@ export class DatabaseStorage implements IStorage {
     return (result.rowCount ?? 0) > 0;
   }
 
-  async updateProductStock(id: string, quantity: number): Promise<Product | undefined> {
+  async updateProductStock(id: string, quantity: number, damagedStock?: number): Promise<Product | undefined> {
+    const updateData: any = { currentStock: quantity, updatedAt: new Date() };
+    if (damagedStock !== undefined) updateData.damagedStock = damagedStock;
     const [product] = await db.update(products)
-      .set({ currentStock: quantity, updatedAt: new Date() })
+      .set(updateData)
       .where(eq(products.id, id))
       .returning();
     return product || undefined;
@@ -353,39 +355,64 @@ export class DatabaseStorage implements IStorage {
   }
 
   async createSale(insertSale: InsertSale, items: InsertSaleItem[]): Promise<SaleWithDetails> {
-    const [sale] = await db.insert(sales).values(insertSale).returning();
-    const createdItems: SaleItem[] = [];
-    for (const item of items) {
-      const [saleItem] = await db.insert(saleItems).values({ ...item, saleId: sale.id }).returning();
-      createdItems.push(saleItem);
-      const [product] = await db.select().from(products).where(eq(products.id, item.productId));
-      if (product) {
-        const newStock = product.currentStock - item.quantity;
-        await db.update(products).set({ currentStock: newStock, updatedAt: new Date() }).where(eq(products.id, item.productId));
-        await db.insert(stockMovements).values({
-          productId: item.productId,
-          type: "out",
-          quantity: item.quantity,
-          previousStock: product.currentStock,
-          newStock,
-          reason: "Sale",
-          referenceType: "sale",
-          referenceId: sale.id,
-          createdByUserId: sale.createdByUserId,
-        });
+    let sale: Sale;
+    let createdItems: SaleItem[] = [];
+
+    await db.transaction(async (tx) => {
+      const [newSale] = await tx.insert(sales).values(insertSale).returning();
+      sale = newSale;
+
+      for (const item of items) {
+        const [saleItem] = await tx.insert(saleItems).values({ ...item, saleId: sale.id }).returning();
+        createdItems.push(saleItem);
+
+        const [product] = await tx.select().from(products).where(eq(products.id, item.productId));
+        if (product) {
+          if (product.currentStock < item.quantity) {
+            throw new Error(`Insufficient stock for product: ${product.name}`);
+          }
+          const newStock = product.currentStock - item.quantity;
+          await tx.update(products).set({ currentStock: newStock, updatedAt: new Date() }).where(eq(products.id, item.productId));
+          await tx.insert(stockMovements).values({
+            productId: item.productId,
+            type: "out",
+            quantity: item.quantity,
+            previousStock: product.currentStock,
+            newStock,
+            reason: "Sale",
+            referenceType: "sale",
+            referenceId: sale.id,
+            createdByUserId: sale.createdByUserId,
+          });
+        }
       }
-    }
-    if (sale.customerId) {
-      await this.updateCustomerBalance(sale.customerId, sale.amountDue, true);
-      const customer = await this.getCustomer(sale.customerId);
-      if (customer) {
-        const newTotal = parseFloat(customer.totalPurchases) + parseFloat(sale.totalAmount);
-        await this.updateCustomer(sale.customerId, { totalPurchases: newTotal.toFixed(2) });
+
+      if (sale.customerId) {
+        const amountDue = parseFloat(sale.amountDue as string) || 0;
+        if (amountDue > 0) {
+          const [cust] = await tx.select().from(customers).where(eq(customers.id, sale.customerId!));
+          if (cust) {
+            const newBalance = parseFloat(cust.balanceOwed as string) + amountDue;
+            const newTotal = parseFloat(cust.totalPurchases as string) + parseFloat(sale.totalAmount as string);
+            await tx.update(customers)
+              .set({ balanceOwed: newBalance.toFixed(2), totalPurchases: newTotal.toFixed(2), updatedAt: new Date() })
+              .where(eq(customers.id, sale.customerId!));
+          }
+        } else {
+          const [cust] = await tx.select().from(customers).where(eq(customers.id, sale.customerId!));
+          if (cust) {
+            const newTotal = parseFloat(cust.totalPurchases as string) + parseFloat(sale.totalAmount as string);
+            await tx.update(customers)
+              .set({ totalPurchases: newTotal.toFixed(2), updatedAt: new Date() })
+              .where(eq(customers.id, sale.customerId!));
+          }
+        }
       }
-    }
-    const [customer] = sale.customerId ? await db.select().from(customers).where(eq(customers.id, sale.customerId)) : [null];
-    const [createdBy] = await db.select().from(users).where(eq(users.id, sale.createdByUserId));
-    return { ...sale, customer, items: createdItems, createdBy };
+    });
+
+    const [customer] = sale!.customerId ? await db.select().from(customers).where(eq(customers.id, sale!.customerId!)) : [null];
+    const [createdBy] = await db.select().from(users).where(eq(users.id, sale!.createdByUserId));
+    return { ...sale!, customer, items: createdItems, createdBy };
   }
 
   async updateSaleStatus(id: string, status: string): Promise<Sale | undefined> {

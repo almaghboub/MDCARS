@@ -11,7 +11,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
 import { useI18n } from "@/lib/i18n";
 import { queryClient, apiRequest } from "@/lib/queryClient";
-import { Boxes, Search, Plus, Minus, AlertTriangle, ArrowUpCircle, ArrowDownCircle, RefreshCw } from "lucide-react";
+import { Boxes, Search, Plus, Minus, AlertTriangle, ArrowUpCircle, ArrowDownCircle, RefreshCw, Skull } from "lucide-react";
 import type { ProductWithCategory, StockMovement } from "@shared/schema";
 import { format } from "date-fns";
 
@@ -20,7 +20,7 @@ export default function Inventory() {
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedProduct, setSelectedProduct] = useState<ProductWithCategory | null>(null);
   const [stockDialogOpen, setStockDialogOpen] = useState(false);
-  const [stockType, setStockType] = useState<"in" | "out" | "adjustment">("in");
+  const [stockType, setStockType] = useState<"in" | "out" | "adjustment" | "damaged">("in");
   const [stockQuantity, setStockQuantity] = useState("");
   const [stockReason, setStockReason] = useState("");
   const [stockCost, setStockCost] = useState("");
@@ -89,7 +89,7 @@ export default function Inventory() {
     });
   };
 
-  const openStockDialog = (product: ProductWithCategory, type: "in" | "out" | "adjustment") => {
+  const openStockDialog = (product: ProductWithCategory, type: "in" | "out" | "adjustment" | "damaged") => {
     setSelectedProduct(product);
     setStockType(type);
     setStockCost(product.costPrice);
@@ -146,8 +146,8 @@ export default function Inventory() {
                       <TableHead>{t("product")}</TableHead>
                       <TableHead>{t("sku")}</TableHead>
                       <TableHead>{t("category")}</TableHead>
-                      <TableHead>{t("stock")}</TableHead>
-                      <TableHead>Low Threshold</TableHead>
+                      <TableHead>{t("availableStock")}</TableHead>
+                      <TableHead className="text-orange-600">{t("damagedStock")}</TableHead>
                       <TableHead>{t("status")}</TableHead>
                       <TableHead>{t("actions")}</TableHead>
                     </TableRow>
@@ -159,7 +159,13 @@ export default function Inventory() {
                         <TableCell>{product.sku}</TableCell>
                         <TableCell>{product.category?.name || "-"}</TableCell>
                         <TableCell className="font-bold">{product.currentStock}</TableCell>
-                        <TableCell>{product.lowStockThreshold}</TableCell>
+                        <TableCell>
+                          {(product.damagedStock ?? 0) > 0 ? (
+                            <span className="font-bold text-orange-600">{product.damagedStock}</span>
+                          ) : (
+                            <span className="text-muted-foreground">0</span>
+                          )}
+                        </TableCell>
                         <TableCell>
                           {product.currentStock <= 0 ? (
                             <Badge variant="destructive">{t("outOfStock")}</Badge>
@@ -200,6 +206,16 @@ export default function Inventory() {
                               data-testid={`button-adjust-${product.id}`}
                             >
                               <RefreshCw className="w-4 h-4" />
+                            </Button>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => openStockDialog(product, "damaged")}
+                              title={t("markAsDamaged")}
+                              data-testid={`button-damage-${product.id}`}
+                              disabled={product.currentStock <= 0}
+                            >
+                              <Skull className="w-4 h-4 text-orange-500" />
                             </Button>
                           </div>
                         </TableCell>
@@ -298,14 +314,22 @@ export default function Inventory() {
         <DialogContent>
           <DialogHeader>
             <DialogTitle>
-              {stockType === "in" ? t("stockIn") : stockType === "out" ? t("stockOut") : t("adjustment")}
+              {stockType === "in" ? t("stockIn") : stockType === "out" ? t("stockOut") : stockType === "damaged" ? t("markAsDamaged") : t("adjustment")}
             </DialogTitle>
           </DialogHeader>
           {selectedProduct && (
             <div className="space-y-4">
               <div className="p-3 bg-muted rounded">
                 <p className="font-medium">{selectedProduct.name}</p>
-                <p className="text-sm text-muted-foreground">{t("stock")}: {selectedProduct.currentStock}</p>
+                <div className="flex gap-4 mt-1">
+                  <p className="text-sm text-muted-foreground">{t("availableStock")}: <span className="font-medium text-foreground">{selectedProduct.currentStock}</span></p>
+                  {(selectedProduct.damagedStock ?? 0) > 0 && (
+                    <p className="text-sm text-orange-600">{t("damagedStock")}: <span className="font-medium">{selectedProduct.damagedStock}</span></p>
+                  )}
+                </div>
+                {stockType === "damaged" && (
+                  <p className="text-xs text-orange-600 mt-2">{t("markAsDamaged")}: قم بتحديد الكميات التالفة — ستُزال من المخزون المتاح وتُحسب في المخزون التالف</p>
+                )}
               </div>
               <div>
                 <label className="text-sm font-medium">

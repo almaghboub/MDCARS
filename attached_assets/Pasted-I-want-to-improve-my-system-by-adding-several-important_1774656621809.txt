@@ -1,0 +1,51 @@
+I want to improve my system by adding several important features related to pricing, invoices, and inventory. Please implement the following in a clean and scalable way:
+
+إضافة صنف (Product Enhancements):
+
+1- تالف (Damaged Items):
+
+Add a feature to mark products as damaged (تالف).
+Damaged quantities must be tracked separately from normal stock.
+Damaged items should NOT be available for sale.
+Show damaged quantities clearly in inventory and reports.
+
+2- يمكن تعديل سعر البيع (Editable Selling Price):
+
+Allow editing the selling price during invoice creation.
+The price change should apply ONLY to that invoice line, not the main product price.
+The original product price in the products table must remain unchanged.
+The edited price should be saved in the invoice items table.
+Invoice total should be calculated using the edited price.
+If possible, log who changed the price and when.
+If there are permissions, only authorized users can edit prices.
+Global markup system:
+Add a global markup percentage controlled from settings.
+Prices should be calculated dynamically:
+Final Price = Base Price × (1 + Markup / 100)
+Do NOT permanently update product prices in the database.
+Credit sales support:
+Add support for selling on credit.
+Add a credit markup percentage.
+Pricing logic:
+Cash Price = Base Price × (1 + Cash Markup / 100)
+Credit Price = Cash Price × (1 + Credit Markup / 100)
+Track customer balances and due payments.
+System stability fixes (very important):
+
+I am facing recurring issues such as:
+
+Duplicate invoice items
+Duplicate return products
+Errors returning after being fixed
+
+To fix this permanently:
+
+Use database transactions for invoice and return operations
+Add database constraints:
+Prevent duplicate invoice items
+Prevent invalid or negative quantities
+Make endpoints idempotent to avoid duplicate requests
+Add proper logging for invoice and return operations
+Fix any race conditions or double request issues
+
+Please make sure all features are implemented safely without breaking existing functionality, and follow best practices for production systems.

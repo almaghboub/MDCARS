@@ -30,6 +30,8 @@ async function runMigrations() {
   const client = await pool.connect();
   try {
     console.log("Running database migrations...");
+
+    // stock_movements columns
     await client.query(`ALTER TABLE stock_movements ADD COLUMN IF NOT EXISTS purchase_type text`);
     await client.query(`ALTER TABLE stock_movements ADD COLUMN IF NOT EXISTS currency text`);
     await client.query(`ALTER TABLE stock_movements ADD COLUMN IF NOT EXISTS supplier_name text`);
@@ -37,6 +39,29 @@ async function runMigrations() {
     await client.query(`ALTER TABLE stock_movements ADD COLUMN IF NOT EXISTS cost_per_unit decimal(10, 2)`);
     await client.query(`ALTER TABLE stock_movements ADD COLUMN IF NOT EXISTS reference_type text`);
     await client.query(`ALTER TABLE stock_movements ADD COLUMN IF NOT EXISTS reference_id varchar`);
+
+    // Add 'damaged' value to stock_movement_type enum (safe, idempotent)
+    await client.query(`
+      DO $$ BEGIN
+        IF NOT EXISTS (SELECT 1 FROM pg_enum WHERE enumlabel = 'damaged' AND enumtypid = 'stock_movement_type'::regtype) THEN
+          ALTER TYPE stock_movement_type ADD VALUE 'damaged';
+        END IF;
+      END $$;
+    `);
+
+    // Add 'credit' value to payment_method enum (safe, idempotent)
+    await client.query(`
+      DO $$ BEGIN
+        IF NOT EXISTS (SELECT 1 FROM pg_enum WHERE enumlabel = 'credit' AND enumtypid = 'payment_method'::regtype) THEN
+          ALTER TYPE payment_method ADD VALUE 'credit';
+        END IF;
+      END $$;
+    `);
+
+    // products: damaged_stock column
+    await client.query(`ALTER TABLE products ADD COLUMN IF NOT EXISTS damaged_stock integer NOT NULL DEFAULT 0`);
+
+    // supplier_payables table
     await client.query(`
       CREATE TABLE IF NOT EXISTS supplier_payables (
         id varchar PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -51,9 +76,12 @@ async function runMigrations() {
         created_at timestamp NOT NULL DEFAULT now()
       )
     `);
+
+    // sales columns
     await client.query(`ALTER TABLE sales ADD COLUMN IF NOT EXISTS original_total decimal(15, 2)`);
     await client.query(`ALTER TABLE sales ADD COLUMN IF NOT EXISTS edit_note text`);
     await client.query(`ALTER TABLE sales ADD COLUMN IF NOT EXISTS edited_at timestamp`);
+
     console.log("Database migrations completed successfully.");
   } catch (err) {
     console.error("Migration error (non-fatal):", err);
@@ -271,24 +299,40 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const costPerUnit = req.body.costPerUnit ? String(req.body.costPerUnit) : null;
       const purchaseType = req.body.purchaseType;
       const currency = req.body.currency;
-      if (!type || !["in", "out", "adjustment"].includes(type)) return res.status(400).json({ message: "Invalid stock movement type" });
+      if (!type || !["in", "out", "adjustment", "damaged"].includes(type)) return res.status(400).json({ message: "Invalid stock movement type" });
       if (isNaN(quantity) || quantity <= 0) return res.status(400).json({ message: "Quantity must be a positive number" });
       if (purchaseType && !["cash", "credit"].includes(purchaseType)) return res.status(400).json({ message: "Invalid purchase type" });
       if (currency && !["LYD", "USD"].includes(currency)) return res.status(400).json({ message: "Invalid currency" });
       const product = await storage.getProduct(id);
       if (!product) return res.status(404).json({ message: "Product not found" });
       const previousStock = product.currentStock;
-      const newStock = type === "in" ? previousStock + quantity : type === "out" ? previousStock - quantity : quantity;
-      if (newStock < 0) return res.status(400).json({ message: "Insufficient stock" });
-      await storage.updateProductStock(id, newStock);
+      const previousDamagedStock = product.damagedStock ?? 0;
+
+      let newStock = previousStock;
+      let newDamagedStock = previousDamagedStock;
+
+      if (type === "in") {
+        newStock = previousStock + quantity;
+      } else if (type === "out") {
+        newStock = previousStock - quantity;
+        if (newStock < 0) return res.status(400).json({ message: "Insufficient stock" });
+      } else if (type === "adjustment") {
+        newStock = quantity;
+      } else if (type === "damaged") {
+        if (quantity > previousStock) return res.status(400).json({ message: "Cannot mark more than available stock as damaged" });
+        newStock = previousStock - quantity;
+        newDamagedStock = previousDamagedStock + quantity;
+      }
+
+      await storage.updateProductStock(id, newStock, newDamagedStock);
       const movement = await storage.createStockMovement({
         productId: id,
-        type,
+        type: type as any,
         quantity,
         previousStock,
         newStock,
         costPerUnit,
-        reason,
+        reason: type === "damaged" ? (reason || "Damaged item") : reason,
         purchaseType: type === "in" ? (purchaseType || "cash") : null,
         currency: type === "in" ? (currency || "LYD") : null,
         supplierName: type === "in" ? (supplierName || null) : null,
