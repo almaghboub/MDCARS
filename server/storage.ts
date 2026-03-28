@@ -543,7 +543,8 @@ export class DatabaseStorage implements IStorage {
     const oldSubtotal = parseFloat(sale.subtotal);
     const discountRatio = oldSubtotal > 0 ? parseFloat(sale.discount) / oldSubtotal : 0;
     const newDiscount = (newSubtotal * discountRatio).toFixed(2);
-    const newTotalAmount = (newSubtotal - parseFloat(newDiscount)).toFixed(2);
+    const serviceFeeAmount = parseFloat(sale.serviceFee || "0");
+    const newTotalAmount = (newSubtotal - parseFloat(newDiscount) + serviceFeeAmount).toFixed(2);
     const oldAmountPaid = parseFloat(sale.amountPaid);
     const newTotal = parseFloat(newTotalAmount);
     let finalAmountPaid = oldAmountPaid;

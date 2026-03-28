@@ -333,7 +333,6 @@ const translations = {
     supplierPayables: "Supplier Payables",
     markAsPaid: "Mark as Paid",
     unpaid: "Unpaid",
-    paid: "Paid",
     totalUnpaid: "Total Unpaid",
     totalRecords: "Total Records",
     unpaidSupplierDebts: "Unpaid Supplier Debts",
@@ -450,7 +449,6 @@ const translations = {
     markupSaved: "Markup settings saved successfully",
     markupExample: "Example: Product at 100 LYD with markup",
     savePricing: "Save Pricing Settings",
-    saving: "Saving...",
   },
   ar: {
     // Common
@@ -561,7 +559,7 @@ const translations = {
     soldBy: "البائع",
     customer: "العميل",
     item: "المنتج",
-    paid: "المدفوع",
+    paid: "مدفوع",
     thankYou: "شكراً لتسوقكم!",
     printInvoice: "طباعة الفاتورة",
     creditSale: "بيع آجل",
@@ -782,7 +780,6 @@ const translations = {
     supplierPayables: "ذمم الموردين",
     markAsPaid: "تحديد كمدفوع",
     unpaid: "غير مدفوع",
-    paid: "مدفوع",
     totalUnpaid: "إجمالي غير المدفوع",
     totalRecords: "إجمالي السجلات",
     unpaidSupplierDebts: "ديون الموردين غير المدفوعة",
@@ -899,7 +896,6 @@ const translations = {
     markupSaved: "تم حفظ إعدادات التسعير بنجاح",
     markupExample: "مثال: منتج بسعر 100 د.ل مع الزيادة",
     savePricing: "حفظ إعدادات التسعير",
-    saving: "جاري الحفظ...",
   },
 } as const;
 
