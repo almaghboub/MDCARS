@@ -5,7 +5,7 @@ import { z } from "zod";
 
 export const userRoleEnum = pgEnum("user_role", ["owner", "cashier", "stock_manager"]);
 export const currencyEnum = pgEnum("currency", ["USD", "LYD"]);
-export const paymentMethodEnum = pgEnum("payment_method", ["cash", "partial", "credit"]);
+export const paymentMethodEnum = pgEnum("payment_method", ["cash", "partial", "credit", "card", "transfer"]);
 export const saleStatusEnum = pgEnum("sale_status", ["completed", "pending", "cancelled", "returned"]);
 export const stockMovementTypeEnum = pgEnum("stock_movement_type", ["in", "out", "adjustment", "damaged"]);
 export const expenseCategoryEnum = pgEnum("expense_category", ["rent", "utilities", "salaries", "supplies", "maintenance", "marketing", "other"]);

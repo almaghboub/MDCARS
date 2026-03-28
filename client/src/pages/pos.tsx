@@ -11,7 +11,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useI18n } from "@/lib/i18n";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useAuth } from "@/components/auth-provider";
-import { ShoppingCart, Search, Plus, Minus, Trash2, User, Receipt, X, Printer, Pencil, Check } from "lucide-react";
+import { ShoppingCart, Search, Plus, Minus, Trash2, User, Receipt, X, Printer, Pencil, Check, Banknote, CreditCard, ArrowLeftRight, BookOpen } from "lucide-react";
 import logoPath from "@assets/MD-removebg-preview_1770139105370.png";
 import type { ProductWithCategory, Customer, SaleWithDetails } from "@shared/schema";
 import { useMarkup } from "@/hooks/use-markup";
@@ -33,8 +33,7 @@ export default function POS() {
   const [isReceiptDialogOpen, setIsReceiptDialogOpen] = useState(false);
   const [lastSale, setLastSale] = useState<SaleWithDetails | null>(null);
   const [lastCartItems, setLastCartItems] = useState<CartItem[]>([]);
-  const [paymentMethod, setPaymentMethod] = useState<"cash" | "partial">("cash");
-  const [saleType, setSaleType] = useState<"cash" | "credit">("cash"); // credit = sell on credit (no payment now)
+  const [paymentMethod, setPaymentMethod] = useState<"cash" | "card" | "transfer" | "credit">("cash");
   const [amountPaid, setAmountPaid] = useState("");
   const [currency, setCurrency] = useState<"LYD" | "USD">("LYD");
   const [discount, setDiscount] = useState("0");
@@ -84,6 +83,7 @@ export default function POS() {
       setAmountPaid("");
       setDiscount("0");
       setServiceFee("0");
+      setPaymentMethod("cash");
     },
     onError: (error: any) => {
       toast({ title: "Error", description: error.message, variant: "destructive" });
@@ -176,7 +176,7 @@ export default function POS() {
             </div>
             <div style="padding:12px 14px">
               <div style="display:flex;justify-content:space-between;padding:3px 0;font-size:13px"><span style="color:#64748b">${t("date")}</span><span style="font-weight:600;color:#1e293b">${dateStr}</span></div>
-              <div style="display:flex;justify-content:space-between;padding:3px 0;font-size:13px"><span style="color:#64748b">${t("paymentMethod")}</span><span style="font-weight:600;color:#1e293b">${sale.paymentMethod === 'cash' ? t("cash") : t("partial")}</span></div>
+              <div style="display:flex;justify-content:space-between;padding:3px 0;font-size:13px"><span style="color:#64748b">${t("paymentMethod")}</span><span style="font-weight:600;color:${sale.paymentMethod === 'credit' ? '#ea580c' : '#1e293b'}">${sale.paymentMethod === 'cash' ? t("cash") : sale.paymentMethod === 'card' ? t("creditCard") : sale.paymentMethod === 'transfer' ? t("moneyTransfer") : sale.paymentMethod === 'credit' ? t("creditSale") : t("partial")}</span></div>
               <div style="display:flex;justify-content:space-between;padding:3px 0;font-size:13px"><span style="color:#64748b">${t("currency")}</span><span style="font-weight:600;color:#1e293b">${sale.currency}</span></div>
             </div>
           </div>
@@ -351,23 +351,34 @@ export default function POS() {
   const paid = parseFloat(amountPaid) || 0;
   const amountDue = Math.max(0, total - paid);
 
+  const getPaymentLabel = (method: string) => {
+    switch (method) {
+      case "cash": return t("cash");
+      case "card": return t("creditCard");
+      case "transfer": return t("moneyTransfer");
+      case "credit": return t("creditSale");
+      case "partial": return t("partial");
+      default: return method;
+    }
+  };
+
   const handleCheckout = () => {
     if (cart.length === 0) {
       toast({ title: t("cartIsEmpty"), variant: "destructive" });
       return;
     }
-    if (saleType === "credit" && !selectedCustomer) {
-      toast({ title: t("selectCustomer"), description: "Credit sales require a customer", variant: "destructive" });
+    if (paymentMethod === "credit" && !selectedCustomer) {
+      toast({ title: t("selectCustomer"), description: t("creditSale"), variant: "destructive" });
       return;
     }
-    if (saleType === "cash" && paid <= 0) {
-      toast({ title: "Please enter amount paid", variant: "destructive" });
+    if (paymentMethod === "cash" && paid <= 0) {
+      toast({ title: t("amountPaid"), description: "Please enter amount paid", variant: "destructive" });
       return;
     }
 
-    const finalPaid = saleType === "credit" ? 0 : paid;
-    const finalDue = saleType === "credit" ? total : Math.max(0, total - paid);
-    const finalPaymentMethod = saleType === "credit" ? "credit" : (paid >= total ? "cash" : "partial");
+    const finalPaid = paymentMethod === "credit" ? 0 : paymentMethod === "cash" ? paid : total;
+    const finalDue = paymentMethod === "credit" ? total : paymentMethod === "cash" ? Math.max(0, total - paid) : 0;
+    const finalPaymentMethod = paymentMethod;
 
     const items = cart.map(item => {
       const ep = effectivePrice(item);
@@ -576,7 +587,6 @@ export default function POS() {
                 size="lg"
                 disabled={cart.length === 0}
                 onClick={() => {
-                  setSaleType("cash");
                   setAmountPaid(total.toFixed(2));
                   setIsCheckoutDialogOpen(true);
                 }}
@@ -658,29 +668,49 @@ export default function POS() {
               <div className="flex justify-between text-lg font-bold pt-1"><span>{t("total")}:</span><span>{total.toFixed(2)} {currency}</span></div>
             </div>
 
-            {/* Payment Type: Cash vs Credit */}
+            {/* Payment Method Selection */}
             <div>
-              <label className="text-sm font-medium">{t("paymentType")}</label>
-              <div className="flex gap-2 mt-1">
+              <label className="text-sm font-medium">{t("selectPaymentMethod")}</label>
+              <div className="grid grid-cols-2 gap-2 mt-2">
                 <Button
-                  variant={saleType === "cash" ? "default" : "outline"}
-                  className="flex-1"
-                  onClick={() => setSaleType("cash")}
-                  data-testid="button-sale-type-cash"
+                  variant={paymentMethod === "cash" ? "default" : "outline"}
+                  className="flex flex-col items-center gap-1 h-16"
+                  onClick={() => setPaymentMethod("cash")}
+                  data-testid="button-payment-cash"
                 >
-                  {t("cashSale")}
+                  <Banknote className="w-5 h-5" />
+                  <span className="text-xs font-medium">{t("cash")}</span>
                 </Button>
                 <Button
-                  variant={saleType === "credit" ? "default" : "outline"}
-                  className={`flex-1 ${saleType === "credit" ? "bg-orange-600 hover:bg-orange-700" : ""}`}
-                  onClick={() => setSaleType("credit")}
-                  data-testid="button-sale-type-credit"
+                  variant={paymentMethod === "card" ? "default" : "outline"}
+                  className="flex flex-col items-center gap-1 h-16"
+                  onClick={() => setPaymentMethod("card")}
+                  data-testid="button-payment-card"
                 >
-                  {t("creditSale")}
+                  <CreditCard className="w-5 h-5" />
+                  <span className="text-xs font-medium">{t("creditCard")}</span>
+                </Button>
+                <Button
+                  variant={paymentMethod === "transfer" ? "default" : "outline"}
+                  className="flex flex-col items-center gap-1 h-16"
+                  onClick={() => setPaymentMethod("transfer")}
+                  data-testid="button-payment-transfer"
+                >
+                  <ArrowLeftRight className="w-5 h-5" />
+                  <span className="text-xs font-medium">{t("moneyTransfer")}</span>
+                </Button>
+                <Button
+                  variant={paymentMethod === "credit" ? "default" : "outline"}
+                  className={`flex flex-col items-center gap-1 h-16 ${paymentMethod === "credit" ? "bg-orange-600 hover:bg-orange-700 border-orange-600" : ""}`}
+                  onClick={() => setPaymentMethod("credit")}
+                  data-testid="button-payment-credit"
+                >
+                  <BookOpen className="w-5 h-5" />
+                  <span className="text-xs font-medium">{t("creditSale")}</span>
                 </Button>
               </div>
-              {saleType === "credit" && !selectedCustomer && (
-                <p className="text-xs text-destructive mt-1">{t("selectCustomer")} — {t("creditSale")}</p>
+              {paymentMethod === "credit" && !selectedCustomer && (
+                <p className="text-xs text-destructive mt-1 font-medium">⚠ {t("selectCustomer")}</p>
               )}
             </div>
 
@@ -697,11 +727,16 @@ export default function POS() {
               </Select>
             </div>
 
-            {saleType === "credit" ? (
+            {paymentMethod === "credit" ? (
               <div className="p-3 bg-orange-500/10 border border-orange-500/30 rounded">
                 <p className="text-orange-700 dark:text-orange-400 font-medium">{t("creditSale")}</p>
                 <p className="text-sm text-muted-foreground">{t("addedToCustomerBalance")}</p>
                 <p className="text-lg font-bold mt-1">{t("amountDue")}: {total.toFixed(2)} {currency}</p>
+              </div>
+            ) : paymentMethod === "card" || paymentMethod === "transfer" ? (
+              <div className="p-3 bg-green-500/10 border border-green-500/30 rounded">
+                <p className="text-green-700 dark:text-green-400 font-medium">{t("paidInFull")}</p>
+                <p className="text-lg font-bold mt-1">{total.toFixed(2)} {currency}</p>
               </div>
             ) : (
               <>
@@ -787,7 +822,7 @@ export default function POS() {
                         </div>
                         <div style={{ display: "flex", justifyContent: "space-between", padding: "3px 0", fontSize: "12px" }}>
                           <span style={{ color: "#64748b" }}>{t("paymentMethod")}</span>
-                          <span style={{ fontWeight: 600, color: "#1e293b" }}>{lastSale.paymentMethod === "cash" ? t("cash") : t("partial")}</span>
+                          <span style={{ fontWeight: 600, color: lastSale.paymentMethod === "credit" ? "#ea580c" : "#1e293b" }}>{getPaymentLabel(lastSale.paymentMethod)}</span>
                         </div>
                         <div style={{ display: "flex", justifyContent: "space-between", padding: "3px 0", fontSize: "12px" }}>
                           <span style={{ color: "#64748b" }}>{t("currency")}</span>

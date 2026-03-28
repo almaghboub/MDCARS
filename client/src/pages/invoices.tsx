@@ -186,8 +186,17 @@ export default function Invoices() {
                         {parseFloat(sale.amountDue) > 0 ? `${sale.amountDue} ${sale.currency}` : "-"}
                       </TableCell>
                       <TableCell>
-                        <Badge variant={sale.paymentMethod === "cash" ? "secondary" : "outline"}>
-                          {sale.paymentMethod === "cash" ? t("cash") : t("partial")}
+                        <Badge variant={
+                          sale.paymentMethod === "credit" ? "destructive" :
+                          sale.paymentMethod === "card" ? "default" :
+                          sale.paymentMethod === "transfer" ? "default" :
+                          "secondary"
+                        }>
+                          {sale.paymentMethod === "cash" ? t("cash") :
+                           sale.paymentMethod === "card" ? t("creditCard") :
+                           sale.paymentMethod === "transfer" ? t("moneyTransfer") :
+                           sale.paymentMethod === "credit" ? t("creditSale") :
+                           t("partial")}
                         </Badge>
                       </TableCell>
                       <TableCell>

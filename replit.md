@@ -103,8 +103,11 @@ PostgreSQL with Drizzle ORM. Schema includes:
 - Quick product search by name/SKU/barcode
 - Shopping cart with quantity management
 - Customer selection or walk-in sales
-- Partial payment support with customer balance tracking
-- Discount application
+- 4 payment methods: Cash, Credit Card, Money Transfer, Credit Sale
+  - Cash: enter amount paid; change or partial balance tracked
+  - Credit Card / Money Transfer: full payment confirmed instantly
+  - Credit Sale: requires customer selection, full amount added to customer balance, nothing deducted from cashbox
+- Discount and service fee application
 
 ### Customer Management
 - Purchase history tracking

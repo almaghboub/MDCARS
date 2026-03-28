@@ -58,6 +58,22 @@ async function runMigrations() {
       END $$;
     `);
 
+    // Add 'card' and 'transfer' values to payment_method enum (safe, idempotent)
+    await client.query(`
+      DO $$ BEGIN
+        IF NOT EXISTS (SELECT 1 FROM pg_enum WHERE enumlabel = 'card' AND enumtypid = 'payment_method'::regtype) THEN
+          ALTER TYPE payment_method ADD VALUE 'card';
+        END IF;
+      END $$;
+    `);
+    await client.query(`
+      DO $$ BEGIN
+        IF NOT EXISTS (SELECT 1 FROM pg_enum WHERE enumlabel = 'transfer' AND enumtypid = 'payment_method'::regtype) THEN
+          ALTER TYPE payment_method ADD VALUE 'transfer';
+        END IF;
+      END $$;
+    `);
+
     // products: damaged_stock column
     await client.query(`ALTER TABLE products ADD COLUMN IF NOT EXISTS damaged_stock integer NOT NULL DEFAULT 0`);
 

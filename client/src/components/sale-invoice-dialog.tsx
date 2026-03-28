@@ -179,6 +179,20 @@ export function SaleInvoiceDialog({ sale, open, onOpenChange }: SaleInvoiceDialo
     }
   };
 
+  const paymentLabel = (method: string) => {
+    switch (method) {
+      case "cash": return t("cash");
+      case "card": return t("creditCard");
+      case "transfer": return t("moneyTransfer");
+      case "credit": return t("creditSale");
+      case "partial": return t("partial");
+      default: return method;
+    }
+  };
+
+  const paymentColor = (method: string) =>
+    method === "credit" ? "#ea580c" : method === "card" ? "#2563eb" : method === "transfer" ? "#7c3aed" : "#16a34a";
+
   const statusClass = (status: string) => {
     switch (status) {
       case "completed": return "status-completed";
@@ -282,7 +296,7 @@ export function SaleInvoiceDialog({ sale, open, onOpenChange }: SaleInvoiceDialo
                     </div>
                     <div className="info-line" style={{ display: "flex", justifyContent: "space-between", padding: "4px 0", fontSize: "13px" }}>
                       <span className="label" style={{ color: "#64748b" }}>{t("paymentMethod")}</span>
-                      <span className="value" style={{ fontWeight: 600, color: "#1e293b" }}>{sale.paymentMethod === "cash" ? t("cash") : t("partial")}</span>
+                      <span className="value" style={{ fontWeight: 700, color: paymentColor(sale.paymentMethod) }}>{paymentLabel(sale.paymentMethod)}</span>
                     </div>
                     <div className="info-line" style={{ display: "flex", justifyContent: "space-between", padding: "4px 0", fontSize: "13px" }}>
                       <span className="label" style={{ color: "#64748b" }}>{t("currency")}</span>
