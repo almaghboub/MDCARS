@@ -126,6 +126,11 @@ const translations = {
     creditMarkup: "Credit Markup (%)",
     creditMarkupDesc: "Additional percentage added on top of cash price for credit sales",
     paymentType: "Payment Type",
+    serviceFee: "Service Fee",
+    serviceFeeDesc: "Collected for service provider — not counted as product revenue",
+    productsTotal: "Products Total",
+    serviceFeeTotal: "Total Service Fees",
+    noServiceFee: "No service fee",
 
     // Products
     manageProductCatalog: "Manage your product catalog",
@@ -570,6 +575,11 @@ const translations = {
     creditMarkup: "هامش الآجل (%)",
     creditMarkupDesc: "نسبة إضافية على السعر النقدي للبيع الآجل",
     paymentType: "نوع الدفع",
+    serviceFee: "رسوم الخدمة",
+    serviceFeeDesc: "تُجمع لصالح مزود الخدمة — لا تُحسب ضمن إيرادات المنتجات",
+    productsTotal: "إجمالي المنتجات",
+    serviceFeeTotal: "إجمالي رسوم الخدمة",
+    noServiceFee: "لا توجد رسوم خدمة",
 
     // Products
     manageProductCatalog: "إدارة كتالوج المنتجات",

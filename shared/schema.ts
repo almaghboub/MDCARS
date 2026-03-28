@@ -104,6 +104,7 @@ export const sales = pgTable("sales", {
   status: saleStatusEnum("status").notNull().default("completed"),
   subtotal: decimal("subtotal", { precision: 10, scale: 2 }).notNull(),
   discount: decimal("discount", { precision: 10, scale: 2 }).notNull().default("0"),
+  serviceFee: decimal("service_fee", { precision: 10, scale: 2 }).notNull().default("0"),
   totalAmount: decimal("total_amount", { precision: 10, scale: 2 }).notNull(),
   amountPaid: decimal("amount_paid", { precision: 10, scale: 2 }).notNull(),
   amountDue: decimal("amount_due", { precision: 10, scale: 2 }).notNull().default("0"),

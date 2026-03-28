@@ -81,6 +81,7 @@ async function runMigrations() {
     await client.query(`ALTER TABLE sales ADD COLUMN IF NOT EXISTS original_total decimal(15, 2)`);
     await client.query(`ALTER TABLE sales ADD COLUMN IF NOT EXISTS edit_note text`);
     await client.query(`ALTER TABLE sales ADD COLUMN IF NOT EXISTS edited_at timestamp`);
+    await client.query(`ALTER TABLE sales ADD COLUMN IF NOT EXISTS service_fee decimal(10, 2) NOT NULL DEFAULT 0`);
 
     console.log("Database migrations completed successfully.");
   } catch (err) {

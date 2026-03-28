@@ -6,7 +6,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { BarChart3, TrendingUp, Package, DollarSign, Calendar, Download, Eye } from "lucide-react";
+import { BarChart3, TrendingUp, Package, DollarSign, Calendar, Download, Eye, Wrench } from "lucide-react";
 import type { Sale, SaleWithDetails } from "@shared/schema";
 import { format, startOfMonth, endOfMonth, startOfDay, endOfDay, subMonths, subDays } from "date-fns";
 import { useI18n } from "@/lib/i18n";
@@ -29,6 +29,7 @@ interface BestSeller {
 interface SalesSummary {
   totalSales: number;
   totalRevenue: number;
+  totalServiceFees: number;
   totalProfit: number;
   averageOrderValue: number;
 }
@@ -81,10 +82,11 @@ export default function Reports() {
 
   const summary: SalesSummary = {
     totalSales: filteredSales.length,
-    totalRevenue: filteredSales.reduce((sum, s) => sum + parseFloat(s.totalAmount), 0),
+    totalServiceFees: filteredSales.reduce((sum, s) => sum + parseFloat(s.serviceFee || "0"), 0),
+    totalRevenue: filteredSales.reduce((sum, s) => sum + parseFloat(s.totalAmount) - parseFloat(s.serviceFee || "0"), 0),
     totalProfit: filteredSales.reduce((sum, s) => sum + calculateProfit(s), 0),
     averageOrderValue: filteredSales.length > 0 
-      ? filteredSales.reduce((sum, s) => sum + parseFloat(s.totalAmount), 0) / filteredSales.length 
+      ? filteredSales.reduce((sum, s) => sum + parseFloat(s.totalAmount) - parseFloat(s.serviceFee || "0"), 0) / filteredSales.length 
       : 0,
   };
 
@@ -136,7 +138,7 @@ export default function Reports() {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
         <Card>
           <CardContent className="p-6">
             <div className="flex items-center justify-between">
@@ -155,11 +157,27 @@ export default function Reports() {
               <div>
                 <p className="text-sm text-muted-foreground">{t("totalRevenue")}</p>
                 <p className="text-2xl font-bold" data-testid="text-total-revenue">{summary.totalRevenue.toFixed(2)} LYD</p>
+                <p className="text-xs text-muted-foreground mt-1">{t("productsTotal")}</p>
               </div>
               <DollarSign className="w-8 h-8 text-green-500" />
             </div>
           </CardContent>
         </Card>
+
+        {summary.totalServiceFees > 0 && (
+          <Card className="border-blue-200 dark:border-blue-800">
+            <CardContent className="p-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm text-blue-600 dark:text-blue-400">{t("serviceFeeTotal")}</p>
+                  <p className="text-2xl font-bold text-blue-600 dark:text-blue-400" data-testid="text-service-fees">{summary.totalServiceFees.toFixed(2)} LYD</p>
+                  <p className="text-xs text-muted-foreground mt-1">{t("serviceFeeDesc").split("—")[0].trim()}</p>
+                </div>
+                <Wrench className="w-8 h-8 text-blue-500" />
+              </div>
+            </CardContent>
+          </Card>
+        )}
 
         <Card>
           <CardContent className="p-6">

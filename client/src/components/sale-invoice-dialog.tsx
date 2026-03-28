@@ -351,6 +351,16 @@ export function SaleInvoiceDialog({ sale, open, onOpenChange }: SaleInvoiceDialo
                       <span style={{ fontWeight: 600, color: "#ef4444" }}>-{parseFloat(sale.discount).toFixed(2)} {sale.currency}</span>
                     </div>
                   )}
+                  <div className="total-row" style={{ display: "flex", justifyContent: "space-between", padding: "10px 18px", fontSize: "13px", borderBottom: "1px solid #f1f5f9" }}>
+                    <span style={{ color: "#1e293b", fontWeight: 600 }}>{t("productsTotal")}</span>
+                    <span style={{ fontWeight: 700, color: "#1e293b" }}>{(parseFloat(sale.subtotal) - parseFloat(sale.discount || "0")).toFixed(2)} {sale.currency}</span>
+                  </div>
+                  {parseFloat(sale.serviceFee || "0") > 0 && (
+                    <div className="total-row" style={{ display: "flex", justifyContent: "space-between", padding: "10px 18px", fontSize: "13px", borderBottom: "1px solid #f1f5f9", background: "#eff6ff" }}>
+                      <span style={{ color: "#1d4ed8", fontWeight: 600 }}>{t("serviceFee")}</span>
+                      <span style={{ fontWeight: 700, color: "#1d4ed8" }}>+{parseFloat(sale.serviceFee || "0").toFixed(2)} {sale.currency}</span>
+                    </div>
+                  )}
                   <div className="total-row grand-total" style={{ display: "flex", justifyContent: "space-between", padding: "14px 18px", background: "linear-gradient(135deg, #1e3a5f 0%, #0f2341 100%)" }}>
                     <span style={{ color: "#93c5fd", fontWeight: 700, fontSize: "15px", textTransform: "uppercase", letterSpacing: "1px" }}>{t("total")}</span>
                     <span style={{ color: "#fff", fontWeight: 900, fontSize: "18px" }}>{parseFloat(sale.totalAmount).toFixed(2)} {sale.currency}</span>

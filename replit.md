@@ -70,6 +70,14 @@ PostgreSQL with Drizzle ORM. Schema includes:
 
 ## Key Features
 
+### Service Fee System
+- Separate `serviceFee` field on every sale invoice
+- Formula: Final Total = Products Total (subtotal − discount) + Service Fee
+- Service fee is shown as its own line in POS cart, checkout dialog, on-screen receipt, and printed invoice
+- Service fee is **excluded** from product revenue and profit calculations in all reports
+- Stored in `sales.service_fee` column; reports subtract it from `totalAmount` to get product revenue
+- Reports show a separate "Total Service Fees" card (visible only when > 0)
+
 ### Global Price Markup System
 - Adjustable markup percentage applied dynamically to all selling prices
 - Base prices stored unchanged in database; markup calculated on display

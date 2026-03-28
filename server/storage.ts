@@ -793,7 +793,8 @@ export class DatabaseStorage implements IStorage {
 
     const [result] = await db.select({
       totalSales: sql<number>`count(*)`,
-      totalRevenue: sql<number>`coalesce(sum(${sales.totalAmount}::numeric), 0)`,
+      totalRevenue: sql<number>`coalesce(sum(${sales.totalAmount}::numeric - coalesce(${sales.serviceFee}::numeric, 0)), 0)`,
+      totalServiceFees: sql<number>`coalesce(sum(coalesce(${sales.serviceFee}::numeric, 0)), 0)`,
     }).from(sales).where(and(gte(sales.createdAt, startOfDay), lte(sales.createdAt, endOfDay)));
 
     const [profitResult] = await db.select({
@@ -805,17 +806,19 @@ export class DatabaseStorage implements IStorage {
     return {
       totalSales: Number(result?.totalSales || 0),
       totalRevenue: Number(result?.totalRevenue || 0),
+      totalServiceFees: Number(result?.totalServiceFees || 0),
       totalProfit: Number(profitResult?.totalProfit || 0),
     };
   }
 
-  async getMonthlySalesReport(year: number, month: number): Promise<{ totalSales: number; totalRevenue: number; totalProfit: number }> {
+  async getMonthlySalesReport(year: number, month: number): Promise<{ totalSales: number; totalRevenue: number; totalServiceFees: number; totalProfit: number }> {
     const startOfMonth = new Date(year, month - 1, 1);
     const endOfMonth = new Date(year, month, 0, 23, 59, 59, 999);
 
     const [result] = await db.select({
       totalSales: sql<number>`count(*)`,
-      totalRevenue: sql<number>`coalesce(sum(${sales.totalAmount}::numeric), 0)`,
+      totalRevenue: sql<number>`coalesce(sum(${sales.totalAmount}::numeric - coalesce(${sales.serviceFee}::numeric, 0)), 0)`,
+      totalServiceFees: sql<number>`coalesce(sum(coalesce(${sales.serviceFee}::numeric, 0)), 0)`,
     }).from(sales).where(and(gte(sales.createdAt, startOfMonth), lte(sales.createdAt, endOfMonth)));
 
     const [profitResult] = await db.select({
@@ -827,6 +830,7 @@ export class DatabaseStorage implements IStorage {
     return {
       totalSales: Number(result?.totalSales || 0),
       totalRevenue: Number(result?.totalRevenue || 0),
+      totalServiceFees: Number(result?.totalServiceFees || 0),
       totalProfit: Number(profitResult?.totalProfit || 0),
     };
   }

@@ -38,6 +38,7 @@ export default function POS() {
   const [amountPaid, setAmountPaid] = useState("");
   const [currency, setCurrency] = useState<"LYD" | "USD">("LYD");
   const [discount, setDiscount] = useState("0");
+  const [serviceFee, setServiceFee] = useState("0");
   const [customerSearch, setCustomerSearch] = useState("");
   const [newCustomerName, setNewCustomerName] = useState("");
   const [newCustomerPhone, setNewCustomerPhone] = useState("");
@@ -82,6 +83,7 @@ export default function POS() {
       setSelectedCustomer(null);
       setAmountPaid("");
       setDiscount("0");
+      setServiceFee("0");
     },
     onError: (error: any) => {
       toast({ title: "Error", description: error.message, variant: "destructive" });
@@ -104,10 +106,24 @@ export default function POS() {
       </tr>
     `).join('') || '';
 
+    const productsSubtotal = parseFloat(sale.subtotal) - parseFloat(sale.discount || "0");
     const discountRow = parseFloat(sale.discount) > 0 ? `
       <div style="display:flex;justify-content:space-between;padding:10px 18px;font-size:13px;border-bottom:1px solid #f1f5f9">
         <span style="color:#64748b">${t("discount")}</span>
         <span style="font-weight:600;color:#ef4444">-${parseFloat(sale.discount).toFixed(2)} ${sale.currency}</span>
+      </div>` : '';
+
+    const productsRow = `
+      <div style="display:flex;justify-content:space-between;padding:10px 18px;font-size:13px;border-bottom:1px solid #f1f5f9">
+        <span style="color:#1e293b;font-weight:600">${t("productsTotal")}</span>
+        <span style="font-weight:700;color:#1e293b">${productsSubtotal.toFixed(2)} ${sale.currency}</span>
+      </div>`;
+
+    const serviceFeeVal = parseFloat(sale.serviceFee || "0");
+    const serviceFeeRow = serviceFeeVal > 0 ? `
+      <div style="display:flex;justify-content:space-between;padding:10px 18px;font-size:13px;border-bottom:1px solid #f1f5f9;background:#eff6ff">
+        <span style="color:#1d4ed8;font-weight:600">${t("serviceFee")}</span>
+        <span style="font-weight:700;color:#1d4ed8">+${serviceFeeVal.toFixed(2)} ${sale.currency}</span>
       </div>` : '';
 
     const dueRow = parseFloat(sale.amountDue) > 0 ? `
@@ -192,12 +208,14 @@ export default function POS() {
         </div>
 
         <div style="display:flex;justify-content:flex-end;margin-bottom:22px">
-          <div style="width:300px;border:1px solid #e2e8f0;border-radius:10px;overflow:hidden">
+          <div style="width:320px;border:1px solid #e2e8f0;border-radius:10px;overflow:hidden">
             <div style="display:flex;justify-content:space-between;padding:10px 18px;font-size:13px;border-bottom:1px solid #f1f5f9">
               <span style="color:#64748b">${t("subtotal")}</span>
               <span style="font-weight:600">${parseFloat(sale.subtotal).toFixed(2)} ${sale.currency}</span>
             </div>
             ${discountRow}
+            ${productsRow}
+            ${serviceFeeRow}
             <div style="display:flex;justify-content:space-between;padding:14px 18px;background:linear-gradient(135deg,#1e3a5f,#0f2341)">
               <span style="color:#93c5fd;font-weight:700;font-size:15px;text-transform:uppercase;letter-spacing:1px">${t("total")}</span>
               <span style="color:#fff;font-weight:900;font-size:18px">${parseFloat(sale.totalAmount).toFixed(2)} ${sale.currency}</span>
@@ -327,7 +345,9 @@ export default function POS() {
   }, [cart]);
 
   const discountAmount = parseFloat(discount) || 0;
-  const total = subtotal - discountAmount;
+  const serviceFeeAmount = parseFloat(serviceFee) || 0;
+  const productsTotal = subtotal - discountAmount;
+  const total = productsTotal + serviceFeeAmount;
   const paid = parseFloat(amountPaid) || 0;
   const amountDue = Math.max(0, total - paid);
 
@@ -368,6 +388,7 @@ export default function POS() {
         customerId: selectedCustomer?.id || null,
         subtotal: subtotal.toFixed(2),
         discount: discountAmount.toFixed(2),
+        serviceFee: serviceFeeAmount.toFixed(2),
         totalAmount: total.toFixed(2),
         amountPaid: finalPaid.toFixed(2),
         amountDue: finalDue.toFixed(2),
@@ -531,6 +552,21 @@ export default function POS() {
                   data-testid="input-discount"
                 />
               </div>
+              <div className="flex justify-between font-medium text-sm border-b pb-2">
+                <span>{t("productsTotal")}:</span>
+                <span>{productsTotal.toFixed(2)} LYD</span>
+              </div>
+              <div className="flex justify-between items-center">
+                <span className="text-sm text-blue-600 dark:text-blue-400">{t("serviceFee")}:</span>
+                <Input
+                  type="number"
+                  value={serviceFee}
+                  onChange={(e) => setServiceFee(e.target.value)}
+                  className="w-24 text-right text-blue-600 dark:text-blue-400"
+                  placeholder="0"
+                  data-testid="input-service-fee"
+                />
+              </div>
               <div className="flex justify-between text-lg font-bold">
                 <span>{t("total")}:</span>
                 <span data-testid="text-cart-total">{total.toFixed(2)} LYD</span>
@@ -610,10 +646,16 @@ export default function POS() {
             <DialogTitle>{t("completeSale")}</DialogTitle>
           </DialogHeader>
           <div className="space-y-4">
-            <div className="p-4 bg-muted rounded space-y-2">
-              <div className="flex justify-between"><span>{t("subtotal")}:</span><span>{subtotal.toFixed(2)} LYD</span></div>
-              <div className="flex justify-between"><span>{t("discount")}:</span><span>-{discountAmount.toFixed(2)} LYD</span></div>
-              <div className="flex justify-between text-lg font-bold"><span>{t("total")}:</span><span>{total.toFixed(2)} LYD</span></div>
+            <div className="p-4 bg-muted rounded space-y-1">
+              <div className="flex justify-between text-sm"><span>{t("subtotal")}:</span><span>{subtotal.toFixed(2)} {currency}</span></div>
+              {discountAmount > 0 && (
+                <div className="flex justify-between text-sm"><span>{t("discount")}:</span><span className="text-red-500">-{discountAmount.toFixed(2)} {currency}</span></div>
+              )}
+              <div className="flex justify-between text-sm font-medium border-b border-border pb-1"><span>{t("productsTotal")}:</span><span>{productsTotal.toFixed(2)} {currency}</span></div>
+              {serviceFeeAmount > 0 && (
+                <div className="flex justify-between text-sm text-blue-600 dark:text-blue-400"><span>{t("serviceFee")}:</span><span>+{serviceFeeAmount.toFixed(2)} {currency}</span></div>
+              )}
+              <div className="flex justify-between text-lg font-bold pt-1"><span>{t("total")}:</span><span>{total.toFixed(2)} {currency}</span></div>
             </div>
 
             {/* Payment Type: Cash vs Credit */}
@@ -809,6 +851,18 @@ export default function POS() {
                         <div style={{ display: "flex", justifyContent: "space-between", padding: "9px 16px", fontSize: "12px", borderBottom: "1px solid #f1f5f9" }}>
                           <span style={{ color: "#64748b" }}>{t("discount")}</span>
                           <span style={{ fontWeight: 600, color: "#ef4444" }}>-{parseFloat(lastSale.discount).toFixed(2)} {lastSale.currency}</span>
+                        </div>
+                      )}
+                      <div style={{ display: "flex", justifyContent: "space-between", padding: "9px 16px", fontSize: "12px", borderBottom: "1px solid #f1f5f9" }}>
+                        <span style={{ color: "#1e293b", fontWeight: 600 }}>{t("productsTotal")}</span>
+                        <span style={{ fontWeight: 700, color: "#1e293b" }}>
+                          {(parseFloat(lastSale.subtotal) - parseFloat(lastSale.discount || "0")).toFixed(2)} {lastSale.currency}
+                        </span>
+                      </div>
+                      {parseFloat(lastSale.serviceFee || "0") > 0 && (
+                        <div style={{ display: "flex", justifyContent: "space-between", padding: "9px 16px", fontSize: "12px", borderBottom: "1px solid #f1f5f9", background: "#eff6ff" }}>
+                          <span style={{ color: "#1d4ed8", fontWeight: 600 }}>{t("serviceFee")}</span>
+                          <span style={{ fontWeight: 700, color: "#1d4ed8" }}>+{parseFloat(lastSale.serviceFee || "0").toFixed(2)} {lastSale.currency}</span>
                         </div>
                       )}
                       <div style={{ display: "flex", justifyContent: "space-between", padding: "12px 16px", background: "linear-gradient(135deg, #1e3a5f, #0f2341)" }}>
