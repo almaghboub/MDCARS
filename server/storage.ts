@@ -110,6 +110,7 @@ export interface IStorage {
   getDashboardStats(): Promise<{
     todaySales: number;
     todayRevenue: number;
+    todayServiceFees: number;
     totalProducts: number;
     lowStockCount: number;
     totalCustomers: number;
@@ -118,8 +119,9 @@ export interface IStorage {
   }>;
 
   getBestSellingProducts(limit?: number): Promise<Array<{ productId: string; productName: string; totalSold: number; totalRevenue: number }>>;
-  getDailySalesReport(date: Date): Promise<{ totalSales: number; totalRevenue: number; totalProfit: number }>;
-  getMonthlySalesReport(year: number, month: number): Promise<{ totalSales: number; totalRevenue: number; totalProfit: number }>;
+  getDailySalesReport(date: Date): Promise<{ totalSales: number; totalRevenue: number; totalServiceFees: number; totalProfit: number }>;
+  getMonthlySalesReport(year: number, month: number): Promise<{ totalSales: number; totalRevenue: number; totalServiceFees: number; totalProfit: number }>;
+  getWeeklySalesReport(): Promise<{ totalSales: number; totalRevenue: number; totalServiceFees: number; totalProfit: number }>;
 
   initializeDefaultData(): Promise<void>;
 }
@@ -762,9 +764,11 @@ export class DatabaseStorage implements IStorage {
     const tomorrow = new Date(today);
     tomorrow.setDate(tomorrow.getDate() + 1);
 
-    const todaySalesResult = await db.select({ count: sql<number>`count(*)`, sum: sql<number>`coalesce(sum(${sales.totalAmount}::numeric), 0)` })
-      .from(sales)
-      .where(and(gte(sales.createdAt, today), lte(sales.createdAt, tomorrow)));
+    const todaySalesResult = await db.select({
+      count: sql<number>`count(*)`,
+      sum: sql<number>`coalesce(sum(${sales.totalAmount}::numeric), 0)`,
+      serviceFees: sql<number>`coalesce(sum(coalesce(${sales.serviceFee}::numeric, 0)), 0)`,
+    }).from(sales).where(and(gte(sales.createdAt, today), lte(sales.createdAt, tomorrow)));
     const [productsResult] = await db.select({ count: sql<number>`count(*)` }).from(products);
     const lowStockResult = await db.select({ count: sql<number>`count(*)` }).from(products)
       .where(sql`${products.currentStock} <= ${products.lowStockThreshold}`);
@@ -774,11 +778,43 @@ export class DatabaseStorage implements IStorage {
     return {
       todaySales: Number(todaySalesResult[0]?.count || 0),
       todayRevenue: Number(todaySalesResult[0]?.sum || 0),
+      todayServiceFees: Number(todaySalesResult[0]?.serviceFees || 0),
       totalProducts: Number(productsResult?.count || 0),
       lowStockCount: Number(lowStockResult[0]?.count || 0),
       totalCustomers: Number(customersResult?.count || 0),
       cashboxBalanceUSD: parseFloat(box?.balanceUSD || "0"),
       cashboxBalanceLYD: parseFloat(box?.balanceLYD || "0"),
+    };
+  }
+
+  async getWeeklySalesReport(): Promise<{ totalSales: number; totalRevenue: number; totalServiceFees: number; totalProfit: number }> {
+    const now = new Date();
+    const dayOfWeek = now.getDay();
+    const daysFromMonday = dayOfWeek === 0 ? 6 : dayOfWeek - 1;
+    const startOfWeek = new Date(now);
+    startOfWeek.setDate(now.getDate() - daysFromMonday);
+    startOfWeek.setHours(0, 0, 0, 0);
+    const endOfWeek = new Date(startOfWeek);
+    endOfWeek.setDate(startOfWeek.getDate() + 6);
+    endOfWeek.setHours(23, 59, 59, 999);
+
+    const [result] = await db.select({
+      totalSales: sql<number>`count(*)`,
+      totalRevenue: sql<number>`coalesce(sum(${sales.totalAmount}::numeric - coalesce(${sales.serviceFee}::numeric, 0)), 0)`,
+      totalServiceFees: sql<number>`coalesce(sum(coalesce(${sales.serviceFee}::numeric, 0)), 0)`,
+    }).from(sales).where(and(gte(sales.createdAt, startOfWeek), lte(sales.createdAt, endOfWeek)));
+
+    const [profitResult] = await db.select({
+      totalProfit: sql<number>`coalesce(sum(${saleItems.profit}::numeric), 0)`,
+    }).from(saleItems)
+      .innerJoin(sales, eq(saleItems.saleId, sales.id))
+      .where(and(gte(sales.createdAt, startOfWeek), lte(sales.createdAt, endOfWeek)));
+
+    return {
+      totalSales: Number(result?.totalSales || 0),
+      totalRevenue: Number(result?.totalRevenue || 0),
+      totalServiceFees: Number(result?.totalServiceFees || 0),
+      totalProfit: Number(profitResult?.totalProfit || 0),
     };
   }
 

@@ -7,23 +7,23 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { BarChart3, TrendingUp, Package, DollarSign, Calendar, Download, Eye, Wrench } from "lucide-react";
-import type { Sale, SaleWithDetails } from "@shared/schema";
+import type { SaleWithDetails } from "@shared/schema";
 import { format, startOfMonth, endOfMonth, startOfDay, endOfDay, subMonths, subDays } from "date-fns";
 import { useI18n } from "@/lib/i18n";
 import { SaleInvoiceDialog } from "@/components/sale-invoice-dialog";
-
-interface DailySalesReport {
-  date: string;
-  totalSales: number;
-  totalRevenue: number;
-  totalProfit: number;
-}
 
 interface BestSeller {
   productId: string;
   productName: string;
   totalSold: number;
   totalRevenue: number;
+}
+
+interface PeriodReport {
+  totalSales: number;
+  totalRevenue: number;
+  totalServiceFees: number;
+  totalProfit: number;
 }
 
 interface SalesSummary {
@@ -48,12 +48,20 @@ export default function Reports() {
     queryKey: ["/api/reports/best-sellers"],
   });
 
-  const { data: dailyReport = [] } = useQuery<DailySalesReport[]>({
-    queryKey: ["/api/reports/daily", period],
+  const { data: todayReport } = useQuery<PeriodReport>({
+    queryKey: ["/api/reports/daily"],
+  });
+
+  const { data: weeklyReport } = useQuery<PeriodReport>({
+    queryKey: ["/api/reports/weekly"],
+  });
+
+  const now = new Date();
+  const { data: monthlyReport } = useQuery<PeriodReport>({
+    queryKey: ["/api/reports/monthly"],
   });
 
   const getDateRange = () => {
-    const now = new Date();
     switch (period) {
       case "today":
         return { start: startOfDay(now), end: endOfDay(now) };
@@ -85,23 +93,23 @@ export default function Reports() {
     totalServiceFees: filteredSales.reduce((sum, s) => sum + parseFloat(s.serviceFee || "0"), 0),
     totalRevenue: filteredSales.reduce((sum, s) => sum + parseFloat(s.totalAmount) - parseFloat(s.serviceFee || "0"), 0),
     totalProfit: filteredSales.reduce((sum, s) => sum + calculateProfit(s), 0),
-    averageOrderValue: filteredSales.length > 0 
-      ? filteredSales.reduce((sum, s) => sum + parseFloat(s.totalAmount) - parseFloat(s.serviceFee || "0"), 0) / filteredSales.length 
+    averageOrderValue: filteredSales.length > 0
+      ? filteredSales.reduce((sum, s) => sum + parseFloat(s.totalAmount) - parseFloat(s.serviceFee || "0"), 0) / filteredSales.length
       : 0,
   };
 
   const exportToCSV = () => {
-    const headers = [t("date"), t("saleNumber"), t("customer"), t("total"), t("profit"), t("payment"), t("status")];
+    const headers = [t("date"), t("saleNumber"), t("customer"), t("total"), t("serviceFee"), t("profit"), t("payment"), t("status")];
     const rows = filteredSales.map(sale => [
       format(new Date(sale.createdAt), "yyyy-MM-dd HH:mm"),
       sale.saleNumber,
       sale.customer?.name || t("walkin"),
       sale.totalAmount,
+      sale.serviceFee || "0",
       calculateProfit(sale).toFixed(2),
       sale.paymentMethod,
       sale.status,
     ]);
-    
     const csvContent = [headers, ...rows].map(row => row.join(",")).join("\n");
     const blob = new Blob([csvContent], { type: "text/csv" });
     const url = URL.createObjectURL(blob);
@@ -110,6 +118,19 @@ export default function Reports() {
     a.download = `sales-report-${format(new Date(), "yyyy-MM-dd")}.csv`;
     a.click();
   };
+
+  const getPaymentLabel = (method: string) => {
+    switch (method) {
+      case "cash": return t("cash");
+      case "card": return t("creditCard");
+      case "transfer": return t("moneyTransfer");
+      case "credit": return t("creditSale");
+      case "mixed": return t("mixed");
+      default: return method;
+    }
+  };
+
+  const serviceFeeInvoices = filteredSales.filter(s => parseFloat(s.serviceFee || "0") > 0);
 
   return (
     <div className="p-6 space-y-6">
@@ -138,7 +159,8 @@ export default function Reports() {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
+      {/* Summary cards */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         <Card>
           <CardContent className="p-6">
             <div className="flex items-center justify-between">
@@ -163,21 +185,6 @@ export default function Reports() {
             </div>
           </CardContent>
         </Card>
-
-        {summary.totalServiceFees > 0 && (
-          <Card className="border-blue-200 dark:border-blue-800">
-            <CardContent className="p-6">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm text-blue-600 dark:text-blue-400">{t("serviceFeeTotal")}</p>
-                  <p className="text-2xl font-bold text-blue-600 dark:text-blue-400" data-testid="text-service-fees">{summary.totalServiceFees.toFixed(2)} LYD</p>
-                  <p className="text-xs text-muted-foreground mt-1">{t("serviceFeeDesc").split("—")[0].trim()}</p>
-                </div>
-                <Wrench className="w-8 h-8 text-blue-500" />
-              </div>
-            </CardContent>
-          </Card>
-        )}
 
         <Card>
           <CardContent className="p-6">
@@ -207,14 +214,18 @@ export default function Reports() {
       <Tabs defaultValue="sales" className="space-y-4">
         <TabsList>
           <TabsTrigger value="sales">{t("salesHistory")}</TabsTrigger>
+          <TabsTrigger value="service-fees" className="flex items-center gap-1.5">
+            <Wrench className="w-3.5 h-3.5" />
+            {t("serviceFeeReport")}
+          </TabsTrigger>
           <TabsTrigger value="best-sellers">{t("bestSellers")}</TabsTrigger>
-          <TabsTrigger value="daily">{t("dailySummary")}</TabsTrigger>
         </TabsList>
 
+        {/* ── Sales History ── */}
         <TabsContent value="sales" className="space-y-4">
           <Card>
             <CardHeader>
-              <CardTitle>{t("salesHistory")} ({filteredSales.length} sales)</CardTitle>
+              <CardTitle>{t("salesHistory")} ({filteredSales.length})</CardTitle>
             </CardHeader>
             <CardContent>
               {filteredSales.length === 0 ? (
@@ -227,8 +238,8 @@ export default function Reports() {
                       <TableHead>{t("saleNumber")}</TableHead>
                       <TableHead>{t("soldBy")}</TableHead>
                       <TableHead>{t("customer")}</TableHead>
-                      <TableHead>{t("items")}</TableHead>
                       <TableHead>{t("total")}</TableHead>
+                      <TableHead className="text-blue-600">{t("serviceFee")}</TableHead>
                       <TableHead>{t("profit")}</TableHead>
                       <TableHead>{t("payment")}</TableHead>
                       <TableHead>{t("status")}</TableHead>
@@ -242,13 +253,15 @@ export default function Reports() {
                         <TableCell className="font-medium">{sale.saleNumber}</TableCell>
                         <TableCell>{sale.createdBy?.firstName} {sale.createdBy?.lastName}</TableCell>
                         <TableCell>{sale.customer?.name || t("walkin")}</TableCell>
-                        <TableCell>{sale.items?.length || 0}</TableCell>
                         <TableCell className="font-bold">{sale.totalAmount} {sale.currency}</TableCell>
+                        <TableCell className="text-blue-600 font-medium">
+                          {parseFloat(sale.serviceFee || "0") > 0
+                            ? `${parseFloat(sale.serviceFee || "0").toFixed(2)} ${sale.currency}`
+                            : <span className="text-muted-foreground">—</span>}
+                        </TableCell>
                         <TableCell className="text-green-600">{calculateProfit(sale).toFixed(2)} LYD</TableCell>
                         <TableCell>
-                          <Badge variant={sale.paymentMethod === "cash" ? "secondary" : "outline"}>
-                            {sale.paymentMethod === "cash" ? t("cash") : t("partial")}
-                          </Badge>
+                          <Badge variant="secondary">{getPaymentLabel(sale.paymentMethod)}</Badge>
                         </TableCell>
                         <TableCell>
                           <Badge variant={sale.status === "completed" ? "default" : sale.status === "pending" ? "secondary" : "destructive"}>
@@ -274,6 +287,147 @@ export default function Reports() {
           </Card>
         </TabsContent>
 
+        {/* ── Service Fee Report ── */}
+        <TabsContent value="service-fees" className="space-y-6">
+          {/* Note banner */}
+          <Card className="border-blue-200 dark:border-blue-800 bg-blue-50/50 dark:bg-blue-950/20">
+            <CardContent className="p-4 flex items-start gap-3">
+              <Wrench className="w-5 h-5 text-blue-500 mt-0.5 shrink-0" />
+              <p className="text-sm text-blue-700 dark:text-blue-300">{t("serviceWorkerNote")}</p>
+            </CardContent>
+          </Card>
+
+          {/* Three period cards */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            {/* Today */}
+            <Card className="border-blue-200 dark:border-blue-800">
+              <CardHeader className="pb-2">
+                <CardTitle className="text-base flex items-center gap-2 text-blue-700 dark:text-blue-300">
+                  <Calendar className="w-4 h-4" />
+                  {t("today")}
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <p className="text-3xl font-bold text-blue-600 dark:text-blue-400" data-testid="text-fee-today">
+                  {(todayReport?.totalServiceFees ?? 0).toFixed(2)}
+                  <span className="text-sm font-normal text-muted-foreground ml-1">LYD</span>
+                </p>
+                <p className="text-sm text-muted-foreground mt-1">
+                  {todayReport?.totalSales ?? 0} {t("totalSales").toLowerCase()} · {todayReport?.totalSales ?? 0} {t("feesCollected")}
+                </p>
+                <div className="mt-3 pt-3 border-t border-border text-xs text-muted-foreground space-y-1">
+                  <div className="flex justify-between"><span>{t("productsTotal")}</span><span>{(todayReport?.totalRevenue ?? 0).toFixed(2)} LYD</span></div>
+                  <div className="flex justify-between"><span>{t("totalProfit")}</span><span className="text-green-600">{(todayReport?.totalProfit ?? 0).toFixed(2)} LYD</span></div>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* This week */}
+            <Card className="border-blue-200 dark:border-blue-800">
+              <CardHeader className="pb-2">
+                <CardTitle className="text-base flex items-center gap-2 text-blue-700 dark:text-blue-300">
+                  <Calendar className="w-4 h-4" />
+                  {t("thisWeek")}
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <p className="text-3xl font-bold text-blue-600 dark:text-blue-400" data-testid="text-fee-week">
+                  {(weeklyReport?.totalServiceFees ?? 0).toFixed(2)}
+                  <span className="text-sm font-normal text-muted-foreground ml-1">LYD</span>
+                </p>
+                <p className="text-sm text-muted-foreground mt-1">
+                  {weeklyReport?.totalSales ?? 0} {t("totalSales").toLowerCase()}
+                </p>
+                <div className="mt-3 pt-3 border-t border-border text-xs text-muted-foreground space-y-1">
+                  <div className="flex justify-between"><span>{t("productsTotal")}</span><span>{(weeklyReport?.totalRevenue ?? 0).toFixed(2)} LYD</span></div>
+                  <div className="flex justify-between"><span>{t("totalProfit")}</span><span className="text-green-600">{(weeklyReport?.totalProfit ?? 0).toFixed(2)} LYD</span></div>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* This month */}
+            <Card className="border-blue-200 dark:border-blue-800">
+              <CardHeader className="pb-2">
+                <CardTitle className="text-base flex items-center gap-2 text-blue-700 dark:text-blue-300">
+                  <Calendar className="w-4 h-4" />
+                  {t("thisMonth")}
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <p className="text-3xl font-bold text-blue-600 dark:text-blue-400" data-testid="text-fee-month">
+                  {(monthlyReport?.totalServiceFees ?? 0).toFixed(2)}
+                  <span className="text-sm font-normal text-muted-foreground ml-1">LYD</span>
+                </p>
+                <p className="text-sm text-muted-foreground mt-1">
+                  {monthlyReport?.totalSales ?? 0} {t("totalSales").toLowerCase()}
+                </p>
+                <div className="mt-3 pt-3 border-t border-border text-xs text-muted-foreground space-y-1">
+                  <div className="flex justify-between"><span>{t("productsTotal")}</span><span>{(monthlyReport?.totalRevenue ?? 0).toFixed(2)} LYD</span></div>
+                  <div className="flex justify-between"><span>{t("totalProfit")}</span><span className="text-green-600">{(monthlyReport?.totalProfit ?? 0).toFixed(2)} LYD</span></div>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+
+          {/* Invoices that include a service fee, filtered by the selected period */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Wrench className="w-5 h-5 text-blue-500" />
+                {t("serviceFeeReport")} — {t("salesHistory")} ({serviceFeeInvoices.length})
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              {serviceFeeInvoices.length === 0 ? (
+                <p className="text-center py-8 text-muted-foreground">{t("noSalesInPeriod")}</p>
+              ) : (
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>{t("date")}</TableHead>
+                      <TableHead>{t("saleNumber")}</TableHead>
+                      <TableHead>{t("soldBy")}</TableHead>
+                      <TableHead>{t("customer")}</TableHead>
+                      <TableHead>{t("productsTotal")}</TableHead>
+                      <TableHead className="text-blue-600 font-semibold">{t("serviceFee")}</TableHead>
+                      <TableHead>{t("total")}</TableHead>
+                      <TableHead>{t("actions")}</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {serviceFeeInvoices.map((sale) => {
+                      const fee = parseFloat(sale.serviceFee || "0");
+                      const productsAmt = parseFloat(sale.totalAmount) - fee;
+                      return (
+                        <TableRow key={sale.id} data-testid={`fee-row-${sale.id}`}>
+                          <TableCell>{format(new Date(sale.createdAt), "PPp")}</TableCell>
+                          <TableCell className="font-medium">{sale.saleNumber}</TableCell>
+                          <TableCell>{sale.createdBy?.firstName} {sale.createdBy?.lastName}</TableCell>
+                          <TableCell>{sale.customer?.name || t("walkin")}</TableCell>
+                          <TableCell>{productsAmt.toFixed(2)} {sale.currency}</TableCell>
+                          <TableCell className="font-bold text-blue-600">{fee.toFixed(2)} {sale.currency}</TableCell>
+                          <TableCell className="font-bold">{sale.totalAmount} {sale.currency}</TableCell>
+                          <TableCell>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => { setSelectedSale(sale); setInvoiceOpen(true); }}
+                              data-testid={`button-fee-invoice-${sale.id}`}
+                            >
+                              <Eye className="w-4 h-4" />
+                            </Button>
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })}
+                  </TableBody>
+                </Table>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {/* ── Best Sellers ── */}
         <TabsContent value="best-sellers" className="space-y-4">
           <Card>
             <CardHeader>
@@ -310,40 +464,6 @@ export default function Reports() {
                     </div>
                   ))}
                 </div>
-              )}
-            </CardContent>
-          </Card>
-        </TabsContent>
-
-        <TabsContent value="daily" className="space-y-4">
-          <Card>
-            <CardHeader>
-              <CardTitle>{t("dailySummary")}</CardTitle>
-            </CardHeader>
-            <CardContent>
-              {dailyReport.length === 0 ? (
-                <p className="text-center py-8 text-muted-foreground">{t("dailySalesData")}</p>
-              ) : (
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>{t("date")}</TableHead>
-                      <TableHead>{t("totalSales")}</TableHead>
-                      <TableHead>{t("revenue")}</TableHead>
-                      <TableHead>{t("profit")}</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {dailyReport.map((day) => (
-                      <TableRow key={day.date}>
-                        <TableCell className="font-medium">{format(new Date(day.date), "PPP")}</TableCell>
-                        <TableCell>{day.totalSales}</TableCell>
-                        <TableCell>{day.totalRevenue.toFixed(2)} LYD</TableCell>
-                        <TableCell className="text-green-600">{day.totalProfit.toFixed(2)} LYD</TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
               )}
             </CardContent>
           </Card>

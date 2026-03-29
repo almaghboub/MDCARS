@@ -855,6 +855,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
     res.json(await storage.getMonthlySalesReport(year, month));
   });
 
+  app.get("/api/reports/weekly", requireAuth, async (req, res) => {
+    res.json(await storage.getWeeklySalesReport());
+  });
+
   const httpServer = createServer(app);
   return httpServer;
 }

@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { ShoppingCart, Package, Users, AlertTriangle, DollarSign, TrendingUp } from "lucide-react";
+import { ShoppingCart, Package, Users, AlertTriangle, DollarSign, TrendingUp, Wrench } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Link } from "wouter";
 import { Button } from "@/components/ui/button";
@@ -10,6 +10,7 @@ import { useI18n } from "@/lib/i18n";
 interface DashboardStats {
   todaySales: number;
   todayRevenue: number;
+  todayServiceFees: number;
   totalProducts: number;
   lowStockCount: number;
   totalCustomers: number;
@@ -98,8 +99,24 @@ export default function Dashboard() {
                 <div>
                   <p className="text-sm text-muted-foreground">{t("todaysRevenue")}</p>
                   <p className="text-2xl font-bold" data-testid="text-today-revenue">{stats?.todayRevenue?.toFixed(2) || "0.00"} LYD</p>
+                  <p className="text-xs text-muted-foreground mt-1">{t("productsTotal")}</p>
                 </div>
                 <TrendingUp className="w-8 h-8 text-green-500" />
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
+        {isOwner && (stats?.todayServiceFees ?? 0) > 0 && (
+          <Card className="border-blue-200 dark:border-blue-800 bg-blue-50/50 dark:bg-blue-950/20">
+            <CardContent className="p-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm text-blue-600 dark:text-blue-400 font-medium">{t("todaysServiceFee")}</p>
+                  <p className="text-2xl font-bold text-blue-700 dark:text-blue-300" data-testid="text-today-service-fee">{stats?.todayServiceFees?.toFixed(2) || "0.00"} LYD</p>
+                  <p className="text-xs text-blue-500/70 dark:text-blue-400/70 mt-1">{t("serviceFeeReport")}</p>
+                </div>
+                <Wrench className="w-8 h-8 text-blue-500" />
               </div>
             </CardContent>
           </Card>

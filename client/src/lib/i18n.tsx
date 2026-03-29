@@ -142,6 +142,13 @@ const translations = {
     productsTotal: "Products Total",
     serviceFeeTotal: "Total Service Fees",
     noServiceFee: "No service fee",
+    serviceFeeReport: "Service Fee Report",
+    todaysServiceFee: "Today's Service Fee",
+    thisWeeksServiceFee: "This Week's Service Fee",
+    thisMonthsServiceFee: "This Month's Service Fee",
+    serviceWorkerNote: "This amount belongs to the service team, not product profit",
+    thisWeek: "This Week",
+    feesCollected: "fees collected",
 
     // Products
     manageProductCatalog: "Manage your product catalog",
@@ -600,6 +607,13 @@ const translations = {
     productsTotal: "إجمالي المنتجات",
     serviceFeeTotal: "إجمالي رسوم الخدمة",
     noServiceFee: "لا توجد رسوم خدمة",
+    serviceFeeReport: "تقرير رسوم الخدمة",
+    todaysServiceFee: "رسوم الخدمة اليوم",
+    thisWeeksServiceFee: "رسوم الخدمة هذا الأسبوع",
+    thisMonthsServiceFee: "رسوم الخدمة هذا الشهر",
+    serviceWorkerNote: "هذا المبلغ يعود لفريق الخدمة وليس لأرباح المنتجات",
+    thisWeek: "هذا الأسبوع",
+    feesCollected: "رسوم محصّلة",
 
     // Products
     manageProductCatalog: "إدارة كتالوج المنتجات",
