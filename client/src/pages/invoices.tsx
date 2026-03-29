@@ -188,6 +188,7 @@ export default function Invoices() {
                       <TableCell>
                         <Badge variant={
                           sale.paymentMethod === "credit" ? "destructive" :
+                          sale.paymentMethod === "mixed" ? "secondary" :
                           sale.paymentMethod === "card" ? "default" :
                           sale.paymentMethod === "transfer" ? "default" :
                           "secondary"
@@ -196,6 +197,7 @@ export default function Invoices() {
                            sale.paymentMethod === "card" ? t("creditCard") :
                            sale.paymentMethod === "transfer" ? t("moneyTransfer") :
                            sale.paymentMethod === "credit" ? t("creditSale") :
+                           sale.paymentMethod === "mixed" ? t("mixed") :
                            t("partial")}
                         </Badge>
                       </TableCell>

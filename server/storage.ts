@@ -6,6 +6,7 @@ import {
   type Customer, type InsertCustomer, type CustomerWithSales,
   type Sale, type InsertSale, type SaleWithDetails,
   type SaleItem, type InsertSaleItem,
+  type SalePayment,
   type Cashbox, type InsertCashbox,
   type CashboxTransaction, type InsertCashboxTransaction,
   type Expense, type InsertExpense,
@@ -15,7 +16,7 @@ import {
   type SupplierPayable, type InsertSupplierPayable,
   type Setting, type InsertSetting,
   users, categories, products, stockMovements, customers,
-  sales, saleItems, cashbox, cashboxTransactions, expenses, revenues,
+  sales, saleItems, salePayments, cashbox, cashboxTransactions, expenses, revenues,
   partners, partnerTransactions, supplierPayables, settings,
 } from "@shared/schema";
 import { db } from "./db";
@@ -321,8 +322,9 @@ export class DatabaseStorage implements IStorage {
     for (const sale of allSales) {
       const [customer] = sale.customerId ? await db.select().from(customers).where(eq(customers.id, sale.customerId)) : [null];
       const items = await db.select().from(saleItems).where(eq(saleItems.saleId, sale.id));
+      const payments = await db.select().from(salePayments).where(eq(salePayments.saleId, sale.id));
       const [createdBy] = await db.select().from(users).where(eq(users.id, sale.createdByUserId));
-      result.push({ ...sale, customer, items, createdBy });
+      result.push({ ...sale, customer, items, payments, createdBy });
     }
     return result;
   }
@@ -332,8 +334,9 @@ export class DatabaseStorage implements IStorage {
     if (!sale) return undefined;
     const [customer] = sale.customerId ? await db.select().from(customers).where(eq(customers.id, sale.customerId)) : [null];
     const items = await db.select().from(saleItems).where(eq(saleItems.saleId, sale.id));
+    const payments = await db.select().from(salePayments).where(eq(salePayments.saleId, sale.id));
     const [createdBy] = await db.select().from(users).where(eq(users.id, sale.createdByUserId));
-    return { ...sale, customer, items, createdBy };
+    return { ...sale, customer, items, payments, createdBy };
   }
 
   async getSalesByCustomerId(customerId: string): Promise<Sale[]> {
@@ -348,19 +351,30 @@ export class DatabaseStorage implements IStorage {
     for (const sale of allSales) {
       const [customer] = sale.customerId ? await db.select().from(customers).where(eq(customers.id, sale.customerId)) : [null];
       const items = await db.select().from(saleItems).where(eq(saleItems.saleId, sale.id));
+      const payments = await db.select().from(salePayments).where(eq(salePayments.saleId, sale.id));
       const [createdBy] = await db.select().from(users).where(eq(users.id, sale.createdByUserId));
-      result.push({ ...sale, customer, items, createdBy });
+      result.push({ ...sale, customer, items, payments, createdBy });
     }
     return result;
   }
 
-  async createSale(insertSale: InsertSale, items: InsertSaleItem[]): Promise<SaleWithDetails> {
+  async createSale(insertSale: InsertSale, items: InsertSaleItem[], payments: { method: string; amount: string }[] = []): Promise<SaleWithDetails> {
     let sale: Sale;
     let createdItems: SaleItem[] = [];
+    let createdPayments: SalePayment[] = [];
 
     await db.transaction(async (tx) => {
       const [newSale] = await tx.insert(sales).values(insertSale).returning();
       sale = newSale;
+
+      for (const p of payments) {
+        const [sp] = await tx.insert(salePayments).values({
+          saleId: sale.id,
+          method: p.method as any,
+          amount: p.amount,
+        }).returning();
+        createdPayments.push(sp);
+      }
 
       for (const item of items) {
         const [saleItem] = await tx.insert(saleItems).values({ ...item, saleId: sale.id }).returning();
@@ -412,7 +426,7 @@ export class DatabaseStorage implements IStorage {
 
     const [customer] = sale!.customerId ? await db.select().from(customers).where(eq(customers.id, sale!.customerId!)) : [null];
     const [createdBy] = await db.select().from(users).where(eq(users.id, sale!.createdByUserId));
-    return { ...sale!, customer, items: createdItems, createdBy };
+    return { ...sale!, customer, items: createdItems, payments: createdPayments, createdBy };
   }
 
   async updateSaleStatus(id: string, status: string): Promise<Sale | undefined> {

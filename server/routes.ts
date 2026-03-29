@@ -99,6 +99,26 @@ async function runMigrations() {
     await client.query(`ALTER TABLE sales ADD COLUMN IF NOT EXISTS edited_at timestamp`);
     await client.query(`ALTER TABLE sales ADD COLUMN IF NOT EXISTS service_fee decimal(10, 2) NOT NULL DEFAULT 0`);
 
+    // Add 'mixed' value to payment_method enum (split payments)
+    await client.query(`
+      DO $$ BEGIN
+        IF NOT EXISTS (SELECT 1 FROM pg_enum WHERE enumlabel = 'mixed' AND enumtypid = 'payment_method'::regtype) THEN
+          ALTER TYPE payment_method ADD VALUE 'mixed';
+        END IF;
+      END $$;
+    `);
+
+    // sale_payments table for split payment tracking
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS sale_payments (
+        id varchar PRIMARY KEY DEFAULT gen_random_uuid(),
+        sale_id varchar NOT NULL REFERENCES sales(id) ON DELETE CASCADE,
+        method payment_method NOT NULL,
+        amount decimal(10, 2) NOT NULL,
+        created_at timestamp NOT NULL DEFAULT now()
+      )
+    `);
+
     console.log("Database migrations completed successfully.");
   } catch (err) {
     console.error("Migration error (non-fatal):", err);
@@ -469,28 +489,56 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post("/api/sales", requireSalesAccess, async (req, res) => {
     try {
-      const { sale: saleData, items } = req.body;
+      const { sale: saleData, items, payments } = req.body;
       const saleNumber = await storage.getNextSaleNumber();
       const validatedSale = insertSaleSchema.parse({ ...saleData, saleNumber, createdByUserId: (req.user as any).id });
       const validatedItems = items.map((item: any) => insertSaleItemSchema.omit({ saleId: true }).parse(item));
-      const sale = await storage.createSale(validatedSale, validatedItems);
+      const validatedPayments: { method: string; amount: string }[] = Array.isArray(payments)
+        ? payments.map((p: any) => ({ method: String(p.method), amount: String(parseFloat(p.amount) || 0) }))
+        : [];
+      const sale = await storage.createSale(validatedSale, validatedItems, validatedPayments);
 
-      const cashbox = await storage.getCashbox();
-      if (cashbox) {
-        const amountUSD = sale.currency === "USD" ? sale.amountPaid : "0";
-        const amountLYD = sale.currency === "LYD" ? sale.amountPaid : "0";
-        await storage.updateCashboxBalance(amountUSD, amountLYD, true);
-        await storage.createCashboxTransaction({
-          cashboxId: cashbox.id,
-          type: "sale",
-          amountUSD,
-          amountLYD,
-          exchangeRate: sale.exchangeRate,
-          description: `Sale ${sale.saleNumber}`,
-          referenceType: "sale",
-          referenceId: sale.id,
-          createdByUserId: (req.user as any).id,
-        });
+      const cashboxRecord = await storage.getCashbox();
+      if (cashboxRecord) {
+        if (validatedPayments.length > 0) {
+          // Split payment: create one cashbox transaction per non-credit method
+          const methodLabel: Record<string, string> = { cash: "Cash", card: "Card", transfer: "Transfer" };
+          for (const p of validatedPayments) {
+            if (p.method === "credit") continue;
+            const amt = parseFloat(p.amount) || 0;
+            if (amt <= 0) continue;
+            const amountUSD = sale.currency === "USD" ? amt.toFixed(2) : "0";
+            const amountLYD = sale.currency === "LYD" ? amt.toFixed(2) : "0";
+            await storage.updateCashboxBalance(amountUSD, amountLYD, true);
+            await storage.createCashboxTransaction({
+              cashboxId: cashboxRecord.id,
+              type: "sale",
+              amountUSD,
+              amountLYD,
+              exchangeRate: sale.exchangeRate,
+              description: `Sale ${sale.saleNumber} (${methodLabel[p.method] || p.method})`,
+              referenceType: "sale",
+              referenceId: sale.id,
+              createdByUserId: (req.user as any).id,
+            });
+          }
+        } else {
+          // Legacy single-payment: deposit full amountPaid
+          const amountUSD = sale.currency === "USD" ? sale.amountPaid : "0";
+          const amountLYD = sale.currency === "LYD" ? sale.amountPaid : "0";
+          await storage.updateCashboxBalance(amountUSD, amountLYD, true);
+          await storage.createCashboxTransaction({
+            cashboxId: cashboxRecord.id,
+            type: "sale",
+            amountUSD,
+            amountLYD,
+            exchangeRate: sale.exchangeRate,
+            description: `Sale ${sale.saleNumber}`,
+            referenceType: "sale",
+            referenceId: sale.id,
+            createdByUserId: (req.user as any).id,
+          });
+        }
       }
       res.json(sale);
     } catch (err: any) { res.status(400).json({ message: err.message }); }

@@ -103,10 +103,16 @@ PostgreSQL with Drizzle ORM. Schema includes:
 - Quick product search by name/SKU/barcode
 - Shopping cart with quantity management
 - Customer selection or walk-in sales
-- 4 payment methods: Cash, Credit Card, Money Transfer, Credit Sale
-  - Cash: enter amount paid; change or partial balance tracked
-  - Credit Card / Money Transfer: full payment confirmed instantly
-  - Credit Sale: requires customer selection, full amount added to customer balance, nothing deducted from cashbox
+- Split payments: select one or more payment methods per invoice
+  - Cash / Credit Card / Money Transfer / Credit Sale (any combination)
+  - Each selected method has its own amount input
+  - Validation: total of all amounts must equal invoice total
+  - Real-time allocation summary showing remaining amount to allocate
+  - Change displayed if cash overpayment
+- Credit Sale portion: added to customer balance, requires customer selection
+- `paymentMethod` on sales record: single method if one used, "mixed" if multiple non-credit, "credit" if credit included
+- `sale_payments` table stores each split entry (method + amount) per invoice
+- Invoice display, print, and reports all show full payment breakdown
 - Discount and service fee application
 
 ### Customer Management

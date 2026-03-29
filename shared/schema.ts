@@ -5,7 +5,7 @@ import { z } from "zod";
 
 export const userRoleEnum = pgEnum("user_role", ["owner", "cashier", "stock_manager"]);
 export const currencyEnum = pgEnum("currency", ["USD", "LYD"]);
-export const paymentMethodEnum = pgEnum("payment_method", ["cash", "partial", "credit", "card", "transfer"]);
+export const paymentMethodEnum = pgEnum("payment_method", ["cash", "partial", "credit", "card", "transfer", "mixed"]);
 export const saleStatusEnum = pgEnum("sale_status", ["completed", "pending", "cancelled", "returned"]);
 export const stockMovementTypeEnum = pgEnum("stock_movement_type", ["in", "out", "adjustment", "damaged"]);
 export const expenseCategoryEnum = pgEnum("expense_category", ["rent", "utilities", "salaries", "supplies", "maintenance", "marketing", "other"]);
@@ -129,6 +129,14 @@ export const saleItems = pgTable("sale_items", {
   profit: decimal("profit", { precision: 10, scale: 2 }).notNull(),
 });
 
+export const salePayments = pgTable("sale_payments", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  saleId: varchar("sale_id").notNull().references(() => sales.id, { onDelete: "cascade" }),
+  method: paymentMethodEnum("method").notNull(),
+  amount: decimal("amount", { precision: 10, scale: 2 }).notNull(),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
 export const cashbox = pgTable("cashbox", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   name: text("name").notNull().default("Main Cashbox"),
@@ -224,6 +232,7 @@ export const insertStockMovementSchema = createInsertSchema(stockMovements).omit
 export const insertCustomerSchema = createInsertSchema(customers).omit({ id: true, createdAt: true, updatedAt: true });
 export const insertSaleSchema = createInsertSchema(sales).omit({ id: true, createdAt: true });
 export const insertSaleItemSchema = createInsertSchema(saleItems).omit({ id: true });
+export const insertSalePaymentSchema = createInsertSchema(salePayments).omit({ id: true, createdAt: true });
 export const insertCashboxSchema = createInsertSchema(cashbox).omit({ id: true, createdAt: true, updatedAt: true });
 export const insertCashboxTransactionSchema = createInsertSchema(cashboxTransactions).omit({ id: true, createdAt: true });
 export const insertExpenseSchema = createInsertSchema(expenses).omit({ id: true, createdAt: true });
@@ -240,6 +249,7 @@ export type InsertStockMovement = z.infer<typeof insertStockMovementSchema>;
 export type InsertCustomer = z.infer<typeof insertCustomerSchema>;
 export type InsertSale = z.infer<typeof insertSaleSchema>;
 export type InsertSaleItem = z.infer<typeof insertSaleItemSchema>;
+export type InsertSalePayment = z.infer<typeof insertSalePaymentSchema>;
 export type InsertCashbox = z.infer<typeof insertCashboxSchema>;
 export type InsertCashboxTransaction = z.infer<typeof insertCashboxTransactionSchema>;
 export type InsertExpense = z.infer<typeof insertExpenseSchema>;
@@ -256,6 +266,7 @@ export type StockMovement = typeof stockMovements.$inferSelect;
 export type Customer = typeof customers.$inferSelect;
 export type Sale = typeof sales.$inferSelect;
 export type SaleItem = typeof saleItems.$inferSelect;
+export type SalePayment = typeof salePayments.$inferSelect;
 export type Cashbox = typeof cashbox.$inferSelect;
 export type CashboxTransaction = typeof cashboxTransactions.$inferSelect;
 export type Expense = typeof expenses.$inferSelect;
@@ -270,6 +281,7 @@ export type SaleWithDetails = Sale & {
   customer: Customer | null;
   items: SaleItem[];
   createdBy: User;
+  payments: SalePayment[];
 };
 export type CustomerWithSales = Customer & { sales: Sale[] };
 

@@ -16,12 +16,14 @@ import logoPath from "@assets/MD-removebg-preview_1770139105370.png";
 import type { ProductWithCategory, Customer, SaleWithDetails } from "@shared/schema";
 import { useMarkup } from "@/hooks/use-markup";
 
+type PayMethod = "cash" | "card" | "transfer" | "credit";
+
 interface CartItem {
   product: ProductWithCategory;
   quantity: number;
   unitPrice: number;
   costPrice: number;
-  customPrice?: number; // user-overridden price
+  customPrice?: number;
 }
 
 export default function POS() {
@@ -33,8 +35,7 @@ export default function POS() {
   const [isReceiptDialogOpen, setIsReceiptDialogOpen] = useState(false);
   const [lastSale, setLastSale] = useState<SaleWithDetails | null>(null);
   const [lastCartItems, setLastCartItems] = useState<CartItem[]>([]);
-  const [paymentMethod, setPaymentMethod] = useState<"cash" | "card" | "transfer" | "credit">("cash");
-  const [amountPaid, setAmountPaid] = useState("");
+  const [splitPayments, setSplitPayments] = useState<{ method: PayMethod; amount: string }[]>([{ method: "cash", amount: "" }]);
   const [currency, setCurrency] = useState<"LYD" | "USD">("LYD");
   const [discount, setDiscount] = useState("0");
   const [serviceFee, setServiceFee] = useState("0");
@@ -80,10 +81,9 @@ export default function POS() {
       setIsReceiptDialogOpen(true);
       setCart([]);
       setSelectedCustomer(null);
-      setAmountPaid("");
+      setSplitPayments([{ method: "cash", amount: "" }]);
       setDiscount("0");
       setServiceFee("0");
-      setPaymentMethod("cash");
     },
     onError: (error: any) => {
       toast({ title: "Error", description: error.message, variant: "destructive" });
@@ -145,6 +145,14 @@ export default function POS() {
 
     const logoUrl = new URL(logoPath, window.location.origin).href;
 
+    const payMethodColor = (m: string) => m === "credit" ? "#ea580c" : m === "card" ? "#2563eb" : m === "transfer" ? "#7c3aed" : "#16a34a";
+    const payMethodLabelStr = (m: string) => m === "cash" ? t("cash") : m === "card" ? t("creditCard") : m === "transfer" ? t("moneyTransfer") : m === "credit" ? t("creditSale") : m === "mixed" ? t("mixed") : m;
+    const paymentRows = sale.payments && sale.payments.length > 0
+      ? sale.payments.map((p: any) =>
+          `<div style="display:flex;justify-content:space-between;padding:3px 0;font-size:13px"><span style="color:#64748b">${payMethodLabelStr(p.method)}</span><span style="font-weight:700;color:${payMethodColor(p.method)}">${parseFloat(p.amount).toFixed(2)} ${sale.currency}</span></div>`
+        ).join("")
+      : `<div style="display:flex;justify-content:space-between;padding:3px 0;font-size:13px"><span style="color:#64748b">${t("paymentMethod")}</span><span style="font-weight:600;color:${payMethodColor(sale.paymentMethod)}">${payMethodLabelStr(sale.paymentMethod)}</span></div>`;
+
     printWindow.document.write(`<!DOCTYPE html><html><head><title>Invoice ${sale.saleNumber} - MD CARS</title>
     <style>
       * { margin:0; padding:0; box-sizing:border-box; }
@@ -176,7 +184,7 @@ export default function POS() {
             </div>
             <div style="padding:12px 14px">
               <div style="display:flex;justify-content:space-between;padding:3px 0;font-size:13px"><span style="color:#64748b">${t("date")}</span><span style="font-weight:600;color:#1e293b">${dateStr}</span></div>
-              <div style="display:flex;justify-content:space-between;padding:3px 0;font-size:13px"><span style="color:#64748b">${t("paymentMethod")}</span><span style="font-weight:600;color:${sale.paymentMethod === 'credit' ? '#ea580c' : '#1e293b'}">${sale.paymentMethod === 'cash' ? t("cash") : sale.paymentMethod === 'card' ? t("creditCard") : sale.paymentMethod === 'transfer' ? t("moneyTransfer") : sale.paymentMethod === 'credit' ? t("creditSale") : t("partial")}</span></div>
+              ${paymentRows}
               <div style="display:flex;justify-content:space-between;padding:3px 0;font-size:13px"><span style="color:#64748b">${t("currency")}</span><span style="font-weight:600;color:#1e293b">${sale.currency}</span></div>
             </div>
           </div>
@@ -348,8 +356,15 @@ export default function POS() {
   const serviceFeeAmount = parseFloat(serviceFee) || 0;
   const productsTotal = subtotal - discountAmount;
   const total = productsTotal + serviceFeeAmount;
-  const paid = parseFloat(amountPaid) || 0;
-  const amountDue = Math.max(0, total - paid);
+
+  const allocatedTotal = splitPayments.reduce((s, p) => s + (parseFloat(p.amount) || 0), 0);
+  const remaining = total - allocatedTotal;
+  const isFullyAllocated = remaining <= 0.005;
+  const hasCreditMethod = splitPayments.some(p => p.method === "credit");
+  const creditAmount = splitPayments.filter(p => p.method === "credit").reduce((s, p) => s + (parseFloat(p.amount) || 0), 0);
+  const nonCreditPaid = Math.max(0, allocatedTotal - creditAmount);
+  const cashEntry = splitPayments.find(p => p.method === "cash");
+  const changeAmount = isFullyAllocated && allocatedTotal > total ? allocatedTotal - total : 0;
 
   const getPaymentLabel = (method: string) => {
     switch (method) {
@@ -358,8 +373,24 @@ export default function POS() {
       case "transfer": return t("moneyTransfer");
       case "credit": return t("creditSale");
       case "partial": return t("partial");
+      case "mixed": return t("mixed");
       default: return method;
     }
+  };
+
+  const togglePaymentMethod = (method: PayMethod) => {
+    const exists = splitPayments.find(p => p.method === method);
+    if (exists) {
+      if (splitPayments.length === 1) return;
+      setSplitPayments(splitPayments.filter(p => p.method !== method));
+    } else {
+      const autoFill = Math.max(0, total - allocatedTotal);
+      setSplitPayments([...splitPayments, { method, amount: autoFill > 0 ? autoFill.toFixed(2) : "" }]);
+    }
+  };
+
+  const updatePaymentAmount = (method: PayMethod, value: string) => {
+    setSplitPayments(splitPayments.map(p => p.method === method ? { ...p, amount: value } : p));
   };
 
   const handleCheckout = () => {
@@ -367,18 +398,23 @@ export default function POS() {
       toast({ title: t("cartIsEmpty"), variant: "destructive" });
       return;
     }
-    if (paymentMethod === "credit" && !selectedCustomer) {
+    if (hasCreditMethod && !selectedCustomer) {
       toast({ title: t("selectCustomer"), description: t("creditSale"), variant: "destructive" });
       return;
     }
-    if (paymentMethod === "cash" && paid <= 0) {
-      toast({ title: t("amountPaid"), description: "Please enter amount paid", variant: "destructive" });
+    if (!isFullyAllocated && remaining > 0.005) {
+      toast({ title: t("remaining") + ": " + remaining.toFixed(2) + " " + currency, variant: "destructive" });
+      return;
+    }
+    const hasZeroAmount = splitPayments.some(p => !(parseFloat(p.amount) > 0));
+    if (hasZeroAmount) {
+      toast({ title: "Please enter an amount for each selected payment method", variant: "destructive" });
       return;
     }
 
-    const finalPaid = paymentMethod === "credit" ? 0 : paymentMethod === "cash" ? paid : total;
-    const finalDue = paymentMethod === "credit" ? total : paymentMethod === "cash" ? Math.max(0, total - paid) : 0;
-    const finalPaymentMethod = paymentMethod;
+    const dominantMethod = splitPayments.length === 1
+      ? splitPayments[0].method
+      : hasCreditMethod ? "credit" : "mixed";
 
     const items = cart.map(item => {
       const ep = effectivePrice(item);
@@ -401,12 +437,13 @@ export default function POS() {
         discount: discountAmount.toFixed(2),
         serviceFee: serviceFeeAmount.toFixed(2),
         totalAmount: total.toFixed(2),
-        amountPaid: finalPaid.toFixed(2),
-        amountDue: finalDue.toFixed(2),
-        paymentMethod: finalPaymentMethod,
+        amountPaid: nonCreditPaid.toFixed(2),
+        amountDue: creditAmount.toFixed(2),
+        paymentMethod: dominantMethod,
         currency,
       },
       items,
+      payments: splitPayments.map(p => ({ method: p.method, amount: (parseFloat(p.amount) || 0).toFixed(2) })),
     });
   };
 
@@ -587,7 +624,7 @@ export default function POS() {
                 size="lg"
                 disabled={cart.length === 0}
                 onClick={() => {
-                  setAmountPaid(total.toFixed(2));
+                  setSplitPayments([{ method: "cash", amount: total.toFixed(2) }]);
                   setIsCheckoutDialogOpen(true);
                 }}
                 data-testid="button-checkout"
@@ -668,49 +705,85 @@ export default function POS() {
               <div className="flex justify-between text-lg font-bold pt-1"><span>{t("total")}:</span><span>{total.toFixed(2)} {currency}</span></div>
             </div>
 
-            {/* Payment Method Selection */}
-            <div>
+            {/* Split Payment Method Selection */}
+            <div className="space-y-3">
               <label className="text-sm font-medium">{t("selectPaymentMethod")}</label>
-              <div className="grid grid-cols-2 gap-2 mt-2">
-                <Button
-                  variant={paymentMethod === "cash" ? "default" : "outline"}
-                  className="flex flex-col items-center gap-1 h-16"
-                  onClick={() => setPaymentMethod("cash")}
-                  data-testid="button-payment-cash"
-                >
-                  <Banknote className="w-5 h-5" />
-                  <span className="text-xs font-medium">{t("cash")}</span>
-                </Button>
-                <Button
-                  variant={paymentMethod === "card" ? "default" : "outline"}
-                  className="flex flex-col items-center gap-1 h-16"
-                  onClick={() => setPaymentMethod("card")}
-                  data-testid="button-payment-card"
-                >
-                  <CreditCard className="w-5 h-5" />
-                  <span className="text-xs font-medium">{t("creditCard")}</span>
-                </Button>
-                <Button
-                  variant={paymentMethod === "transfer" ? "default" : "outline"}
-                  className="flex flex-col items-center gap-1 h-16"
-                  onClick={() => setPaymentMethod("transfer")}
-                  data-testid="button-payment-transfer"
-                >
-                  <ArrowLeftRight className="w-5 h-5" />
-                  <span className="text-xs font-medium">{t("moneyTransfer")}</span>
-                </Button>
-                <Button
-                  variant={paymentMethod === "credit" ? "default" : "outline"}
-                  className={`flex flex-col items-center gap-1 h-16 ${paymentMethod === "credit" ? "bg-orange-600 hover:bg-orange-700 border-orange-600" : ""}`}
-                  onClick={() => setPaymentMethod("credit")}
-                  data-testid="button-payment-credit"
-                >
-                  <BookOpen className="w-5 h-5" />
-                  <span className="text-xs font-medium">{t("creditSale")}</span>
-                </Button>
+              <div className="grid grid-cols-4 gap-2">
+                {([
+                  { method: "cash" as PayMethod, icon: <Banknote className="w-4 h-4" />, label: t("cash"), activeClass: "bg-green-600 hover:bg-green-700 text-white border-green-600" },
+                  { method: "card" as PayMethod, icon: <CreditCard className="w-4 h-4" />, label: t("creditCard"), activeClass: "bg-blue-600 hover:bg-blue-700 text-white border-blue-600" },
+                  { method: "transfer" as PayMethod, icon: <ArrowLeftRight className="w-4 h-4" />, label: t("moneyTransfer"), activeClass: "bg-violet-600 hover:bg-violet-700 text-white border-violet-600" },
+                  { method: "credit" as PayMethod, icon: <BookOpen className="w-4 h-4" />, label: t("creditSale"), activeClass: "bg-orange-600 hover:bg-orange-700 text-white border-orange-600" },
+                ] as const).map(({ method, icon, label, activeClass }) => {
+                  const isActive = splitPayments.some(p => p.method === method);
+                  return (
+                    <Button
+                      key={method}
+                      variant={isActive ? "default" : "outline"}
+                      className={`flex flex-col items-center gap-1 h-16 text-xs font-medium ${isActive ? activeClass : ""}`}
+                      onClick={() => togglePaymentMethod(method)}
+                      data-testid={`button-payment-${method}`}
+                    >
+                      {icon}
+                      <span>{label}</span>
+                    </Button>
+                  );
+                })}
               </div>
-              {paymentMethod === "credit" && !selectedCustomer && (
-                <p className="text-xs text-destructive mt-1 font-medium">⚠ {t("selectCustomer")}</p>
+
+              {/* Amount inputs for each selected method */}
+              <div className="space-y-2">
+                {splitPayments.map(({ method, amount }) => (
+                  <div key={method} className="flex items-center gap-3">
+                    <span className="text-sm font-medium w-28 shrink-0">{getPaymentLabel(method)}</span>
+                    <Input
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      value={amount}
+                      onChange={e => updatePaymentAmount(method, e.target.value)}
+                      className="flex-1 text-right font-mono"
+                      placeholder="0.00"
+                      data-testid={`input-amount-${method}`}
+                    />
+                    <span className="text-sm text-muted-foreground w-10 shrink-0">{currency}</span>
+                  </div>
+                ))}
+              </div>
+
+              {/* Allocation summary */}
+              <div className={`p-3 rounded border text-sm ${isFullyAllocated ? "bg-green-500/10 border-green-500/30" : "bg-amber-500/10 border-amber-500/30"}`}>
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">{t("allocated")}:</span>
+                  <span className="font-bold">{allocatedTotal.toFixed(2)} {currency}</span>
+                </div>
+                {!isFullyAllocated && remaining > 0.005 && (
+                  <div className="flex justify-between mt-1">
+                    <span className="text-amber-700 dark:text-amber-400">{t("remaining")}:</span>
+                    <span className="font-bold text-amber-700 dark:text-amber-400">{remaining.toFixed(2)} {currency}</span>
+                  </div>
+                )}
+                {changeAmount > 0.005 && (
+                  <div className="flex justify-between mt-1">
+                    <span className="text-green-700 dark:text-green-400">{t("change")}:</span>
+                    <span className="font-bold text-green-700 dark:text-green-400">{changeAmount.toFixed(2)} {currency}</span>
+                  </div>
+                )}
+                {creditAmount > 0 && (
+                  <div className="flex justify-between mt-1">
+                    <span className="text-orange-700 dark:text-orange-400">{t("amountDue")}:</span>
+                    <span className="font-bold text-orange-700 dark:text-orange-400">{creditAmount.toFixed(2)} {currency}</span>
+                  </div>
+                )}
+              </div>
+
+              {hasCreditMethod && !selectedCustomer && (
+                <p className="text-xs text-destructive font-medium">⚠ {t("selectCustomer")}</p>
+              )}
+              {hasCreditMethod && creditAmount > 0 && selectedCustomer && (
+                <p className="text-xs text-muted-foreground">
+                  {creditAmount.toFixed(2)} {currency} {t("addedToCustomerBalance")} ({selectedCustomer.name})
+                </p>
               )}
             </div>
 
@@ -726,43 +799,6 @@ export default function POS() {
                 </SelectContent>
               </Select>
             </div>
-
-            {paymentMethod === "credit" ? (
-              <div className="p-3 bg-orange-500/10 border border-orange-500/30 rounded">
-                <p className="text-orange-700 dark:text-orange-400 font-medium">{t("creditSale")}</p>
-                <p className="text-sm text-muted-foreground">{t("addedToCustomerBalance")}</p>
-                <p className="text-lg font-bold mt-1">{t("amountDue")}: {total.toFixed(2)} {currency}</p>
-              </div>
-            ) : paymentMethod === "card" || paymentMethod === "transfer" ? (
-              <div className="p-3 bg-green-500/10 border border-green-500/30 rounded">
-                <p className="text-green-700 dark:text-green-400 font-medium">{t("paidInFull")}</p>
-                <p className="text-lg font-bold mt-1">{total.toFixed(2)} {currency}</p>
-              </div>
-            ) : (
-              <>
-                <div>
-                  <label className="text-sm font-medium">{t("amountPaid")}</label>
-                  <Input
-                    type="number"
-                    value={amountPaid}
-                    onChange={(e) => setAmountPaid(e.target.value)}
-                    className="text-lg"
-                    data-testid="input-amount-paid"
-                  />
-                </div>
-                {amountDue > 0 && (
-                  <div className="p-3 bg-destructive/10 rounded">
-                    <p className="text-destructive font-medium">{t("amountDue")}: {amountDue.toFixed(2)} {currency}</p>
-                    <p className="text-sm text-muted-foreground">{t("addedToCustomerBalance")}</p>
-                  </div>
-                )}
-                {paid > total && (
-                  <div className="p-3 bg-green-500/10 rounded">
-                    <p className="text-green-600 font-medium">{t("change")}: {(paid - total).toFixed(2)} {currency}</p>
-                  </div>
-                )}
-              </>
-            )}
 
             <Button
               className="w-full"
@@ -820,10 +856,19 @@ export default function POS() {
                           <span style={{ color: "#64748b" }}>{t("date")}</span>
                           <span style={{ fontWeight: 600, color: "#1e293b" }}>{new Date(lastSale.createdAt).toLocaleDateString()} {new Date(lastSale.createdAt).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'})}</span>
                         </div>
-                        <div style={{ display: "flex", justifyContent: "space-between", padding: "3px 0", fontSize: "12px" }}>
-                          <span style={{ color: "#64748b" }}>{t("paymentMethod")}</span>
-                          <span style={{ fontWeight: 600, color: lastSale.paymentMethod === "credit" ? "#ea580c" : "#1e293b" }}>{getPaymentLabel(lastSale.paymentMethod)}</span>
-                        </div>
+                        {lastSale.payments && lastSale.payments.length > 0 ? (
+                          lastSale.payments.map((p: any) => (
+                            <div key={p.id} style={{ display: "flex", justifyContent: "space-between", padding: "3px 0", fontSize: "12px" }}>
+                              <span style={{ color: "#64748b" }}>{getPaymentLabel(p.method)}</span>
+                              <span style={{ fontWeight: 700, color: p.method === "credit" ? "#ea580c" : p.method === "card" ? "#2563eb" : p.method === "transfer" ? "#7c3aed" : "#16a34a" }}>{parseFloat(p.amount).toFixed(2)} {lastSale.currency}</span>
+                            </div>
+                          ))
+                        ) : (
+                          <div style={{ display: "flex", justifyContent: "space-between", padding: "3px 0", fontSize: "12px" }}>
+                            <span style={{ color: "#64748b" }}>{t("paymentMethod")}</span>
+                            <span style={{ fontWeight: 600, color: lastSale.paymentMethod === "credit" ? "#ea580c" : "#1e293b" }}>{getPaymentLabel(lastSale.paymentMethod)}</span>
+                          </div>
+                        )}
                         <div style={{ display: "flex", justifyContent: "space-between", padding: "3px 0", fontSize: "12px" }}>
                           <span style={{ color: "#64748b" }}>{t("currency")}</span>
                           <span style={{ fontWeight: 600, color: "#1e293b" }}>{lastSale.currency}</span>

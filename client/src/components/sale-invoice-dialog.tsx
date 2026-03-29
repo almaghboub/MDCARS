@@ -186,6 +186,7 @@ export function SaleInvoiceDialog({ sale, open, onOpenChange }: SaleInvoiceDialo
       case "transfer": return t("moneyTransfer");
       case "credit": return t("creditSale");
       case "partial": return t("partial");
+      case "mixed": return t("mixed");
       default: return method;
     }
   };
@@ -294,10 +295,19 @@ export function SaleInvoiceDialog({ sale, open, onOpenChange }: SaleInvoiceDialo
                       <span className="label" style={{ color: "#64748b" }}>{t("date")}</span>
                       <span className="value" style={{ fontWeight: 600, color: "#1e293b" }}>{format(new Date(sale.createdAt), "dd/MM/yyyy HH:mm")}</span>
                     </div>
-                    <div className="info-line" style={{ display: "flex", justifyContent: "space-between", padding: "4px 0", fontSize: "13px" }}>
-                      <span className="label" style={{ color: "#64748b" }}>{t("paymentMethod")}</span>
-                      <span className="value" style={{ fontWeight: 700, color: paymentColor(sale.paymentMethod) }}>{paymentLabel(sale.paymentMethod)}</span>
-                    </div>
+                    {sale.payments && sale.payments.length > 0 ? (
+                      sale.payments.map(p => (
+                        <div key={p.id} className="info-line" style={{ display: "flex", justifyContent: "space-between", padding: "4px 0", fontSize: "13px" }}>
+                          <span className="label" style={{ color: "#64748b" }}>{paymentLabel(p.method)}</span>
+                          <span className="value" style={{ fontWeight: 700, color: paymentColor(p.method) }}>{parseFloat(p.amount).toFixed(2)} {sale.currency}</span>
+                        </div>
+                      ))
+                    ) : (
+                      <div className="info-line" style={{ display: "flex", justifyContent: "space-between", padding: "4px 0", fontSize: "13px" }}>
+                        <span className="label" style={{ color: "#64748b" }}>{t("paymentMethod")}</span>
+                        <span className="value" style={{ fontWeight: 700, color: paymentColor(sale.paymentMethod) }}>{paymentLabel(sale.paymentMethod)}</span>
+                      </div>
+                    )}
                     <div className="info-line" style={{ display: "flex", justifyContent: "space-between", padding: "4px 0", fontSize: "13px" }}>
                       <span className="label" style={{ color: "#64748b" }}>{t("currency")}</span>
                       <span className="value" style={{ fontWeight: 600, color: "#1e293b" }}>{sale.currency}</span>
