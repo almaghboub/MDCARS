@@ -287,6 +287,51 @@ export type SaleWithDetails = Sale & {
 };
 export type CustomerWithSales = Customer & { sales: Sale[] };
 
+// Orders tables
+export const orders = pgTable("orders", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  orderNumber: text("order_number").notNull(),
+  customerId: varchar("customer_id").references(() => customers.id),
+  receiverName: text("receiver_name").notNull(),
+  receiverPhone: text("receiver_phone").notNull(),
+  shippingCountry: text("shipping_country").notNull().default("Libya"),
+  shippingCity: text("shipping_city").notNull(),
+  shippingCategory: text("shipping_category").notNull().default("normal"),
+  shippingCost: decimal("shipping_cost", { precision: 10, scale: 2 }).notNull().default("0"),
+  shippingWeight: decimal("shipping_weight", { precision: 10, scale: 2 }).notNull().default("0"),
+  totalAmount: decimal("total_amount", { precision: 10, scale: 2 }).notNull().default("0"),
+  downPayment: decimal("down_payment", { precision: 10, scale: 2 }).notNull().default("0"),
+  downPaymentType: text("down_payment_type"),
+  remainingBalance: decimal("remaining_balance", { precision: 10, scale: 2 }).notNull().default("0"),
+  status: text("status").notNull().default("pending"),
+  notes: text("notes"),
+  lydExchangeRate: decimal("lyd_exchange_rate", { precision: 10, scale: 4 }).notNull().default("1"),
+  darbAssabilOrderId: text("darb_assabil_order_id"),
+  darbAssabilReference: text("darb_assabil_reference"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+});
+
+export const orderItems = pgTable("order_items", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  orderId: varchar("order_id").notNull().references(() => orders.id),
+  productName: text("product_name").notNull(),
+  quantity: integer("quantity").notNull().default(1),
+  price: decimal("price", { precision: 10, scale: 2 }).notNull().default("0"),
+  cost: decimal("cost", { precision: 10, scale: 2 }).notNull().default("0"),
+  weight: decimal("weight", { precision: 10, scale: 3 }).notNull().default("0"),
+  profit: decimal("profit", { precision: 10, scale: 2 }).notNull().default("0"),
+});
+
+export const insertOrderSchema = createInsertSchema(orders).omit({ id: true, createdAt: true, updatedAt: true, orderNumber: true });
+export const insertOrderItemSchema = createInsertSchema(orderItems).omit({ id: true });
+
+export type InsertOrder = z.infer<typeof insertOrderSchema>;
+export type InsertOrderItem = z.infer<typeof insertOrderItemSchema>;
+export type Order = typeof orders.$inferSelect;
+export type OrderItem = typeof orderItems.$inferSelect;
+export type OrderWithItems = Order & { items: OrderItem[]; customer: Customer | null };
+
 export const loginSchema = z.object({
   username: z.string().min(1, "Username is required"),
   password: z.string().min(1, "Password is required"),

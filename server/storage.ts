@@ -15,9 +15,12 @@ import {
   type PartnerTransaction, type InsertPartnerTransaction,
   type SupplierPayable, type InsertSupplierPayable,
   type Setting, type InsertSetting,
+  type Order, type InsertOrder,
+  type OrderItem, type InsertOrderItem,
+  type OrderWithItems,
   users, categories, products, stockMovements, customers,
   sales, saleItems, salePayments, cashbox, cashboxTransactions, expenses, revenues,
-  partners, partnerTransactions, supplierPayables, settings,
+  partners, partnerTransactions, supplierPayables, settings, orders, orderItems,
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, desc, sql, or, ilike, and, gte, lte } from "drizzle-orm";
@@ -1093,6 +1096,116 @@ export class DatabaseStorage implements IStorage {
   async markSupplierPayablePaid(id: string): Promise<SupplierPayable | undefined> {
     const [updated] = await db.update(supplierPayables).set({ isPaid: true, paidAt: new Date() }).where(eq(supplierPayables.id, id)).returning();
     return updated;
+  }
+
+  // Orders
+  async getOrders(): Promise<OrderWithItems[]> {
+    const allOrders = await db.select().from(orders).orderBy(desc(orders.createdAt));
+    const result: OrderWithItems[] = [];
+    for (const order of allOrders) {
+      const items = await db.select().from(orderItems).where(eq(orderItems.orderId, order.id));
+      let customer: Customer | null = null;
+      if (order.customerId) {
+        const [c] = await db.select().from(customers).where(eq(customers.id, order.customerId));
+        customer = c || null;
+      }
+      result.push({ ...order, items, customer });
+    }
+    return result;
+  }
+
+  async getOrderById(id: string): Promise<OrderWithItems | undefined> {
+    const [order] = await db.select().from(orders).where(eq(orders.id, id));
+    if (!order) return undefined;
+    const items = await db.select().from(orderItems).where(eq(orderItems.orderId, id));
+    let customer: Customer | null = null;
+    if (order.customerId) {
+      const [c] = await db.select().from(customers).where(eq(customers.id, order.customerId));
+      customer = c || null;
+    }
+    return { ...order, items, customer };
+  }
+
+  async createOrder(data: InsertOrder & { items: Omit<InsertOrderItem, 'orderId'>[] }): Promise<OrderWithItems> {
+    const count = await db.select({ count: sql<number>`count(*)` }).from(orders);
+    const num = (Number(count[0]?.count || 0) + 1).toString().padStart(4, '0');
+    const orderNumber = `ORD-${num}`;
+
+    const totalAmount = data.items.reduce((sum, it) => sum + parseFloat(it.price || '0') * (it.quantity || 1), 0);
+    const downPayment = parseFloat(data.downPayment?.toString() || '0');
+    const shippingCost = parseFloat(data.shippingCost?.toString() || '0');
+    const remainingBalance = totalAmount + shippingCost - downPayment;
+
+    const [created] = await db.insert(orders).values({
+      ...data,
+      orderNumber,
+      totalAmount: totalAmount.toFixed(2),
+      remainingBalance: remainingBalance.toFixed(2),
+    }).returning();
+
+    const createdItems: OrderItem[] = [];
+    for (const item of data.items) {
+      const qty = item.quantity || 1;
+      const price = parseFloat(item.price?.toString() || '0');
+      const cost = parseFloat(item.cost?.toString() || '0');
+      const profit = (price - cost) * qty;
+      const [ci] = await db.insert(orderItems).values({
+        ...item,
+        orderId: created.id,
+        profit: profit.toFixed(2),
+      }).returning();
+      createdItems.push(ci);
+    }
+
+    let customer: Customer | null = null;
+    if (created.customerId) {
+      const [c] = await db.select().from(customers).where(eq(customers.id, created.customerId));
+      customer = c || null;
+    }
+
+    return { ...created, items: createdItems, customer };
+  }
+
+  async updateOrder(id: string, data: Partial<InsertOrder> & { items?: Omit<InsertOrderItem, 'orderId'>[] }): Promise<OrderWithItems | undefined> {
+    const existing = await this.getOrderById(id);
+    if (!existing) return undefined;
+
+    const updateData: any = { ...data, updatedAt: new Date() };
+    delete updateData.items;
+
+    if (data.items !== undefined) {
+      const totalAmount = data.items.reduce((sum, it) => sum + parseFloat(it.price?.toString() || '0') * (it.quantity || 1), 0);
+      const downPayment = parseFloat((data.downPayment ?? existing.downPayment)?.toString() || '0');
+      const shippingCost = parseFloat((data.shippingCost ?? existing.shippingCost)?.toString() || '0');
+      updateData.totalAmount = totalAmount.toFixed(2);
+      updateData.remainingBalance = (totalAmount + shippingCost - downPayment).toFixed(2);
+
+      await db.delete(orderItems).where(eq(orderItems.orderId, id));
+      for (const item of data.items) {
+        const qty = item.quantity || 1;
+        const price = parseFloat(item.price?.toString() || '0');
+        const cost = parseFloat(item.cost?.toString() || '0');
+        const profit = (price - cost) * qty;
+        await db.insert(orderItems).values({ ...item, orderId: id, profit: profit.toFixed(2) });
+      }
+    }
+
+    const [updated] = await db.update(orders).set(updateData).where(eq(orders.id, id)).returning();
+    if (!updated) return undefined;
+    return this.getOrderById(id);
+  }
+
+  async updateOrderStatus(id: string, status: string): Promise<Order | undefined> {
+    const [updated] = await db.update(orders).set({ status, updatedAt: new Date() }).where(eq(orders.id, id)).returning();
+    return updated;
+  }
+
+  async deleteOrder(id: string): Promise<boolean> {
+    const [existing] = await db.select().from(orders).where(eq(orders.id, id));
+    if (!existing) return false;
+    await db.delete(orderItems).where(eq(orderItems.orderId, id));
+    await db.delete(orders).where(eq(orders.id, id));
+    return true;
   }
 
   async initializeDefaultData(): Promise<void> {

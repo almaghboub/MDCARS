@@ -132,6 +132,54 @@ async function runMigrations() {
         AND si.is_paid = true
     `);
 
+    // Create orders table if not exists
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS orders (
+        id varchar PRIMARY KEY DEFAULT gen_random_uuid(),
+        order_number text NOT NULL,
+        customer_id varchar REFERENCES customers(id),
+        receiver_name text NOT NULL,
+        receiver_phone text NOT NULL,
+        shipping_country text NOT NULL DEFAULT 'Libya',
+        shipping_city text NOT NULL,
+        shipping_category text NOT NULL DEFAULT 'normal',
+        shipping_cost decimal(10,2) NOT NULL DEFAULT 0,
+        shipping_weight decimal(10,2) NOT NULL DEFAULT 0,
+        total_amount decimal(10,2) NOT NULL DEFAULT 0,
+        down_payment decimal(10,2) NOT NULL DEFAULT 0,
+        down_payment_type text,
+        remaining_balance decimal(10,2) NOT NULL DEFAULT 0,
+        status text NOT NULL DEFAULT 'pending',
+        notes text,
+        lyd_exchange_rate decimal(10,4) NOT NULL DEFAULT 1,
+        darb_assabil_order_id text,
+        darb_assabil_reference text,
+        created_at timestamp NOT NULL DEFAULT NOW(),
+        updated_at timestamp NOT NULL DEFAULT NOW()
+      )
+    `);
+
+    // Create order_items table if not exists
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS order_items (
+        id varchar PRIMARY KEY DEFAULT gen_random_uuid(),
+        order_id varchar NOT NULL REFERENCES orders(id) ON DELETE CASCADE,
+        product_name text NOT NULL,
+        quantity integer NOT NULL DEFAULT 1,
+        price decimal(10,2) NOT NULL DEFAULT 0,
+        cost decimal(10,2) NOT NULL DEFAULT 0,
+        weight decimal(10,3) NOT NULL DEFAULT 0,
+        profit decimal(10,2) NOT NULL DEFAULT 0
+      )
+    `);
+
+    // Add any missing columns to orders table for backward compatibility
+    await client.query(`ALTER TABLE orders ADD COLUMN IF NOT EXISTS down_payment_type text`);
+    await client.query(`ALTER TABLE orders ADD COLUMN IF NOT EXISTS lyd_exchange_rate decimal(10,4) NOT NULL DEFAULT 1`);
+    await client.query(`ALTER TABLE orders ADD COLUMN IF NOT EXISTS darb_assabil_order_id text`);
+    await client.query(`ALTER TABLE orders ADD COLUMN IF NOT EXISTS darb_assabil_reference text`);
+    await client.query(`ALTER TABLE orders ADD COLUMN IF NOT EXISTS updated_at timestamp NOT NULL DEFAULT NOW()`);
+
     // Reconcile all partner totals from their actual transactions (fixes stale percentages)
     await client.query(`
       UPDATE partners p
@@ -1060,6 +1108,72 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.get("/api/reports/weekly", requireAuth, async (req, res) => {
     res.json(await storage.getWeeklySalesReport());
+  });
+
+  // Orders routes
+  app.get("/api/orders", requireAuth, async (req, res) => {
+    try {
+      const allOrders = await storage.getOrders();
+      res.json(allOrders);
+    } catch (err: any) {
+      res.status(500).json({ message: "Failed to fetch orders" });
+    }
+  });
+
+  app.get("/api/orders/:id", requireAuth, async (req, res) => {
+    try {
+      const order = await storage.getOrderById(req.params.id);
+      if (!order) return res.status(404).json({ message: "Order not found" });
+      res.json(order);
+    } catch (err: any) {
+      res.status(500).json({ message: "Failed to fetch order" });
+    }
+  });
+
+  app.post("/api/orders", requireAuth, async (req, res) => {
+    try {
+      const { items, ...orderData } = req.body;
+      if (!items || items.length === 0) {
+        return res.status(400).json({ message: "Order must have at least one item" });
+      }
+      const order = await storage.createOrder({ ...orderData, items });
+      res.status(201).json(order);
+    } catch (err: any) {
+      console.error("Order creation error:", err);
+      res.status(500).json({ message: `Failed to create order: ${err.message}` });
+    }
+  });
+
+  app.patch("/api/orders/:id", requireAuth, async (req, res) => {
+    try {
+      const { items, ...orderData } = req.body;
+      const updated = await storage.updateOrder(req.params.id, { ...orderData, ...(items ? { items } : {}) });
+      if (!updated) return res.status(404).json({ message: "Order not found" });
+      res.json(updated);
+    } catch (err: any) {
+      res.status(500).json({ message: "Failed to update order" });
+    }
+  });
+
+  app.patch("/api/orders/:id/status", requireAuth, async (req, res) => {
+    try {
+      const { status } = req.body;
+      const updated = await storage.updateOrderStatus(req.params.id, status);
+      if (!updated) return res.status(404).json({ message: "Order not found" });
+      res.json(updated);
+    } catch (err: any) {
+      res.status(500).json({ message: "Failed to update order status" });
+    }
+  });
+
+  app.delete("/api/orders/:id", requireOwner, async (req, res) => {
+    try {
+      const deleted = await storage.deleteOrder(req.params.id);
+      if (!deleted) return res.status(404).json({ message: "Order not found" });
+      res.json({ message: "Order deleted" });
+    } catch (err: any) {
+      res.status(500).json({ message: "Failed to delete order" });
+    }
   });
 
   const httpServer = createServer(app);
