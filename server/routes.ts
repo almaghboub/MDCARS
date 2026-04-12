@@ -907,21 +907,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           description: "Initial investment",
           createdByUserId: (req.user as any).id,
         });
-        const cashbox = await storage.getCashbox();
-        if (cashbox) {
-          const amtUSD = (initialInvestmentCurrency || "LYD") === "USD" ? parseFloat(initialInvestment).toFixed(2) : "0";
-          const amtLYD = (initialInvestmentCurrency || "LYD") === "LYD" ? parseFloat(initialInvestment).toFixed(2) : "0";
-          await storage.updateCashboxBalance(amtUSD, amtLYD, true);
-          await storage.createCashboxTransaction({
-            cashboxId: cashbox.id,
-            type: "deposit",
-            amountUSD: amtUSD,
-            amountLYD: amtLYD,
-            exchangeRate: "1",
-            description: `Initial investment from partner: ${partner.name}`,
-            createdByUserId: (req.user as any).id,
-          });
-        }
+        // Investments do NOT affect cashbox — capital is already in the business (products/inventory)
       } else {
         await storage.recalculatePartnerOwnership();
       }
@@ -958,35 +944,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       const partner = await storage.getPartner(parsed.data.partnerId);
       const cashbox = await storage.getCashbox();
-      if (cashbox && partner) {
+      // Investments do NOT affect cashbox — capital is already in the business (products/inventory)
+      // Only withdrawals and profit distributions deduct from cashbox (real cash leaving)
+      if (cashbox && partner && (parsed.data.type === "withdrawal" || parsed.data.type === "profit_distribution")) {
         const amountUSD = parsed.data.currency === "USD" ? parsed.data.amount : "0";
         const amountLYD = parsed.data.currency === "LYD" ? parsed.data.amount : "0";
-
-        if (parsed.data.type === "investment") {
-          await storage.updateCashboxBalance(amountUSD, amountLYD, true);
-          await storage.createCashboxTransaction({
-            cashboxId: cashbox.id,
-            type: "deposit",
-            amountUSD,
-            amountLYD,
-            exchangeRate: "1",
-            description: `Partner investment from ${partner.name}`,
-            createdByUserId: user.id,
-          });
-        } else if (parsed.data.type === "withdrawal" || parsed.data.type === "profit_distribution") {
-          await storage.updateCashboxBalance(amountUSD, amountLYD, false);
-          await storage.createCashboxTransaction({
-            cashboxId: cashbox.id,
-            type: "withdrawal",
-            amountUSD,
-            amountLYD,
-            exchangeRate: "1",
-            description: parsed.data.type === "withdrawal"
-              ? `Partner withdrawal by ${partner.name}`
-              : `Profit distribution to ${partner.name}`,
-            createdByUserId: user.id,
-          });
-        }
+        await storage.updateCashboxBalance(amountUSD, amountLYD, false);
+        await storage.createCashboxTransaction({
+          cashboxId: cashbox.id,
+          type: "withdrawal",
+          amountUSD,
+          amountLYD,
+          exchangeRate: "1",
+          description: parsed.data.type === "withdrawal"
+            ? `Partner withdrawal by ${partner.name}`
+            : `Profit distribution to ${partner.name}`,
+          createdByUserId: user.id,
+        });
       }
 
       res.status(201).json(transaction);
@@ -1008,15 +982,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       const updated = await storage.updatePartnerTransaction(req.params.id, { amount: newAmount.toFixed(2), description });
 
+      // Investments do NOT affect cashbox — only withdrawals/profit_distributions do
       const cashbox = await storage.getCashbox();
-      if (cashbox && delta !== 0) {
+      if (cashbox && delta !== 0 && (existing.type === "withdrawal" || existing.type === "profit_distribution")) {
         const amountUSD = existing.currency === "USD" ? Math.abs(delta).toFixed(2) : "0";
         const amountLYD = existing.currency === "LYD" ? Math.abs(delta).toFixed(2) : "0";
-        if (existing.type === "investment") {
-          await storage.updateCashboxBalance(amountUSD, amountLYD, delta > 0);
-        } else if (existing.type === "withdrawal" || existing.type === "profit_distribution") {
-          await storage.updateCashboxBalance(amountUSD, amountLYD, delta < 0);
-        }
+        // If amount increased, deduct more; if decreased, refund the difference
+        await storage.updateCashboxBalance(amountUSD, amountLYD, delta < 0);
       }
 
       res.json(updated);
@@ -1031,15 +1003,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const deleted = await storage.deletePartnerTransaction(req.params.id);
       if (!deleted) return res.status(404).json({ message: "Transaction not found" });
 
+      // Investments never touched cashbox, so no reversal needed when deleting
+      // Withdrawals/profit_distributions did deduct cashbox, so refund when deleting
       const cashbox = await storage.getCashbox();
-      if (cashbox) {
+      if (cashbox && (existing.type === "withdrawal" || existing.type === "profit_distribution")) {
         const amountUSD = existing.currency === "USD" ? existing.amount : "0";
         const amountLYD = existing.currency === "LYD" ? existing.amount : "0";
-        if (existing.type === "investment") {
-          await storage.updateCashboxBalance(amountUSD, amountLYD, false);
-        } else if (existing.type === "withdrawal" || existing.type === "profit_distribution") {
-          await storage.updateCashboxBalance(amountUSD, amountLYD, true);
-        }
+        await storage.updateCashboxBalance(amountUSD, amountLYD, true);
       }
 
       res.json({ message: "Transaction deleted" });
