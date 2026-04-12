@@ -64,6 +64,7 @@ export interface IStorage {
   getAllSales(): Promise<SaleWithDetails[]>;
   getSale(id: string): Promise<SaleWithDetails | undefined>;
   getSalesByCustomerId(customerId: string): Promise<Sale[]>;
+  getSalesByCustomerIdWithItems(customerId: string): Promise<SaleWithDetails[]>;
   getSalesByDateRange(startDate: Date, endDate: Date): Promise<SaleWithDetails[]>;
   createSale(sale: InsertSale, items: InsertSaleItem[]): Promise<SaleWithDetails>;
   updateSaleStatus(id: string, status: string): Promise<Sale | undefined>;
@@ -71,6 +72,7 @@ export interface IStorage {
   editSale(id: string, returnItemIds: string[], newItems: InsertSaleItem[], userId: string): Promise<SaleWithDetails | undefined>;
   deleteSale(id: string): Promise<boolean>;
   getNextSaleNumber(): Promise<string>;
+  markSaleItemPaid(itemId: string): Promise<{ item: SaleItem; customer: Customer | null } | undefined>;
 
   getCashbox(): Promise<Cashbox | undefined>;
   createCashbox(cashbox: InsertCashbox): Promise<Cashbox>;
@@ -354,6 +356,44 @@ export class DatabaseStorage implements IStorage {
     return db.select().from(sales).where(eq(sales.customerId, customerId)).orderBy(desc(sales.createdAt));
   }
 
+  async getSalesByCustomerIdWithItems(customerId: string): Promise<SaleWithDetails[]> {
+    const customerSales = await db.select().from(sales).where(eq(sales.customerId, customerId)).orderBy(desc(sales.createdAt));
+    const result: SaleWithDetails[] = [];
+    for (const sale of customerSales) {
+      const items = await db.select().from(saleItems).where(eq(saleItems.saleId, sale.id));
+      const payments = await db.select().from(salePayments).where(eq(salePayments.saleId, sale.id));
+      const [createdBy] = await db.select().from(users).where(eq(users.id, sale.createdByUserId));
+      result.push({ ...sale, customer: null, items, payments, createdBy });
+    }
+    return result;
+  }
+
+  async markSaleItemPaid(itemId: string): Promise<{ item: SaleItem; customer: Customer | null } | undefined> {
+    const [item] = await db.select().from(saleItems).where(eq(saleItems.id, itemId));
+    if (!item) return undefined;
+    if (item.isPaid) return { item, customer: null };
+
+    const [updatedItem] = await db.update(saleItems)
+      .set({ isPaid: true, paidAt: new Date() })
+      .where(eq(saleItems.id, itemId))
+      .returning();
+
+    const [sale] = await db.select().from(sales).where(eq(sales.id, updatedItem.saleId));
+    let customer: Customer | null = null;
+    if (sale?.customerId) {
+      const [cust] = await db.select().from(customers).where(eq(customers.id, sale.customerId));
+      if (cust) {
+        const newBalance = Math.max(0, parseFloat(cust.balanceOwed as string) - parseFloat(updatedItem.totalPrice as string));
+        const [updatedCust] = await db.update(customers)
+          .set({ balanceOwed: newBalance.toFixed(2), updatedAt: new Date() })
+          .where(eq(customers.id, sale.customerId))
+          .returning();
+        customer = updatedCust;
+      }
+    }
+    return { item: updatedItem, customer };
+  }
+
   async getSalesByDateRange(startDate: Date, endDate: Date): Promise<SaleWithDetails[]> {
     const allSales = await db.select().from(sales)
       .where(and(gte(sales.createdAt, startDate), lte(sales.createdAt, endDate)))
@@ -387,8 +427,13 @@ export class DatabaseStorage implements IStorage {
         createdPayments.push(sp);
       }
 
+      const creditSale = parseFloat((insertSale.amountDue as string) || "0") > 0;
       for (const item of items) {
-        const [saleItem] = await tx.insert(saleItems).values({ ...item, saleId: sale.id }).returning();
+        const [saleItem] = await tx.insert(saleItems).values({
+          ...item,
+          saleId: sale.id,
+          isPaid: !creditSale,
+        }).returning();
         createdItems.push(saleItem);
 
         const [product] = await tx.select().from(products).where(eq(products.id, item.productId));

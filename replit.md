@@ -118,8 +118,17 @@ PostgreSQL with Drizzle ORM. Schema includes:
 ### Customer Management
 - Purchase history tracking
 - Balance owed tracking with direct edit (set initial balance or override balance in add/edit form)
-- Payment recording to reduce balance
+- Payment recording to reduce balance (manual payment via "Record Payment" button)
 - Contact information and notes
+- **Credit Invoice Tracking**: Full item-level credit tracking in customer account view
+  - Credit Invoices tab shows all sales with `amountDue > 0` grouped by invoice
+  - Each invoice expands to show all products with paid/unpaid status per item
+  - Checkbox beside each unpaid item → marks it paid → deducts item price from `customer.balanceOwed`
+  - Summary cards: Total Credit Amount, Total Paid (items), Balance Owed
+  - All Invoices tab shows complete purchase history
+  - New sales with credit portion automatically set all `saleItems.isPaid = false`
+  - Fully paid sales set all `saleItems.isPaid = true`
+  - `PATCH /api/sale-items/:id/mark-paid` endpoint; `GET /api/customers/:id/invoices` endpoint
 
 ### Financial Management
 - Cashbox balance in dual currencies

@@ -127,6 +127,8 @@ export const saleItems = pgTable("sale_items", {
   costPrice: decimal("cost_price", { precision: 10, scale: 2 }).notNull(),
   totalPrice: decimal("total_price", { precision: 10, scale: 2 }).notNull(),
   profit: decimal("profit", { precision: 10, scale: 2 }).notNull(),
+  isPaid: boolean("is_paid").notNull().default(true),
+  paidAt: timestamp("paid_at"),
 });
 
 export const salePayments = pgTable("sale_payments", {

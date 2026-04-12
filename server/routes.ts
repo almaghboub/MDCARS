@@ -119,6 +119,19 @@ async function runMigrations() {
       )
     `);
 
+    // sale_items: item-level payment tracking
+    await client.query(`ALTER TABLE sale_items ADD COLUMN IF NOT EXISTS is_paid boolean NOT NULL DEFAULT true`);
+    await client.query(`ALTER TABLE sale_items ADD COLUMN IF NOT EXISTS paid_at timestamp`);
+    // Existing credit sale items → mark as unpaid (only if not already set to false)
+    await client.query(`
+      UPDATE sale_items si
+      SET is_paid = false
+      FROM sales s
+      WHERE si.sale_id = s.id
+        AND CAST(s.amount_due AS decimal) > 0
+        AND si.is_paid = true
+    `);
+
     console.log("Database migrations completed successfully.");
   } catch (err) {
     console.error("Migration error (non-fatal):", err);
@@ -470,6 +483,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       res.json(customer);
+    } catch (err: any) { res.status(400).json({ message: err.message }); }
+  });
+
+  app.get("/api/customers/:id/invoices", requireAuth, async (req, res) => {
+    const salesWithItems = await storage.getSalesByCustomerIdWithItems(req.params.id);
+    res.json(salesWithItems);
+  });
+
+  app.patch("/api/sale-items/:id/mark-paid", requireSalesAccess, async (req, res) => {
+    try {
+      const result = await storage.markSaleItemPaid(req.params.id);
+      if (!result) return res.status(404).json({ message: "Sale item not found" });
+      res.json(result);
     } catch (err: any) { res.status(400).json({ message: err.message }); }
   });
 
