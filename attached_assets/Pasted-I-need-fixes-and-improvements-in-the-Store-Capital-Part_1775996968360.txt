@@ -1,0 +1,53 @@
+I need fixes and improvements in the Store Capital - Partners section.
+
+Right now, the partner percentage is not changing correctly, and I also need full edit and delete control for Partner Transactions.
+
+Please implement the following:
+
+Fix partner ownership percentage calculation
+The partner percentage is not updating correctly.
+I want the ownership percentage to automatically recalculate based on the real total invested capital of each partner.
+If one partner adds more money, their percentage should increase.
+If values change, the percentage should update immediately and correctly.
+Allow editing Partner Transactions
+I want to be able to edit Partner Transactions.
+If I edit an investment transaction or withdrawal transaction, all related totals must update correctly.
+This includes:
+Total Invested
+Total Withdrawn
+Net Balance
+Ownership Percentage
+Allow deleting Partner Transactions
+I want to be able to delete Partner Transactions.
+When I delete a transaction, the system must reverse its effect correctly.
+Important rule for deleting transactions
+If I delete an investment transaction:
+that amount should be removed from the partner’s Total Invested
+the total capital should update
+ownership percentages should update again
+If I delete a withdrawal transaction:
+that amount should be removed from Total Withdrawn
+it should go back to the partner balance correctly
+the totals must recalculate correctly
+
+In other words:
+
+deleting an added amount should remove it from totals
+deleting a withdrawn amount should return it back correctly to the partner’s balance
+Keep everything synchronized
+When editing or deleting Partner Transactions, the system must automatically and correctly update:
+partner invested total
+partner withdrawn total
+partner net balance
+total store capital
+partner ownership percentages
+Prevent incorrect calculations
+Please review the calculation logic carefully because the percentage currently does not match the real invested amounts.
+Add proper transaction management
+Please make sure all edit and delete operations are safe and stable:
+use proper database updates
+avoid duplicate calculations
+keep totals accurate
+do not let old values remain after editing or deleting
+
+Please fix this in a clean and permanent way.

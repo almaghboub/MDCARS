@@ -920,6 +920,59 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (err: any) { res.status(400).json({ message: err.message }); }
   });
 
+  app.patch("/api/partner-transactions/:id", requireOwner, async (req, res) => {
+    try {
+      const { amount, description } = req.body;
+      if (!amount || isNaN(parseFloat(amount)) || parseFloat(amount) <= 0) {
+        return res.status(400).json({ message: "Valid amount is required" });
+      }
+      const existing = await storage.getPartnerTransaction(req.params.id);
+      if (!existing) return res.status(404).json({ message: "Transaction not found" });
+
+      const oldAmount = parseFloat(existing.amount);
+      const newAmount = parseFloat(amount);
+      const delta = newAmount - oldAmount;
+
+      const updated = await storage.updatePartnerTransaction(req.params.id, { amount: newAmount.toFixed(2), description });
+
+      const cashbox = await storage.getCashbox();
+      if (cashbox && delta !== 0) {
+        const amountUSD = existing.currency === "USD" ? Math.abs(delta).toFixed(2) : "0";
+        const amountLYD = existing.currency === "LYD" ? Math.abs(delta).toFixed(2) : "0";
+        if (existing.type === "investment") {
+          await storage.updateCashboxBalance(amountUSD, amountLYD, delta > 0);
+        } else if (existing.type === "withdrawal" || existing.type === "profit_distribution") {
+          await storage.updateCashboxBalance(amountUSD, amountLYD, delta < 0);
+        }
+      }
+
+      res.json(updated);
+    } catch (err: any) { res.status(400).json({ message: err.message }); }
+  });
+
+  app.delete("/api/partner-transactions/:id", requireOwner, async (req, res) => {
+    try {
+      const existing = await storage.getPartnerTransaction(req.params.id);
+      if (!existing) return res.status(404).json({ message: "Transaction not found" });
+
+      const deleted = await storage.deletePartnerTransaction(req.params.id);
+      if (!deleted) return res.status(404).json({ message: "Transaction not found" });
+
+      const cashbox = await storage.getCashbox();
+      if (cashbox) {
+        const amountUSD = existing.currency === "USD" ? existing.amount : "0";
+        const amountLYD = existing.currency === "LYD" ? existing.amount : "0";
+        if (existing.type === "investment") {
+          await storage.updateCashboxBalance(amountUSD, amountLYD, false);
+        } else if (existing.type === "withdrawal" || existing.type === "profit_distribution") {
+          await storage.updateCashboxBalance(amountUSD, amountLYD, true);
+        }
+      }
+
+      res.json({ message: "Transaction deleted" });
+    } catch (err: any) { res.status(400).json({ message: err.message }); }
+  });
+
   app.get("/api/settings", requireAuth, async (req, res) => {
     res.json(await storage.getAllSettings());
   });

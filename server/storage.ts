@@ -106,8 +106,12 @@ export interface IStorage {
   updatePartner(id: string, partner: Partial<InsertPartner>): Promise<Partner | undefined>;
   deletePartner(id: string): Promise<boolean>;
   getPartnerTransactions(partnerId?: string): Promise<PartnerTransaction[]>;
+  getPartnerTransaction(id: string): Promise<PartnerTransaction | undefined>;
   createPartnerTransaction(transaction: InsertPartnerTransaction): Promise<PartnerTransaction>;
+  updatePartnerTransaction(id: string, data: { amount: string; description?: string }): Promise<PartnerTransaction | undefined>;
+  deletePartnerTransaction(id: string): Promise<boolean>;
   recalculatePartnerOwnership(): Promise<void>;
+  recomputePartnerTotalsFromTransactions(partnerId: string): Promise<void>;
 
   getAllSupplierPayables(): Promise<SupplierPayable[]>;
   createSupplierPayable(payable: InsertSupplierPayable): Promise<SupplierPayable>;
@@ -1015,27 +1019,55 @@ export class DatabaseStorage implements IStorage {
     return await db.select().from(partnerTransactions).orderBy(desc(partnerTransactions.createdAt));
   }
 
+  async getPartnerTransaction(id: string): Promise<PartnerTransaction | undefined> {
+    const [tx] = await db.select().from(partnerTransactions).where(eq(partnerTransactions.id, id));
+    return tx || undefined;
+  }
+
   async createPartnerTransaction(transaction: InsertPartnerTransaction): Promise<PartnerTransaction> {
     const [created] = await db.insert(partnerTransactions).values(transaction).returning();
-    const partner = await this.getPartner(transaction.partnerId);
-    if (partner) {
-      const amount = parseFloat(transaction.amount);
-      if (transaction.type === "investment") {
-        await db.update(partners).set({
-          totalInvested: (parseFloat(partner.totalInvested) + amount).toFixed(2),
-        }).where(eq(partners.id, transaction.partnerId));
-        await this.recalculatePartnerOwnership();
-      } else if (transaction.type === "withdrawal") {
-        await db.update(partners).set({
-          totalWithdrawn: (parseFloat(partner.totalWithdrawn) + amount).toFixed(2),
-        }).where(eq(partners.id, transaction.partnerId));
-      } else if (transaction.type === "profit_distribution") {
-        await db.update(partners).set({
-          totalProfitDistributed: (parseFloat(partner.totalProfitDistributed) + amount).toFixed(2),
-        }).where(eq(partners.id, transaction.partnerId));
-      }
-    }
+    await this.recomputePartnerTotalsFromTransactions(transaction.partnerId);
+    await this.recalculatePartnerOwnership();
     return created;
+  }
+
+  async updatePartnerTransaction(id: string, data: { amount: string; description?: string }): Promise<PartnerTransaction | undefined> {
+    const [existing] = await db.select().from(partnerTransactions).where(eq(partnerTransactions.id, id));
+    if (!existing) return undefined;
+    const [updated] = await db.update(partnerTransactions)
+      .set({ amount: data.amount, description: data.description ?? existing.description })
+      .where(eq(partnerTransactions.id, id))
+      .returning();
+    await this.recomputePartnerTotalsFromTransactions(existing.partnerId);
+    await this.recalculatePartnerOwnership();
+    return updated;
+  }
+
+  async deletePartnerTransaction(id: string): Promise<boolean> {
+    const [existing] = await db.select().from(partnerTransactions).where(eq(partnerTransactions.id, id));
+    if (!existing) return false;
+    await db.delete(partnerTransactions).where(eq(partnerTransactions.id, id));
+    await this.recomputePartnerTotalsFromTransactions(existing.partnerId);
+    await this.recalculatePartnerOwnership();
+    return true;
+  }
+
+  async recomputePartnerTotalsFromTransactions(partnerId: string): Promise<void> {
+    const txs = await db.select().from(partnerTransactions).where(eq(partnerTransactions.partnerId, partnerId));
+    let totalInvested = 0;
+    let totalWithdrawn = 0;
+    let totalProfitDistributed = 0;
+    for (const tx of txs) {
+      const amt = parseFloat(tx.amount || "0");
+      if (tx.type === "investment") totalInvested += amt;
+      else if (tx.type === "withdrawal") totalWithdrawn += amt;
+      else if (tx.type === "profit_distribution") totalProfitDistributed += amt;
+    }
+    await db.update(partners).set({
+      totalInvested: totalInvested.toFixed(2),
+      totalWithdrawn: totalWithdrawn.toFixed(2),
+      totalProfitDistributed: totalProfitDistributed.toFixed(2),
+    }).where(eq(partners.id, partnerId));
   }
 
   async recalculatePartnerOwnership(): Promise<void> {
