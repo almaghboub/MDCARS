@@ -132,6 +132,31 @@ async function runMigrations() {
         AND si.is_paid = true
     `);
 
+    // Reconcile all partner totals from their actual transactions (fixes stale percentages)
+    await client.query(`
+      UPDATE partners p
+      SET
+        total_invested    = COALESCE((SELECT SUM(CAST(amount AS decimal)) FROM partner_transactions WHERE partner_id = p.id AND type = 'investment'), 0),
+        total_withdrawn   = COALESCE((SELECT SUM(CAST(amount AS decimal)) FROM partner_transactions WHERE partner_id = p.id AND type = 'withdrawal'), 0),
+        total_profit_distributed = COALESCE((SELECT SUM(CAST(amount AS decimal)) FROM partner_transactions WHERE partner_id = p.id AND type = 'profit_distribution'), 0)
+    `);
+
+    // Recalculate ownership percentage for all partners based on total_invested
+    await client.query(`
+      UPDATE partners p
+      SET ownership_percentage = (
+        CASE
+          WHEN (SELECT SUM(CAST(total_invested AS decimal)) FROM partners) > 0
+          THEN ROUND(
+            CAST(p.total_invested AS decimal) /
+            (SELECT SUM(CAST(total_invested AS decimal)) FROM partners) * 100,
+            2
+          )
+          ELSE 0
+        END
+      )
+    `);
+
     console.log("Database migrations completed successfully.");
   } catch (err) {
     console.error("Migration error (non-fatal):", err);
