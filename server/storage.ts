@@ -76,17 +76,25 @@ export interface IStorage {
   createCashbox(cashbox: InsertCashbox): Promise<Cashbox>;
   updateCashboxBalance(amountUSD: string, amountLYD: string, add: boolean): Promise<Cashbox | undefined>;
   getCashboxTransactions(): Promise<CashboxTransaction[]>;
+  getCashboxTransaction(id: string): Promise<CashboxTransaction | undefined>;
+  getCashboxTransactionByReference(referenceType: string, referenceId: string): Promise<CashboxTransaction | undefined>;
   createCashboxTransaction(transaction: InsertCashboxTransaction): Promise<CashboxTransaction>;
+  updateCashboxTransaction(id: string, data: { description?: string; amountUSD?: string; amountLYD?: string }): Promise<CashboxTransaction | undefined>;
+  deleteCashboxTransaction(id: string): Promise<CashboxTransaction | undefined>;
 
   getAllExpenses(): Promise<Expense[]>;
+  getExpense(id: string): Promise<Expense | undefined>;
   getExpensesByDateRange(startDate: Date, endDate: Date): Promise<Expense[]>;
   createExpense(expense: InsertExpense): Promise<Expense>;
+  updateExpense(id: string, data: Partial<{ amount: string; description: string; category: string }>): Promise<Expense | undefined>;
   deleteExpense(id: string): Promise<boolean>;
   getNextExpenseNumber(): Promise<string>;
 
   getAllRevenues(): Promise<Revenue[]>;
+  getRevenue(id: string): Promise<Revenue | undefined>;
   getRevenuesByDateRange(startDate: Date, endDate: Date): Promise<Revenue[]>;
   createRevenue(revenue: InsertRevenue): Promise<Revenue>;
+  updateRevenue(id: string, data: Partial<{ amount: string; description: string; source: string }>): Promise<Revenue | undefined>;
   deleteRevenue(id: string): Promise<boolean>;
   getNextRevenueNumber(): Promise<string>;
 
@@ -97,6 +105,7 @@ export interface IStorage {
   deletePartner(id: string): Promise<boolean>;
   getPartnerTransactions(partnerId?: string): Promise<PartnerTransaction[]>;
   createPartnerTransaction(transaction: InsertPartnerTransaction): Promise<PartnerTransaction>;
+  recalculatePartnerOwnership(): Promise<void>;
 
   getAllSupplierPayables(): Promise<SupplierPayable[]>;
   createSupplierPayable(payable: InsertSupplierPayable): Promise<SupplierPayable>;
@@ -671,13 +680,44 @@ export class DatabaseStorage implements IStorage {
     return db.select().from(cashboxTransactions).orderBy(desc(cashboxTransactions.createdAt));
   }
 
+  async getCashboxTransaction(id: string): Promise<CashboxTransaction | undefined> {
+    const [tx] = await db.select().from(cashboxTransactions).where(eq(cashboxTransactions.id, id));
+    return tx;
+  }
+
+  async getCashboxTransactionByReference(referenceType: string, referenceId: string): Promise<CashboxTransaction | undefined> {
+    const [tx] = await db.select().from(cashboxTransactions)
+      .where(and(eq(cashboxTransactions.referenceType, referenceType), eq(cashboxTransactions.referenceId, referenceId)));
+    return tx;
+  }
+
   async createCashboxTransaction(insertTransaction: InsertCashboxTransaction): Promise<CashboxTransaction> {
     const [transaction] = await db.insert(cashboxTransactions).values(insertTransaction).returning();
     return transaction;
   }
 
+  async updateCashboxTransaction(id: string, data: { description?: string; amountUSD?: string; amountLYD?: string }): Promise<CashboxTransaction | undefined> {
+    const [updated] = await db.update(cashboxTransactions).set(data).where(eq(cashboxTransactions.id, id)).returning();
+    return updated;
+  }
+
+  async deleteCashboxTransaction(id: string): Promise<CashboxTransaction | undefined> {
+    const [deleted] = await db.delete(cashboxTransactions).where(eq(cashboxTransactions.id, id)).returning();
+    return deleted;
+  }
+
   async getAllExpenses(): Promise<Expense[]> {
     return db.select().from(expenses).orderBy(desc(expenses.createdAt));
+  }
+
+  async getExpense(id: string): Promise<Expense | undefined> {
+    const [expense] = await db.select().from(expenses).where(eq(expenses.id, id));
+    return expense;
+  }
+
+  async updateExpense(id: string, data: Partial<{ amount: string; description: string; category: string }>): Promise<Expense | undefined> {
+    const [updated] = await db.update(expenses).set(data).where(eq(expenses.id, id)).returning();
+    return updated;
   }
 
   async getExpensesByDateRange(startDate: Date, endDate: Date): Promise<Expense[]> {
@@ -704,6 +744,16 @@ export class DatabaseStorage implements IStorage {
 
   async getAllRevenues(): Promise<Revenue[]> {
     return db.select().from(revenues).orderBy(desc(revenues.createdAt));
+  }
+
+  async getRevenue(id: string): Promise<Revenue | undefined> {
+    const [revenue] = await db.select().from(revenues).where(eq(revenues.id, id));
+    return revenue;
+  }
+
+  async updateRevenue(id: string, data: Partial<{ amount: string; description: string; source: string }>): Promise<Revenue | undefined> {
+    const [updated] = await db.update(revenues).set(data).where(eq(revenues.id, id)).returning();
+    return updated;
   }
 
   async getRevenuesByDateRange(startDate: Date, endDate: Date): Promise<Revenue[]> {
@@ -929,6 +979,7 @@ export class DatabaseStorage implements IStorage {
         await db.update(partners).set({
           totalInvested: (parseFloat(partner.totalInvested) + amount).toFixed(2),
         }).where(eq(partners.id, transaction.partnerId));
+        await this.recalculatePartnerOwnership();
       } else if (transaction.type === "withdrawal") {
         await db.update(partners).set({
           totalWithdrawn: (parseFloat(partner.totalWithdrawn) + amount).toFixed(2),
@@ -940,6 +991,17 @@ export class DatabaseStorage implements IStorage {
       }
     }
     return created;
+  }
+
+  async recalculatePartnerOwnership(): Promise<void> {
+    const allPartners = await db.select().from(partners);
+    const totalInvested = allPartners.reduce((sum, p) => sum + parseFloat(p.totalInvested || "0"), 0);
+    for (const partner of allPartners) {
+      const pct = totalInvested > 0
+        ? ((parseFloat(partner.totalInvested || "0") / totalInvested) * 100).toFixed(2)
+        : "0.00";
+      await db.update(partners).set({ ownershipPercentage: pct }).where(eq(partners.id, partner.id));
+    }
   }
 
   async getAllSupplierPayables(): Promise<SupplierPayable[]> {

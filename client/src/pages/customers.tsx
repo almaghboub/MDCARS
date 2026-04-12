@@ -24,6 +24,7 @@ const customerFormSchema = z.object({
   email: z.string().email().optional().or(z.literal("")),
   address: z.string().optional(),
   notes: z.string().optional(),
+  balanceOwed: z.string().optional(),
 });
 
 type CustomerFormData = z.infer<typeof customerFormSchema>;
@@ -52,6 +53,7 @@ export default function Customers() {
       email: "",
       address: "",
       notes: "",
+      balanceOwed: "",
     },
   });
 
@@ -129,6 +131,7 @@ export default function Customers() {
       email: customer.email || "",
       address: customer.address || "",
       notes: customer.notes || "",
+      balanceOwed: customer.balanceOwed || "0",
     });
     setIsDialogOpen(true);
   };
@@ -145,10 +148,14 @@ export default function Customers() {
   };
 
   const onSubmit = (data: CustomerFormData) => {
+    const payload = {
+      ...data,
+      balanceOwed: data.balanceOwed && data.balanceOwed !== "" ? data.balanceOwed : "0",
+    };
     if (editingCustomer) {
-      updateMutation.mutate({ id: editingCustomer.id, data });
+      updateMutation.mutate({ id: editingCustomer.id, data: payload });
     } else {
-      createMutation.mutate(data);
+      createMutation.mutate(payload);
     }
   };
 
@@ -215,6 +222,13 @@ export default function Customers() {
                   <FormItem>
                     <FormLabel>{t("notes")} (Optional)</FormLabel>
                     <FormControl><Textarea {...field} data-testid="input-customer-notes" /></FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )} />
+                <FormField control={form.control} name="balanceOwed" render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>{t("balanceOwed")} LYD {editingCustomer ? "" : `(${t("optional")})`}</FormLabel>
+                    <FormControl><Input type="number" step="0.01" min="0" {...field} data-testid="input-customer-balance" placeholder="0.00" /></FormControl>
                     <FormMessage />
                   </FormItem>
                 )} />

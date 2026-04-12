@@ -452,6 +452,13 @@ const translations = {
     noPartnersYet: "No partners added yet",
     addPartnersToStart: "Add your business partners to start tracking investments and profits",
     noTransactionsYet: "No transactions recorded yet",
+    ownershipAutoCalculated: "Ownership % is auto-calculated based on total invested capital",
+    ownershipAutoCalculatedNote: "Current ownership",
+    initialInvestment: "Initial Investment",
+    confirmDelete: "Are you sure you want to delete this?",
+    deleted: "Deleted successfully",
+    updated: "Updated successfully",
+    editTransaction: "Edit Transaction",
 
     // Pricing & Markup
     pricing: "Pricing",
@@ -917,6 +924,13 @@ const translations = {
     noPartnersYet: "لم يتم إضافة شركاء بعد",
     addPartnersToStart: "أضف شركاء عملك لبدء تتبع الاستثمارات والأرباح",
     noTransactionsYet: "لم يتم تسجيل معاملات بعد",
+    ownershipAutoCalculated: "نسبة الملكية تحسب تلقائياً بناءً على إجمالي رأس المال المستثمر",
+    ownershipAutoCalculatedNote: "الملكية الحالية",
+    initialInvestment: "الاستثمار الأولي",
+    confirmDelete: "هل أنت متأكد أنك تريد الحذف؟",
+    deleted: "تم الحذف بنجاح",
+    updated: "تم التحديث بنجاح",
+    editTransaction: "تعديل معاملة",
 
     // Pricing & Markup
     pricing: "التسعير",

@@ -1,0 +1,47 @@
+I want to fix and improve several important parts of my system. Please review and implement the following carefully in a clean and stable way:
+
+Customer Manager – Balance Owed
+I want to be able to edit the “Balance Owed” in the Customer Manager database at any time.
+Right now, I can add it for the first customer, but after that when I add another customer, I cannot correctly add or edit the money they owe.
+I need the system to allow:
+adding the owed balance for every customer
+editing the owed balance later
+saving the updated balance correctly
+This should work properly for all customers, not only the first one.
+Cashbox Transactions
+I want to be able to edit and delete Cashbox Transactions.
+I also want Cashbox Transactions to be connected to Expenses.
+If I edit or delete any Cashbox Transaction that is related to an expense, the same update should also happen in the Expenses section automatically.
+The data must stay synchronized between Cashbox Transactions and Expenses.
+Revenues
+The Revenues section is not working correctly.
+Please check and fix the Revenues logic so it works properly and shows the correct values.
+Store Capital – Partners
+I want major improvements in the Store Capital / Partners section:
+I want to be able to edit partner capital entries.
+The partner percentage should be based on the amount of money each partner added.
+If I take money from the business, that amount should be deducted from the total available money.
+I want the capital amount to be calculated from the products that I add to the store.
+The amount each partner adds should be used to calculate that partner’s ownership percentage.
+In the future, when I add money, I want the system to ask me whether this money is:
+new capital
+or money related to products that are already in the system
+
+Please make this section work clearly and correctly so partner shares, total capital, and cash movements are accurate.
+
+Expenses and Total Money
+Expenses should reduce the total available money.
+However, expenses should NOT change the capital ownership percentages or original capital structure.
+In other words:
+expenses reduce available cash / total money
+but they do not change the actual capital ownership of the partners
+
+Please implement all of this carefully and make sure:
+
+editing works correctly
+deleting works correctly
+linked sections update each other correctly
+calculations remain accurate
+nothing breaks in the current system
+
+Thank you.

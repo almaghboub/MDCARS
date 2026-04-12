@@ -117,7 +117,7 @@ PostgreSQL with Drizzle ORM. Schema includes:
 
 ### Customer Management
 - Purchase history tracking
-- Balance owed tracking
+- Balance owed tracking with direct edit (set initial balance or override balance in add/edit form)
 - Payment recording to reduce balance
 - Contact information and notes
 
@@ -126,6 +126,15 @@ PostgreSQL with Drizzle ORM. Schema includes:
 - Expense categorization (rent, utilities, salaries, supplies, maintenance, marketing, other)
 - Revenue source tracking
 - Automatic cashbox updates on sales/expenses/revenues
+- **Cashbox Transactions**: Full edit and delete support
+  - Delete: reverses cashbox balance; also deletes linked expense/revenue
+  - Edit: updates amount (with cashbox balance adjustment) and description; syncs to linked expense/revenue
+  - Deleting an expense/revenue from its tab also reverses the cashbox balance (bug fix)
+- **Partners - Auto Ownership %**: Ownership percentage is auto-calculated based on total invested capital
+  - Formula: (partner.totalInvested / all partners' totalInvested) × 100
+  - Recalculated after every investment transaction
+  - Optional initial investment amount when creating a new partner (recorded as first investment + cashbox deposit)
+  - Edit partner: shows current auto-calculated ownership % as read-only info
 
 ### Reporting
 - Daily and monthly sales summaries

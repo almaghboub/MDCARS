@@ -43,11 +43,18 @@ const cashboxTransactionFormSchema = z.object({
   description: z.string().optional(),
 });
 
+const editTxFormSchema = z.object({
+  description: z.string().optional(),
+  amountUSD: z.string().optional(),
+  amountLYD: z.string().optional(),
+});
+
 const partnerFormSchema = z.object({
   name: z.string().min(1, "Name is required"),
   phone: z.string().optional(),
   email: z.string().optional(),
-  ownershipPercentage: z.string().min(1, "Ownership percentage is required"),
+  initialInvestment: z.string().optional(),
+  initialInvestmentCurrency: z.enum(["LYD", "USD"]).optional(),
 });
 
 const partnerTransactionFormSchema = z.object({
@@ -63,6 +70,8 @@ export default function Finance() {
   const [isExpenseDialogOpen, setIsExpenseDialogOpen] = useState(false);
   const [isRevenueDialogOpen, setIsRevenueDialogOpen] = useState(false);
   const [isTransactionDialogOpen, setIsTransactionDialogOpen] = useState(false);
+  const [isEditTxDialogOpen, setIsEditTxDialogOpen] = useState(false);
+  const [editingTx, setEditingTx] = useState<CashboxTransaction | null>(null);
   const [isPartnerDialogOpen, setIsPartnerDialogOpen] = useState(false);
   const [isPartnerTxDialogOpen, setIsPartnerTxDialogOpen] = useState(false);
   const [editingPartner, setEditingPartner] = useState<Partner | null>(null);
@@ -121,9 +130,14 @@ export default function Finance() {
     defaultValues: { type: "deposit", amountUSD: "", amountLYD: "", description: "" },
   });
 
+  const editTxForm = useForm<z.infer<typeof editTxFormSchema>>({
+    resolver: zodResolver(editTxFormSchema),
+    defaultValues: { description: "", amountUSD: "", amountLYD: "" },
+  });
+
   const partnerForm = useForm<z.infer<typeof partnerFormSchema>>({
     resolver: zodResolver(partnerFormSchema),
-    defaultValues: { name: "", phone: "", email: "", ownershipPercentage: "50" },
+    defaultValues: { name: "", phone: "", email: "", initialInvestment: "", initialInvestmentCurrency: "LYD" },
   });
 
   const partnerTxForm = useForm<z.infer<typeof partnerTransactionFormSchema>>({
@@ -184,12 +198,50 @@ export default function Finance() {
     },
   });
 
+  const deleteCashboxTxMutation = useMutation({
+    mutationFn: async (id: string) => {
+      await apiRequest("DELETE", `/api/cashbox/transactions/${id}`);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/cashbox"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/cashbox/transactions"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/expenses"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/revenues"] });
+      toast({ title: t("deleted") });
+    },
+    onError: (error: any) => {
+      toast({ title: t("error"), description: error.message, variant: "destructive" });
+    },
+  });
+
+  const editCashboxTxMutation = useMutation({
+    mutationFn: async ({ id, data }: { id: string; data: z.infer<typeof editTxFormSchema> }) => {
+      const res = await apiRequest("PATCH", `/api/cashbox/transactions/${id}`, data);
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/cashbox"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/cashbox/transactions"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/expenses"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/revenues"] });
+      toast({ title: t("updated") });
+      setIsEditTxDialogOpen(false);
+      setEditingTx(null);
+      editTxForm.reset();
+    },
+    onError: (error: any) => {
+      toast({ title: t("error"), description: error.message, variant: "destructive" });
+    },
+  });
+
   const deleteExpenseMutation = useMutation({
     mutationFn: async (id: string) => {
       await apiRequest("DELETE", `/api/expenses/${id}`);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/expenses"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/cashbox"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/cashbox/transactions"] });
       toast({ title: "Expense deleted" });
     },
   });
@@ -200,6 +252,8 @@ export default function Finance() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/revenues"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/cashbox"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/cashbox/transactions"] });
       toast({ title: "Revenue deleted" });
     },
   });
@@ -227,6 +281,9 @@ export default function Finance() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/partners"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/partner-transactions"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/cashbox"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/cashbox/transactions"] });
       toast({ title: t("partnerAdded") });
       setIsPartnerDialogOpen(false);
       partnerForm.reset();
@@ -238,7 +295,8 @@ export default function Finance() {
 
   const updatePartnerMutation = useMutation({
     mutationFn: async ({ id, data }: { id: string; data: z.infer<typeof partnerFormSchema> }) => {
-      const res = await apiRequest("PATCH", `/api/partners/${id}`, data);
+      const { initialInvestment, initialInvestmentCurrency, ...rest } = data;
+      const res = await apiRequest("PATCH", `/api/partners/${id}`, rest);
       return res.json();
     },
     onSuccess: () => {
@@ -286,15 +344,26 @@ export default function Finance() {
       name: partner.name,
       phone: partner.phone || "",
       email: partner.email || "",
-      ownershipPercentage: partner.ownershipPercentage,
+      initialInvestment: "",
+      initialInvestmentCurrency: "LYD",
     });
     setIsPartnerDialogOpen(true);
   };
 
   const openAddPartner = () => {
     setEditingPartner(null);
-    partnerForm.reset({ name: "", phone: "", email: "", ownershipPercentage: "50" });
+    partnerForm.reset({ name: "", phone: "", email: "", initialInvestment: "", initialInvestmentCurrency: "LYD" });
     setIsPartnerDialogOpen(true);
+  };
+
+  const openEditTx = (tx: CashboxTransaction) => {
+    setEditingTx(tx);
+    editTxForm.reset({
+      description: tx.description || "",
+      amountUSD: tx.amountUSD || "",
+      amountLYD: tx.amountLYD || "",
+    });
+    setIsEditTxDialogOpen(true);
   };
 
   const totalExpenses = expenses.reduce((sum, e) => sum + parseFloat(e.amount), 0);
@@ -517,11 +586,12 @@ export default function Finance() {
                       <TableHead>{t("amountLYD")}</TableHead>
                       <TableHead>{t("amountUSD")}</TableHead>
                       <TableHead>{t("description")}</TableHead>
+                      <TableHead>{t("actions")}</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {transactions.slice(0, 20).map((tx) => (
-                      <TableRow key={tx.id}>
+                    {transactions.slice(0, 50).map((tx) => (
+                      <TableRow key={tx.id} data-testid={`row-cashbox-tx-${tx.id}`}>
                         <TableCell>{format(new Date(tx.createdAt), "PPp")}</TableCell>
                         <TableCell>
                           <Badge variant={tx.type === "deposit" || tx.type === "sale" ? "default" : "destructive"}>
@@ -530,12 +600,22 @@ export default function Finance() {
                             ) : (
                               <ArrowDownCircle className="w-3 h-3 mr-1" />
                             )}
-                            {tx.type === "sale" ? t("sale") : tx.type === "expense" ? t("expense") : tx.type === "deposit" ? t("deposit") : tx.type === "withdrawal" ? t("withdrawal") : tx.type === "refund" ? t("refund") : tx.type}
+                            {tx.type === "sale" ? t("sale") : tx.type === "expense" ? t("expense") : tx.type === "deposit" ? t("deposit") : tx.type === "withdrawal" ? t("withdrawal") : tx.type === "refund" ? t("refund") : tx.type === "revenue" ? t("revenue") : tx.type}
                           </Badge>
                         </TableCell>
-                        <TableCell>{tx.amountLYD} LYD</TableCell>
-                        <TableCell>${tx.amountUSD}</TableCell>
-                        <TableCell>{tx.description || "-"}</TableCell>
+                        <TableCell>{parseFloat(tx.amountLYD || "0") > 0 ? `${tx.amountLYD} LYD` : "-"}</TableCell>
+                        <TableCell>{parseFloat(tx.amountUSD || "0") > 0 ? `$${tx.amountUSD}` : "-"}</TableCell>
+                        <TableCell className="max-w-[200px] truncate">{tx.description || "-"}</TableCell>
+                        <TableCell>
+                          <div className="flex gap-1">
+                            <Button variant="ghost" size="sm" onClick={() => openEditTx(tx)} data-testid={`button-edit-tx-${tx.id}`}>
+                              <Edit className="w-3 h-3" />
+                            </Button>
+                            <Button variant="ghost" size="sm" className="text-destructive hover:text-destructive" onClick={() => { if (confirm(t("confirmDelete"))) deleteCashboxTxMutation.mutate(tx.id); }} data-testid={`button-delete-tx-${tx.id}`}>
+                              <Trash2 className="w-3 h-3" />
+                            </Button>
+                          </div>
+                        </TableCell>
                       </TableRow>
                     ))}
                   </TableBody>
@@ -962,9 +1042,9 @@ export default function Finance() {
             </div>
           </div>
 
-          {totalOwnership > 0 && totalOwnership !== 100 && (
-            <div className="p-3 bg-yellow-500/20 border border-yellow-500/30 rounded-md text-yellow-700 dark:text-yellow-400 text-sm">
-              {t("ownershipWarning")} ({totalOwnership}%)
+          {partnersData.length > 0 && (
+            <div className="p-3 bg-blue-500/10 border border-blue-500/20 rounded-md text-blue-700 dark:text-blue-400 text-sm">
+              {t("ownershipAutoCalculated")} — {partnersData.map(p => `${p.name}: ${parseFloat(p.ownershipPercentage).toFixed(1)}%`).join(" | ")}
             </div>
           )}
 
@@ -1103,13 +1183,6 @@ export default function Finance() {
                   <FormMessage />
                 </FormItem>
               )} />
-              <FormField control={partnerForm.control} name="ownershipPercentage" render={({ field }) => (
-                <FormItem>
-                  <FormLabel>{t("ownershipPercentage")} (%)</FormLabel>
-                  <FormControl><Input type="number" step="0.01" min="0" max="100" {...field} data-testid="input-ownership" /></FormControl>
-                  <FormMessage />
-                </FormItem>
-              )} />
               <FormField control={partnerForm.control} name="phone" render={({ field }) => (
                 <FormItem>
                   <FormLabel>{t("phone")}</FormLabel>
@@ -1124,8 +1197,84 @@ export default function Finance() {
                   <FormMessage />
                 </FormItem>
               )} />
+              {!editingPartner && (
+                <div className="space-y-3 p-3 border rounded-lg bg-muted/30">
+                  <p className="text-sm font-medium text-muted-foreground">{t("initialInvestment")} ({t("optional")})</p>
+                  <FormField control={partnerForm.control} name="initialInvestment" render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>{t("amount")}</FormLabel>
+                      <FormControl><Input type="number" step="0.01" min="0" {...field} placeholder="0.00" data-testid="input-initial-investment" /></FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )} />
+                  <FormField control={partnerForm.control} name="initialInvestmentCurrency" render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>{t("currency")}</FormLabel>
+                      <Select onValueChange={field.onChange} value={field.value}>
+                        <FormControl>
+                          <SelectTrigger data-testid="select-initial-currency">
+                            <SelectValue />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          <SelectItem value="LYD">LYD</SelectItem>
+                          <SelectItem value="USD">USD</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <FormMessage />
+                    </FormItem>
+                  )} />
+                  <p className="text-xs text-muted-foreground">{t("ownershipAutoCalculated")}</p>
+                </div>
+              )}
+              {editingPartner && (
+                <div className="p-3 bg-blue-500/10 border border-blue-500/20 rounded-lg text-sm text-muted-foreground">
+                  {t("ownershipAutoCalculatedNote")} {editingPartner.ownershipPercentage}%
+                </div>
+              )}
               <Button type="submit" className="w-full" disabled={createPartnerMutation.isPending || updatePartnerMutation.isPending} data-testid="button-submit-partner">
                 {editingPartner ? t("update") : t("add")}
+              </Button>
+            </form>
+          </Form>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={isEditTxDialogOpen} onOpenChange={(open) => { setIsEditTxDialogOpen(open); if (!open) { setEditingTx(null); editTxForm.reset(); } }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>{t("editTransaction")}</DialogTitle>
+          </DialogHeader>
+          {editingTx && (
+            <div className="text-sm text-muted-foreground mb-2">
+              {t("type")}: <Badge variant={["deposit","sale","revenue"].includes(editingTx.type) ? "default" : "destructive"}>{editingTx.type}</Badge>
+            </div>
+          )}
+          <Form {...editTxForm}>
+            <form onSubmit={editTxForm.handleSubmit((data) => editingTx && editCashboxTxMutation.mutate({ id: editingTx.id, data }))} className="space-y-4">
+              <FormField control={editTxForm.control} name="amountLYD" render={({ field }) => (
+                <FormItem>
+                  <FormLabel>{t("amountLYD")}</FormLabel>
+                  <FormControl><Input type="number" step="0.01" min="0" {...field} data-testid="input-edit-tx-lyd" /></FormControl>
+                  <FormMessage />
+                </FormItem>
+              )} />
+              <FormField control={editTxForm.control} name="amountUSD" render={({ field }) => (
+                <FormItem>
+                  <FormLabel>{t("amountUSD")}</FormLabel>
+                  <FormControl><Input type="number" step="0.01" min="0" {...field} data-testid="input-edit-tx-usd" /></FormControl>
+                  <FormMessage />
+                </FormItem>
+              )} />
+              <FormField control={editTxForm.control} name="description" render={({ field }) => (
+                <FormItem>
+                  <FormLabel>{t("description")}</FormLabel>
+                  <FormControl><Textarea {...field} data-testid="input-edit-tx-desc" /></FormControl>
+                  <FormMessage />
+                </FormItem>
+              )} />
+              <Button type="submit" className="w-full" disabled={editCashboxTxMutation.isPending} data-testid="button-save-tx-edit">
+                {editCashboxTxMutation.isPending ? t("saving") : t("update")}
               </Button>
             </form>
           </Form>

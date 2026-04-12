@@ -601,6 +601,61 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (err: any) { res.status(400).json({ message: err.message }); }
   });
 
+  app.patch("/api/cashbox/transactions/:id", requireOwner, async (req, res) => {
+    try {
+      const tx = await storage.getCashboxTransaction(req.params.id);
+      if (!tx) return res.status(404).json({ message: "Transaction not found" });
+      const { description, amountUSD, amountLYD } = req.body;
+      if (amountUSD !== undefined || amountLYD !== undefined) {
+        const oldUSD = parseFloat(tx.amountUSD || "0");
+        const oldLYD = parseFloat(tx.amountLYD || "0");
+        const newUSD = parseFloat(amountUSD ?? tx.amountUSD ?? "0");
+        const newLYD = parseFloat(amountLYD ?? tx.amountLYD ?? "0");
+        const diffUSD = newUSD - oldUSD;
+        const diffLYD = newLYD - oldLYD;
+        const isDeposit = ["deposit", "sale", "revenue"].includes(tx.type);
+        if (diffUSD !== 0 || diffLYD !== 0) {
+          const primaryDiff = diffUSD !== 0 ? diffUSD : diffLYD;
+          const shouldAdd = isDeposit ? primaryDiff > 0 : primaryDiff < 0;
+          await storage.updateCashboxBalance(
+            Math.abs(diffUSD).toFixed(2),
+            Math.abs(diffLYD).toFixed(2),
+            shouldAdd
+          );
+        }
+        if (tx.referenceType === "expense" && tx.referenceId) {
+          const expAmt = tx.amountLYD !== "0" ? newLYD.toFixed(2) : newUSD.toFixed(2);
+          await storage.updateExpense(tx.referenceId, { amount: expAmt, description: description ?? undefined });
+        }
+        if (tx.referenceType === "revenue" && tx.referenceId) {
+          const revAmt = tx.amountLYD !== "0" ? newLYD.toFixed(2) : newUSD.toFixed(2);
+          await storage.updateRevenue(tx.referenceId, { amount: revAmt, description: description ?? undefined });
+        }
+      }
+      const updated = await storage.updateCashboxTransaction(req.params.id, {
+        description,
+        amountUSD: amountUSD?.toString(),
+        amountLYD: amountLYD?.toString(),
+      });
+      res.json(updated);
+    } catch (err: any) { res.status(400).json({ message: err.message }); }
+  });
+
+  app.delete("/api/cashbox/transactions/:id", requireOwner, async (req, res) => {
+    const tx = await storage.getCashboxTransaction(req.params.id);
+    if (!tx) return res.status(404).json({ message: "Transaction not found" });
+    const isDeposit = ["deposit", "sale", "revenue"].includes(tx.type);
+    await storage.updateCashboxBalance(tx.amountUSD || "0", tx.amountLYD || "0", !isDeposit);
+    if (tx.referenceType === "expense" && tx.referenceId) {
+      await storage.deleteExpense(tx.referenceId);
+    }
+    if (tx.referenceType === "revenue" && tx.referenceId) {
+      await storage.deleteRevenue(tx.referenceId);
+    }
+    await storage.deleteCashboxTransaction(tx.id);
+    res.json({ message: "Transaction deleted" });
+  });
+
   app.get("/api/expenses", requireAuth, async (req, res) => {
     res.json(await storage.getAllExpenses());
   });
@@ -637,8 +692,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   app.delete("/api/expenses/:id", requireOwner, async (req, res) => {
-    const deleted = await storage.deleteExpense(req.params.id);
-    if (!deleted) return res.status(404).json({ message: "Expense not found" });
+    const expense = await storage.getExpense(req.params.id);
+    if (!expense) return res.status(404).json({ message: "Expense not found" });
+    const linkedTx = await storage.getCashboxTransactionByReference("expense", expense.id);
+    if (linkedTx) {
+      await storage.updateCashboxBalance(linkedTx.amountUSD || "0", linkedTx.amountLYD || "0", true);
+      await storage.deleteCashboxTransaction(linkedTx.id);
+    }
+    await storage.deleteExpense(req.params.id);
     res.json({ message: "Expense deleted" });
   });
 
@@ -678,8 +739,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   app.delete("/api/revenues/:id", requireOwner, async (req, res) => {
-    const deleted = await storage.deleteRevenue(req.params.id);
-    if (!deleted) return res.status(404).json({ message: "Revenue not found" });
+    const revenue = await storage.getRevenue(req.params.id);
+    if (!revenue) return res.status(404).json({ message: "Revenue not found" });
+    const linkedTx = await storage.getCashboxTransactionByReference("revenue", revenue.id);
+    if (linkedTx) {
+      await storage.updateCashboxBalance(linkedTx.amountUSD || "0", linkedTx.amountLYD || "0", false);
+      await storage.deleteCashboxTransaction(linkedTx.id);
+    }
+    await storage.deleteRevenue(req.params.id);
     res.json({ message: "Revenue deleted" });
   });
 
@@ -727,9 +794,41 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   app.post("/api/partners", requireOwner, async (req, res) => {
-    const parsed = insertPartnerSchema.safeParse(req.body);
-    if (!parsed.success) return res.status(400).json({ message: "Invalid data", errors: parsed.error.errors });
-    res.status(201).json(await storage.createPartner(parsed.data));
+    try {
+      const { initialInvestment, initialInvestmentCurrency, ...partnerData } = req.body;
+      const parsed = insertPartnerSchema.omit({ ownershipPercentage: true }).safeParse(partnerData);
+      if (!parsed.success) return res.status(400).json({ message: "Invalid data", errors: parsed.error.errors });
+      const partner = await storage.createPartner({ ...parsed.data, ownershipPercentage: "0" });
+      if (initialInvestment && parseFloat(initialInvestment) > 0) {
+        await storage.createPartnerTransaction({
+          partnerId: partner.id,
+          type: "investment",
+          amount: parseFloat(initialInvestment).toFixed(2),
+          currency: initialInvestmentCurrency || "LYD",
+          description: "Initial investment",
+          createdByUserId: (req.user as any).id,
+        });
+        const cashbox = await storage.getCashbox();
+        if (cashbox) {
+          const amtUSD = (initialInvestmentCurrency || "LYD") === "USD" ? parseFloat(initialInvestment).toFixed(2) : "0";
+          const amtLYD = (initialInvestmentCurrency || "LYD") === "LYD" ? parseFloat(initialInvestment).toFixed(2) : "0";
+          await storage.updateCashboxBalance(amtUSD, amtLYD, true);
+          await storage.createCashboxTransaction({
+            cashboxId: cashbox.id,
+            type: "deposit",
+            amountUSD: amtUSD,
+            amountLYD: amtLYD,
+            exchangeRate: "1",
+            description: `Initial investment from partner: ${partner.name}`,
+            createdByUserId: (req.user as any).id,
+          });
+        }
+      } else {
+        await storage.recalculatePartnerOwnership();
+      }
+      const updated = await storage.getPartner(partner.id);
+      res.status(201).json(updated ?? partner);
+    } catch (err: any) { res.status(400).json({ message: err.message }); }
   });
 
   app.patch("/api/partners/:id", requireOwner, async (req, res) => {
