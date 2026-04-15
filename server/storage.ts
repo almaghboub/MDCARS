@@ -253,6 +253,11 @@ export class DatabaseStorage implements IStorage {
   }
 
   async deleteProduct(id: string): Promise<boolean> {
+    const [existing] = await db.select().from(products).where(eq(products.id, id));
+    if (!existing) return false;
+    // Delete stock movements first (history logs — safe to remove with the product)
+    await db.delete(stockMovements).where(eq(stockMovements.productId, id));
+    // This will throw a foreign key error (code 23503) if the product has sale history
     const result = await db.delete(products).where(eq(products.id, id));
     return (result.rowCount ?? 0) > 0;
   }

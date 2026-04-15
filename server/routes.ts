@@ -409,9 +409,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   app.delete("/api/products/:id", requireOwner, async (req, res) => {
-    const deleted = await storage.deleteProduct(req.params.id);
-    if (!deleted) return res.status(404).json({ message: "Product not found" });
-    res.json({ message: "Product deleted" });
+    try {
+      const deleted = await storage.deleteProduct(req.params.id);
+      if (!deleted) return res.status(404).json({ message: "Product not found" });
+      res.json({ message: "Product deleted" });
+    } catch (err: any) {
+      if (err.code === "23503") {
+        return res.status(400).json({ message: "Cannot delete product because it has sales history. You can deactivate it instead." });
+      }
+      res.status(500).json({ message: "Failed to delete product" });
+    }
   });
 
   app.post("/api/products/:id/stock", requireInventoryAccess, async (req, res) => {

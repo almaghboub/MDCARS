@@ -115,7 +115,15 @@ export default function Products() {
       toast({ title: t("productDeleted") });
     },
     onError: (error: any) => {
-      toast({ title: "Error", description: error.message, variant: "destructive" });
+      let description = error.message || "Failed to delete product";
+      try {
+        const match = description.match(/^\d+: (.+)$/s);
+        if (match) {
+          const parsed = JSON.parse(match[1]);
+          if (parsed.message) description = parsed.message;
+        }
+      } catch {}
+      toast({ title: "Cannot Delete Product", description, variant: "destructive" });
     },
   });
 
