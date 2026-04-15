@@ -2,7 +2,10 @@
 echo "Building frontend..."
 npx vite build
 
-echo "Building server (CommonJS for production)..."
-./node_modules/.bin/esbuild server/index.ts --platform=node --packages=external --bundle --format=cjs --outfile=dist/prodServer.js
+echo "Building server..."
+./node_modules/.bin/esbuild server/index.ts --platform=node --packages=external --bundle --format=esm --outdir=dist
 
-echo "Done! Now restart with: sudo systemctl restart mdcars"
+echo "Copying to prodServer.js..."
+cp dist/index.js dist/prodServer.js
+
+echo "Build complete! Now run: sudo systemctl restart mdcars"
