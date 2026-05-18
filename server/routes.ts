@@ -1,3 +1,4 @@
+import "express-async-errors";
 import type { Express } from "express";
 import { createServer, type Server } from "http";
 import passport from "passport";

@@ -701,10 +701,12 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getNextSaleNumber(): Promise<string> {
-    const [result] = await db.select({ count: sql<number>`count(*)` }).from(sales);
-    const count = (result?.count || 0) + 1;
+    const [result] = await db.select({
+      maxNum: sql<string>`max(cast(right(sale_number, 4) as int))`
+    }).from(sales);
+    const next = (parseInt(result?.maxNum || '0', 10) || 0) + 1;
     const date = new Date();
-    return `MD-${date.getFullYear()}${String(date.getMonth() + 1).padStart(2, '0')}${String(date.getDate()).padStart(2, '0')}-${String(count).padStart(4, '0')}`;
+    return `MD-${date.getFullYear()}${String(date.getMonth() + 1).padStart(2, '0')}${String(date.getDate()).padStart(2, '0')}-${String(next).padStart(4, '0')}`;
   }
 
   async getCashbox(): Promise<Cashbox | undefined> {
@@ -832,9 +834,11 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getNextRevenueNumber(): Promise<string> {
-    const [result] = await db.select({ count: sql<number>`count(*)` }).from(revenues);
-    const count = (result?.count || 0) + 1;
-    return `REV-${String(count).padStart(5, '0')}`;
+    const [result] = await db.select({
+      maxNum: sql<string>`max(substring(revenue_number from 5)::int)`
+    }).from(revenues);
+    const next = (parseInt(result?.maxNum || '0', 10) || 0) + 1;
+    return `REV-${String(next).padStart(5, '0')}`;
   }
 
   async getSetting(key: string): Promise<Setting | undefined> {
@@ -1147,9 +1151,11 @@ export class DatabaseStorage implements IStorage {
   }
 
   async createOrder(data: InsertOrder & { items: Omit<InsertOrderItem, 'orderId'>[] }): Promise<OrderWithItems> {
-    const count = await db.select({ count: sql<number>`count(*)` }).from(orders);
-    const num = (Number(count[0]?.count || 0) + 1).toString().padStart(4, '0');
-    const orderNumber = `ORD-${num}`;
+    const [ordResult] = await db.select({
+      maxNum: sql<string>`max(substring(order_number from 5)::int)`
+    }).from(orders);
+    const ordNext = (parseInt(ordResult?.maxNum || '0', 10) || 0) + 1;
+    const orderNumber = `ORD-${ordNext.toString().padStart(4, '0')}`;
 
     const totalAmount = data.items.reduce((sum, it) => sum + parseFloat(it.price || '0') * (it.quantity || 1), 0);
     const downPayment = parseFloat(data.downPayment?.toString() || '0');
