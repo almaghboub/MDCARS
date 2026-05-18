@@ -12,6 +12,6 @@ echo "Building frontend (production config — no Replit plugins)..."
 npx vite build --config vite.prod.config.ts
 
 echo "Building server..."
-./node_modules/.bin/esbuild server/prodServer.ts --platform=node --packages=external --bundle --format=esm --outfile=dist/prodServer.js
+npx esbuild server/prodServer.ts --platform=node --packages=external --bundle --format=esm --outfile=dist/prodServer.js
 
 echo "Build complete! Now run: sudo systemctl restart mdcars"
