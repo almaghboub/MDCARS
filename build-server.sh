@@ -1,6 +1,9 @@
 #!/bin/bash
 set -e
 
+echo "=== Installing ALL dependencies (including devDependencies for build tools) ==="
+npm install --include=dev
+
 echo "=== Building frontend ==="
 CONFIG=$(ls vite*prod* 2>/dev/null | head -1)
 if [ -z "$CONFIG" ]; then
@@ -13,4 +16,6 @@ npx vite build --config "$CONFIG"
 echo "=== Building server ==="
 npx esbuild server/prodServer.ts --platform=node --packages=external --bundle --format=esm --outfile=dist/prodServer.js
 
-echo "=== Build complete! Run: sudo systemctl restart mdcars ==="
+echo ""
+echo "=== Build complete! ==="
+echo "Run: sudo systemctl restart mdcars"
