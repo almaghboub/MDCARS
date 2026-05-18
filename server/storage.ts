@@ -72,7 +72,7 @@ export interface IStorage {
   createSale(sale: InsertSale, items: InsertSaleItem[]): Promise<SaleWithDetails>;
   updateSaleStatus(id: string, status: string): Promise<Sale | undefined>;
   returnSale(id: string, userId: string): Promise<SaleWithDetails | undefined>;
-  editSale(id: string, returnItemIds: string[], newItems: InsertSaleItem[], userId: string): Promise<SaleWithDetails | undefined>;
+  editSale(id: string, returnItemIds: string[], newItems: Omit<InsertSaleItem, 'saleId'>[], userId: string): Promise<SaleWithDetails | undefined>;
   deleteSale(id: string): Promise<boolean>;
   getNextSaleNumber(): Promise<string>;
   markSaleItemPaid(itemId: string): Promise<{ item: SaleItem; customer: Customer | null } | undefined>;
@@ -559,7 +559,7 @@ export class DatabaseStorage implements IStorage {
     return this.getSale(id);
   }
 
-  async editSale(id: string, returnItemIds: string[], newItems: InsertSaleItem[], userId: string): Promise<SaleWithDetails | undefined> {
+  async editSale(id: string, returnItemIds: string[], newItems: Omit<InsertSaleItem, 'saleId'>[], userId: string): Promise<SaleWithDetails | undefined> {
     const sale = await this.getSale(id);
     if (!sale) return undefined;
     if (sale.status !== "completed") return undefined;
@@ -591,7 +591,7 @@ export class DatabaseStorage implements IStorage {
     for (const item of newItems) {
       stockNeeded.set(item.productId, (stockNeeded.get(item.productId) || 0) + item.quantity);
     }
-    for (const [productId, qty] of stockNeeded.entries()) {
+    for (const [productId, qty] of Array.from(stockNeeded.entries())) {
       const [product] = await db.select().from(products).where(eq(products.id, productId));
       if (!product || product.currentStock < qty) {
         throw new Error(`Insufficient stock for product ${product?.name || productId}`);
@@ -775,7 +775,7 @@ export class DatabaseStorage implements IStorage {
   }
 
   async updateExpense(id: string, data: Partial<{ amount: string; description: string; category: string }>): Promise<Expense | undefined> {
-    const [updated] = await db.update(expenses).set(data).where(eq(expenses.id, id)).returning();
+    const [updated] = await db.update(expenses).set(data as any).where(eq(expenses.id, id)).returning();
     return updated;
   }
 
@@ -866,6 +866,7 @@ export class DatabaseStorage implements IStorage {
   async getDashboardStats(): Promise<{
     todaySales: number;
     todayRevenue: number;
+    todayServiceFees: number;
     totalProducts: number;
     lowStockCount: number;
     totalCustomers: number;
@@ -949,7 +950,7 @@ export class DatabaseStorage implements IStorage {
     }));
   }
 
-  async getDailySalesReport(date: Date): Promise<{ totalSales: number; totalRevenue: number; totalProfit: number }> {
+  async getDailySalesReport(date: Date): Promise<{ totalSales: number; totalRevenue: number; totalServiceFees: number; totalProfit: number }> {
     const startOfDay = new Date(date);
     startOfDay.setHours(0, 0, 0, 0);
     const endOfDay = new Date(date);

@@ -325,8 +325,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.patch("/api/users/:id", requireOwner, async (req, res) => {
     try {
       const { id } = req.params;
-      const data = req.body;
-      if (data.password) data.password = await hashPassword(data.password);
+      const data = insertUserSchema.partial().parse(req.body);
+      if (data.password) (data as any).password = await hashPassword(data.password);
       const user = await storage.updateUser(id, data);
       if (!user) return res.status(404).json({ message: "User not found" });
       res.json({ ...user, password: undefined });
@@ -351,9 +351,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   app.patch("/api/categories/:id", requireOwner, async (req, res) => {
-    const category = await storage.updateCategory(req.params.id, req.body);
-    if (!category) return res.status(404).json({ message: "Category not found" });
-    res.json(category);
+    try {
+      const data = insertCategorySchema.partial().parse(req.body);
+      const category = await storage.updateCategory(req.params.id, data);
+      if (!category) return res.status(404).json({ message: "Category not found" });
+      res.json(category);
+    } catch (err: any) { res.status(400).json({ message: err.message }); }
   });
 
   app.delete("/api/categories/:id", requireOwner, async (req, res) => {
@@ -412,9 +415,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   app.patch("/api/products/:id", requireInventoryAccess, async (req, res) => {
-    const product = await storage.updateProduct(req.params.id, req.body);
-    if (!product) return res.status(404).json({ message: "Product not found" });
-    res.json(product);
+    try {
+      const data = insertProductSchema.partial().parse(req.body);
+      const product = await storage.updateProduct(req.params.id, data);
+      if (!product) return res.status(404).json({ message: "Product not found" });
+      res.json(product);
+    } catch (err: any) { res.status(400).json({ message: err.message }); }
   });
 
   app.delete("/api/products/:id", requireOwner, async (req, res) => {
@@ -537,9 +543,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   app.patch("/api/customers/:id", requireAuth, async (req, res) => {
-    const customer = await storage.updateCustomer(req.params.id, req.body);
-    if (!customer) return res.status(404).json({ message: "Customer not found" });
-    res.json(customer);
+    try {
+      const data = insertCustomerSchema.partial().parse(req.body);
+      const customer = await storage.updateCustomer(req.params.id, data);
+      if (!customer) return res.status(404).json({ message: "Customer not found" });
+      res.json(customer);
+    } catch (err: any) { res.status(400).json({ message: err.message }); }
   });
 
   app.delete("/api/customers/:id", requireOwner, async (req, res) => {

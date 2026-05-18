@@ -1,4 +1,5 @@
 import { useState, useMemo } from "react";
+import { fmt, safeNum } from "@/lib/utils";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -293,16 +294,16 @@ export default function Customers() {
     c.phone.includes(searchQuery)
   );
 
-  const creditInvoices = customerInvoices.filter(s => parseFloat(s.amountDue as string) > 0 || s.items.some(i => !i.isPaid));
-  const regularInvoices = customerInvoices.filter(s => parseFloat(s.amountDue as string) <= 0 && s.items.every(i => i.isPaid));
+  const creditInvoices = customerInvoices.filter(s => safeNum(s.amountDue) > 0 || s.items.some(i => !i.isPaid));
+  const regularInvoices = customerInvoices.filter(s => safeNum(s.amountDue) <= 0 && s.items.every(i => i.isPaid));
 
   const creditSummary = useMemo(() => {
     const allCreditItems = customerInvoices.flatMap(s =>
-      parseFloat(s.amountDue as string) > 0 || s.items.some(i => !i.isPaid) ? s.items : []
+      safeNum(s.amountDue) > 0 || s.items.some(i => !i.isPaid) ? s.items : []
     );
-    const totalCredit = allCreditItems.reduce((sum, i) => sum + parseFloat(i.totalPrice as string), 0);
-    const totalPaidItems = allCreditItems.filter(i => i.isPaid).reduce((sum, i) => sum + parseFloat(i.totalPrice as string), 0);
-    const totalUnpaid = allCreditItems.filter(i => !i.isPaid).reduce((sum, i) => sum + parseFloat(i.totalPrice as string), 0);
+    const totalCredit = allCreditItems.reduce((sum, i) => sum + safeNum(i.totalPrice), 0);
+    const totalPaidItems = allCreditItems.filter(i => i.isPaid).reduce((sum, i) => sum + safeNum(i.totalPrice), 0);
+    const totalUnpaid = allCreditItems.filter(i => !i.isPaid).reduce((sum, i) => sum + safeNum(i.totalPrice), 0);
     return { totalCredit, totalPaidItems, totalUnpaid };
   }, [customerInvoices]);
 
@@ -504,19 +505,19 @@ export default function Customers() {
                 <div className="p-3 bg-blue-50 dark:bg-blue-950 rounded-lg border border-blue-200 dark:border-blue-800">
                   <p className="text-xs text-blue-600 dark:text-blue-400 font-medium">Total Credit Amount</p>
                   <p className="text-lg font-bold text-blue-700 dark:text-blue-300">
-                    {invoicesLoading ? "..." : creditSummary.totalCredit.toFixed(2)} LYD
+                    {invoicesLoading ? "..." : fmt(creditSummary.totalCredit)} LYD
                   </p>
                 </div>
                 <div className="p-3 bg-green-50 dark:bg-green-950 rounded-lg border border-green-200 dark:border-green-800">
                   <p className="text-xs text-green-600 dark:text-green-400 font-medium">Total Paid (Items)</p>
                   <p className="text-lg font-bold text-green-700 dark:text-green-300">
-                    {invoicesLoading ? "..." : creditSummary.totalPaidItems.toFixed(2)} LYD
+                    {invoicesLoading ? "..." : fmt(creditSummary.totalPaidItems)} LYD
                   </p>
                 </div>
                 <div className="p-3 bg-red-50 dark:bg-red-950 rounded-lg border border-red-200 dark:border-red-800">
                   <p className="text-xs text-red-600 dark:text-red-400 font-medium">Balance Owed</p>
                   <p className="text-lg font-bold text-red-700 dark:text-red-300">
-                    {parseFloat(currentViewingCustomer.balanceOwed).toFixed(2)} LYD
+                    {fmt(currentViewingCustomer.balanceOwed)} LYD
                   </p>
                 </div>
               </div>
@@ -579,9 +580,9 @@ export default function Customers() {
                           <p className="text-xs text-muted-foreground">{sale.items.length} item(s)</p>
                         </div>
                         <div className="text-right space-y-1">
-                          <p className="font-bold">{parseFloat(sale.totalAmount as string).toFixed(2)} {sale.currency}</p>
-                          {parseFloat(sale.amountDue as string) > 0 ? (
-                            <Badge variant="destructive" className="text-xs">Credit: {parseFloat(sale.amountDue as string).toFixed(2)}</Badge>
+                          <p className="font-bold">{fmt(sale.totalAmount)} {sale.currency}</p>
+                          {safeNum(sale.amountDue) > 0 ? (
+                            <Badge variant="destructive" className="text-xs">Credit: {fmt(sale.amountDue)}</Badge>
                           ) : (
                             <Badge variant="secondary" className="bg-green-100 text-green-800 text-xs">Paid</Badge>
                           )}

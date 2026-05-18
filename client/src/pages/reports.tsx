@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { fmt, safeNum } from "@/lib/utils";
 import { useQuery } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -396,16 +397,16 @@ export default function Reports() {
                   </TableHeader>
                   <TableBody>
                     {serviceFeeInvoices.map((sale) => {
-                      const fee = parseFloat(sale.serviceFee || "0");
-                      const productsAmt = parseFloat(sale.totalAmount) - fee;
+                      const fee = safeNum(sale.serviceFee);
+                      const productsAmt = safeNum(sale.totalAmount) - fee;
                       return (
                         <TableRow key={sale.id} data-testid={`fee-row-${sale.id}`}>
                           <TableCell>{format(new Date(sale.createdAt), "PPp")}</TableCell>
                           <TableCell className="font-medium">{sale.saleNumber}</TableCell>
                           <TableCell>{sale.createdBy?.firstName} {sale.createdBy?.lastName}</TableCell>
                           <TableCell>{sale.customer?.name || t("walkin")}</TableCell>
-                          <TableCell>{productsAmt.toFixed(2)} {sale.currency}</TableCell>
-                          <TableCell className="font-bold text-blue-600">{fee.toFixed(2)} {sale.currency}</TableCell>
+                          <TableCell>{fmt(productsAmt)} {sale.currency}</TableCell>
+                          <TableCell className="font-bold text-blue-600">{fmt(fee)} {sale.currency}</TableCell>
                           <TableCell className="font-bold">{sale.totalAmount} {sale.currency}</TableCell>
                           <TableCell>
                             <Button

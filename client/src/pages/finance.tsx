@@ -658,7 +658,7 @@ export default function Finance() {
                             ) : (
                               <ArrowDownCircle className="w-3 h-3 mr-1" />
                             )}
-                            {tx.type === "sale" ? t("sale") : tx.type === "expense" ? t("expense") : tx.type === "deposit" ? t("deposit") : tx.type === "withdrawal" ? t("withdrawal") : tx.type === "refund" ? t("refund") : tx.type === "revenue" ? t("revenue") : tx.type}
+                            {(tx.type as string) === "sale" ? t("sale") : (tx.type as string) === "expense" ? t("expense") : (tx.type as string) === "deposit" ? t("deposit") : (tx.type as string) === "withdrawal" ? t("withdrawal") : (tx.type as string) === "refund" ? t("refund") : (tx.type as string) === "revenue" ? t("revenue") : tx.type}
                           </Badge>
                         </TableCell>
                         <TableCell>{parseFloat(tx.amountLYD || "0") > 0 ? `${tx.amountLYD} LYD` : "-"}</TableCell>

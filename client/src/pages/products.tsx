@@ -134,7 +134,7 @@ export default function Products() {
     onError: (error: any) => {
       let description = error.message || "Failed to delete product";
       try {
-        const match = description.match(/^\d+: (.+)$/s);
+        const match = description.match(/^\d+: ([\s\S]+)$/);
         if (match) {
           const parsed = JSON.parse(match[1]);
           if (parsed.message) description = parsed.message;

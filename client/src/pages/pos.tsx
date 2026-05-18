@@ -1,4 +1,5 @@
 import { useState, useMemo, useRef } from "react";
+import { fmt, safeNum } from "@/lib/utils";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -925,41 +926,41 @@ export default function POS() {
                     <div style={{ width: "280px", border: "1px solid #e2e8f0", borderRadius: "8px", overflow: "hidden" }}>
                       <div style={{ display: "flex", justifyContent: "space-between", padding: "9px 16px", fontSize: "12px", borderBottom: "1px solid #f1f5f9" }}>
                         <span style={{ color: "#64748b" }}>{t("subtotal")}</span>
-                        <span style={{ fontWeight: 600 }}>{parseFloat(lastSale.subtotal).toFixed(2)} {lastSale.currency}</span>
+                        <span style={{ fontWeight: 600 }}>{fmt(lastSale.subtotal)} {lastSale.currency}</span>
                       </div>
-                      {parseFloat(lastSale.discount) > 0 && (
+                      {safeNum(lastSale.discount) > 0 && (
                         <div style={{ display: "flex", justifyContent: "space-between", padding: "9px 16px", fontSize: "12px", borderBottom: "1px solid #f1f5f9" }}>
                           <span style={{ color: "#64748b" }}>{t("discount")}</span>
-                          <span style={{ fontWeight: 600, color: "#ef4444" }}>-{parseFloat(lastSale.discount).toFixed(2)} {lastSale.currency}</span>
+                          <span style={{ fontWeight: 600, color: "#ef4444" }}>-{fmt(lastSale.discount)} {lastSale.currency}</span>
                         </div>
                       )}
                       <div style={{ display: "flex", justifyContent: "space-between", padding: "9px 16px", fontSize: "12px", borderBottom: "1px solid #f1f5f9" }}>
                         <span style={{ color: "#1e293b", fontWeight: 600 }}>{t("productsTotal")}</span>
                         <span style={{ fontWeight: 700, color: "#1e293b" }}>
-                          {(parseFloat(lastSale.subtotal) - parseFloat(lastSale.discount || "0")).toFixed(2)} {lastSale.currency}
+                          {fmt(safeNum(lastSale.subtotal) - safeNum(lastSale.discount))} {lastSale.currency}
                         </span>
                       </div>
-                      {parseFloat(lastSale.serviceFee || "0") > 0 && (
+                      {safeNum(lastSale.serviceFee) > 0 && (
                         <div style={{ display: "flex", justifyContent: "space-between", padding: "9px 16px", fontSize: "12px", borderBottom: "1px solid #f1f5f9", background: "#eff6ff" }}>
                           <span style={{ color: "#1d4ed8", fontWeight: 600 }}>{t("serviceFee")}</span>
-                          <span style={{ fontWeight: 700, color: "#1d4ed8" }}>+{parseFloat(lastSale.serviceFee || "0").toFixed(2)} {lastSale.currency}</span>
+                          <span style={{ fontWeight: 700, color: "#1d4ed8" }}>+{fmt(lastSale.serviceFee)} {lastSale.currency}</span>
                         </div>
                       )}
                       <div style={{ display: "flex", justifyContent: "space-between", padding: "12px 16px", background: "linear-gradient(135deg, #1e3a5f, #0f2341)" }}>
                         <span style={{ color: "#93c5fd", fontWeight: 700, fontSize: "14px", textTransform: "uppercase", letterSpacing: "1px" }}>{t("total")}</span>
-                        <span style={{ color: "#fff", fontWeight: 900, fontSize: "16px" }}>{parseFloat(lastSale.totalAmount).toFixed(2)} {lastSale.currency}</span>
+                        <span style={{ color: "#fff", fontWeight: 900, fontSize: "16px" }}>{fmt(lastSale.totalAmount)} {lastSale.currency}</span>
                       </div>
                       <div style={{ display: "flex", justifyContent: "space-between", padding: "9px 16px", fontSize: "12px", borderBottom: "1px solid #f1f5f9" }}>
                         <span style={{ color: "#64748b" }}>{t("paid")}</span>
-                        <span style={{ fontWeight: 700, color: "#16a34a" }}>{parseFloat(lastSale.amountPaid).toFixed(2)} {lastSale.currency}</span>
+                        <span style={{ fontWeight: 700, color: "#16a34a" }}>{fmt(lastSale.amountPaid)} {lastSale.currency}</span>
                       </div>
-                      {parseFloat(lastSale.amountDue) > 0 && (
+                      {safeNum(lastSale.amountDue) > 0 && (
                         <div style={{ display: "flex", justifyContent: "space-between", padding: "9px 16px", fontSize: "12px" }}>
                           <span style={{ color: "#64748b" }}>{t("amountDue")}</span>
-                          <span style={{ fontWeight: 700, color: "#ea580c" }}>{parseFloat(lastSale.amountDue).toFixed(2)} {lastSale.currency}</span>
+                          <span style={{ fontWeight: 700, color: "#ea580c" }}>{fmt(lastSale.amountDue)} {lastSale.currency}</span>
                         </div>
                       )}
-                      {parseFloat(lastSale.amountPaid) > parseFloat(lastSale.totalAmount) && (
+                      {safeNum(lastSale.amountPaid) > safeNum(lastSale.totalAmount) && (
                         <div style={{ display: "flex", justifyContent: "space-between", padding: "9px 16px", fontSize: "12px" }}>
                           <span style={{ color: "#64748b" }}>{t("change")}</span>
                           <span style={{ fontWeight: 700, color: "#16a34a" }}>{(parseFloat(lastSale.amountPaid) - parseFloat(lastSale.totalAmount)).toFixed(2)} {lastSale.currency}</span>
