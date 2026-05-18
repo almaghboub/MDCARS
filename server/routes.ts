@@ -898,6 +898,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   app.get("/api/partners", requireOwner, async (req, res) => {
+    // Always recompute totals + ownership from actual transactions before returning
+    const allPartners = await storage.getAllPartners();
+    for (const p of allPartners) {
+      await storage.recomputePartnerTotalsFromTransactions(p.id);
+    }
+    await storage.recalculatePartnerOwnership();
+    res.json(await storage.getAllPartners());
+  });
+
+  app.post("/api/partners/recalculate", requireOwner, async (req, res) => {
+    const allPartners = await storage.getAllPartners();
+    for (const p of allPartners) {
+      await storage.recomputePartnerTotalsFromTransactions(p.id);
+    }
+    await storage.recalculatePartnerOwnership();
     res.json(await storage.getAllPartners());
   });
 
