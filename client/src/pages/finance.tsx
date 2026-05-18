@@ -431,9 +431,8 @@ export default function Finance() {
   const totalSalesUSD = completedSales.filter(s => s.currency === "USD").reduce((sum, s) => sum + parseFloat(s.amountPaid), 0);
   const partnerNetCapital = (p: Partner) =>
     Math.max(0, parseFloat(p.totalInvested || "0") - parseFloat(p.totalWithdrawn || "0") - parseFloat(p.totalProfitDistributed || "0"));
-  const totalNetCapital = partnersData.reduce((sum, p) => sum + partnerNetCapital(p), 0);
-  const partnerOwnershipPct = (p: Partner) =>
-    totalNetCapital > 0 ? ((partnerNetCapital(p) / totalNetCapital) * 100).toFixed(2) : "0.00";
+  // Use the server-computed ownership percentage (getAllPartners computes net-capital-based % server-side)
+  const partnerOwnershipPct = (p: Partner) => parseFloat(p.ownershipPercentage || "0").toFixed(2);
   const totalOwnership = partnersData.reduce((sum, p) => sum + parseFloat(partnerOwnershipPct(p)), 0);
   const totalCapital = partnersData.reduce((sum, p) => sum + parseFloat(p.totalInvested) - parseFloat(p.totalWithdrawn), 0);
 
