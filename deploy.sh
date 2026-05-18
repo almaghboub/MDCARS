@@ -1,4 +1,9 @@
 #!/bin/bash
+set -e
+
+echo "Cleaning old build artifacts..."
+rm -rf dist node_modules/.vite
+
 echo "Building frontend..."
 npx vite build
 
