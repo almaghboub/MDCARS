@@ -8,8 +8,8 @@ echo "Cleaning old build artifacts..."
 rm -rf dist
 rm -rf node_modules/.vite
 
-echo "Building frontend..."
-npx vite build
+echo "Building frontend (production config — no Replit plugins)..."
+npx vite build --config vite.prod.config.ts
 
 echo "Building server..."
 ./node_modules/.bin/esbuild server/prodServer.ts --platform=node --packages=external --bundle --format=esm --outfile=dist/prodServer.js
