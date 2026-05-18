@@ -2,9 +2,15 @@
 set -e
 
 echo "=== Building frontend ==="
-npx vite build --config vprod.config.ts
+CONFIG=$(ls vite*prod* 2>/dev/null | head -1)
+if [ -z "$CONFIG" ]; then
+  echo "ERROR: No vite prod config found (expected vite.prod.config.ts or vprod.config.ts)"
+  exit 1
+fi
+echo "Using config: $CONFIG"
+npx vite build --config "$CONFIG"
 
 echo "=== Building server ==="
 npx esbuild server/prodServer.ts --platform=node --packages=external --bundle --format=esm --outfile=dist/prodServer.js
 
-echo "=== Done! Restart with: sudo systemctl restart mdcars ==="
+echo "=== Build complete! Run: sudo systemctl restart mdcars ==="
