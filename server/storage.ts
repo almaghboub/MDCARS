@@ -794,9 +794,11 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getNextExpenseNumber(): Promise<string> {
-    const [result] = await db.select({ count: sql<number>`count(*)` }).from(expenses);
-    const count = (result?.count || 0) + 1;
-    return `EXP-${String(count).padStart(5, '0')}`;
+    const [result] = await db.select({
+      maxNum: sql<string>`max(substring(expense_number from 5)::int)`
+    }).from(expenses);
+    const next = (parseInt(result?.maxNum || '0', 10) || 0) + 1;
+    return `EXP-${String(next).padStart(5, '0')}`;
   }
 
   async getAllRevenues(): Promise<Revenue[]> {
