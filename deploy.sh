@@ -1,8 +1,12 @@
 #!/bin/bash
 set -e
 
+echo "Installing dependencies..."
+npm install
+
 echo "Cleaning old build artifacts..."
-rm -rf dist node_modules/.vite
+rm -rf dist
+rm -rf node_modules/.vite
 
 echo "Building frontend..."
 npx vite build
