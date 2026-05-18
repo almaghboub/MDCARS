@@ -429,7 +429,12 @@ export default function Finance() {
   const totalUnpaidUSD = unpaidPayables.filter(p => p.currency === "USD").reduce((sum, p) => sum + parseFloat(p.amount), 0);
   const totalSalesLYD = completedSales.filter(s => s.currency === "LYD").reduce((sum, s) => sum + parseFloat(s.amountPaid), 0);
   const totalSalesUSD = completedSales.filter(s => s.currency === "USD").reduce((sum, s) => sum + parseFloat(s.amountPaid), 0);
-  const totalOwnership = partnersData.reduce((sum, p) => sum + parseFloat(p.ownershipPercentage), 0);
+  const partnerNetCapital = (p: Partner) =>
+    Math.max(0, parseFloat(p.totalInvested || "0") - parseFloat(p.totalWithdrawn || "0") - parseFloat(p.totalProfitDistributed || "0"));
+  const totalNetCapital = partnersData.reduce((sum, p) => sum + partnerNetCapital(p), 0);
+  const partnerOwnershipPct = (p: Partner) =>
+    totalNetCapital > 0 ? ((partnerNetCapital(p) / totalNetCapital) * 100).toFixed(2) : "0.00";
+  const totalOwnership = partnersData.reduce((sum, p) => sum + parseFloat(partnerOwnershipPct(p)), 0);
   const totalCapital = partnersData.reduce((sum, p) => sum + parseFloat(p.totalInvested) - parseFloat(p.totalWithdrawn), 0);
 
   const getPartnerName = (id: string) => partnersData.find(p => p.id === id)?.name || "-";
@@ -1098,7 +1103,7 @@ export default function Finance() {
 
           {partnersData.length > 0 && (
             <div className="p-3 bg-blue-500/10 border border-blue-500/20 rounded-md text-blue-700 dark:text-blue-400 text-sm">
-              {t("ownershipAutoCalculated")} — {partnersData.map(p => `${p.name}: ${parseFloat(p.ownershipPercentage).toFixed(1)}%`).join(" | ")}
+              {t("ownershipAutoCalculated")} — {partnersData.map(p => `${p.name}: ${parseFloat(partnerOwnershipPct(p)).toFixed(1)}%`).join(" | ")}
             </div>
           )}
 
@@ -1126,7 +1131,7 @@ export default function Finance() {
                           <div className="flex items-center gap-2">
                             <Badge variant="outline" className="text-lg px-3 py-1">
                               <Percent className="w-4 h-4 mr-1" />
-                              {partner.ownershipPercentage}%
+                              {partnerOwnershipPct(partner)}%
                             </Badge>
                             <Button variant="ghost" size="sm" onClick={() => openEditPartner(partner)} data-testid={`button-edit-partner-${partner.id}`}>
                               <Edit className="w-4 h-4" />
@@ -1305,7 +1310,7 @@ export default function Finance() {
               )}
               {editingPartner && (
                 <div className="p-3 bg-blue-500/10 border border-blue-500/20 rounded-lg text-sm text-muted-foreground">
-                  {t("ownershipAutoCalculatedNote")} {editingPartner.ownershipPercentage}%
+                  {t("ownershipAutoCalculatedNote")} {partnerOwnershipPct(editingPartner)}%
                 </div>
               )}
               <Button type="submit" className="w-full" disabled={createPartnerMutation.isPending || updatePartnerMutation.isPending} data-testid="button-submit-partner">
@@ -1375,7 +1380,7 @@ export default function Finance() {
                     </FormControl>
                     <SelectContent>
                       {partnersData.map(p => (
-                        <SelectItem key={p.id} value={p.id}>{p.name} ({p.ownershipPercentage}%)</SelectItem>
+                        <SelectItem key={p.id} value={p.id}>{p.name} ({partnerOwnershipPct(p)}%)</SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
