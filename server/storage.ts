@@ -994,7 +994,18 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getAllPartners(): Promise<Partner[]> {
-    return await db.select().from(partners).orderBy(desc(partners.createdAt));
+    const allPartners = await db.select().from(partners).orderBy(desc(partners.createdAt));
+    // Compute net capital for each partner
+    const netCapital = (p: Partner) =>
+      Math.max(0, parseFloat(p.totalInvested || "0") - parseFloat(p.totalWithdrawn || "0") - parseFloat(p.totalProfitDistributed || "0"));
+    const totalNet = allPartners.reduce((sum, p) => sum + netCapital(p), 0);
+    // Override ownershipPercentage with correctly computed value
+    return allPartners.map(p => ({
+      ...p,
+      ownershipPercentage: totalNet > 0
+        ? ((netCapital(p) / totalNet) * 100).toFixed(2)
+        : "0.00",
+    }));
   }
 
   async getPartner(id: string): Promise<Partner | undefined> {
