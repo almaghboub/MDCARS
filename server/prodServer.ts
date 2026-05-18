@@ -67,9 +67,23 @@ function serveStatic(app: express.Express) {
     );
   }
 
-  app.use(express.static(distPath));
+  // Static assets (JS/CSS) have content hashes — cache them long-term
+  app.use(express.static(distPath, {
+    setHeaders: (res, filePath) => {
+      if (filePath.endsWith(".html")) {
+        // Never cache HTML — browsers must always fetch the latest so they load the right JS
+        res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
+        res.setHeader("Pragma", "no-cache");
+        res.setHeader("Expires", "0");
+      }
+    },
+  }));
 
+  // SPA fallback — also with no-cache so updated deploys take effect immediately
   app.use("*", (_req, res) => {
+    res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
+    res.setHeader("Pragma", "no-cache");
+    res.setHeader("Expires", "0");
     res.sendFile(path.resolve(distPath, "index.html"));
   });
 }
