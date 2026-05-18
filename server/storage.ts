@@ -1080,10 +1080,12 @@ export class DatabaseStorage implements IStorage {
 
   async recalculatePartnerOwnership(): Promise<void> {
     const allPartners = await db.select().from(partners);
-    const totalInvested = allPartners.reduce((sum, p) => sum + parseFloat(p.totalInvested || "0"), 0);
+    const netCapital = (p: typeof allPartners[0]) =>
+      Math.max(0, parseFloat(p.totalInvested || "0") - parseFloat(p.totalWithdrawn || "0") - parseFloat(p.totalProfitDistributed || "0"));
+    const totalNetCapital = allPartners.reduce((sum, p) => sum + netCapital(p), 0);
     for (const partner of allPartners) {
-      const pct = totalInvested > 0
-        ? ((parseFloat(partner.totalInvested || "0") / totalInvested) * 100).toFixed(2)
+      const pct = totalNetCapital > 0
+        ? ((netCapital(partner) / totalNetCapital) * 100).toFixed(2)
         : "0.00";
       await db.update(partners).set({ ownershipPercentage: pct }).where(eq(partners.id, partner.id));
     }

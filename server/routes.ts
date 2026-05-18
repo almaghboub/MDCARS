@@ -189,15 +189,23 @@ async function runMigrations() {
         total_profit_distributed = COALESCE((SELECT SUM(CAST(amount AS decimal)) FROM partner_transactions WHERE partner_id = p.id AND type = 'profit_distribution'), 0)
     `);
 
-    // Recalculate ownership percentage for all partners based on total_invested
+    // Recalculate ownership percentage for all partners based on net capital (invested - withdrawn - profit_distributed)
     await client.query(`
       UPDATE partners p
       SET ownership_percentage = (
         CASE
-          WHEN (SELECT SUM(CAST(total_invested AS decimal)) FROM partners) > 0
+          WHEN (
+            SELECT SUM(GREATEST(
+              CAST(total_invested AS decimal) - CAST(total_withdrawn AS decimal) - CAST(total_profit_distributed AS decimal),
+              0
+            )) FROM partners
+          ) > 0
           THEN ROUND(
-            CAST(p.total_invested AS decimal) /
-            (SELECT SUM(CAST(total_invested AS decimal)) FROM partners) * 100,
+            GREATEST(CAST(p.total_invested AS decimal) - CAST(p.total_withdrawn AS decimal) - CAST(p.total_profit_distributed AS decimal), 0) /
+            (SELECT SUM(GREATEST(
+              CAST(total_invested AS decimal) - CAST(total_withdrawn AS decimal) - CAST(total_profit_distributed AS decimal),
+              0
+            )) FROM partners) * 100,
             2
           )
           ELSE 0
