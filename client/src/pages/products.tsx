@@ -70,6 +70,23 @@ export default function Products() {
     defaultValues: { name: "", description: "" },
   });
 
+  const parseApiError = (error: any): string => {
+    try {
+      const raw: string = error?.message || "Unknown error";
+      const colonIdx = raw.indexOf(": ");
+      if (colonIdx > -1) {
+        const rest = raw.slice(colonIdx + 2);
+        const parsed = JSON.parse(rest);
+        if (parsed?.message) return parsed.message;
+        if (Array.isArray(parsed)) return parsed.map((e: any) => e.message).join(", ");
+        return rest;
+      }
+      return raw;
+    } catch (_e) {
+      return error?.message || "Unknown error";
+    }
+  };
+
   const createProductMutation = useMutation({
     mutationFn: async (data: ProductFormData) => {
       const res = await apiRequest("POST", "/api/products", data);
@@ -85,7 +102,7 @@ export default function Products() {
       productForm.reset();
     },
     onError: (error: any) => {
-      toast({ title: "Error", description: error.message, variant: "destructive" });
+      toast({ title: "Failed to Add Product", description: parseApiError(error), variant: "destructive" });
     },
   });
 
@@ -102,7 +119,7 @@ export default function Products() {
       productForm.reset();
     },
     onError: (error: any) => {
-      toast({ title: "Error", description: error.message, variant: "destructive" });
+      toast({ title: "Failed to Update Product", description: parseApiError(error), variant: "destructive" });
     },
   });
 
