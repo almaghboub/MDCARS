@@ -262,9 +262,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   await storage.initializeDefaultData();
 
-  app.post("/api/auth/login", passport.authenticate("local"), (req, res) => {
-    const user = req.user as any;
-    res.json({ user: { id: user.id, username: user.username, role: user.role, firstName: user.firstName, lastName: user.lastName, email: user.email } });
+  app.post("/api/auth/login", (req, res, next) => {
+    passport.authenticate("local", (err: any, user: any, info: any) => {
+      if (err) return res.status(500).json({ message: "Server error during login" });
+      if (!user) return res.status(401).json({ message: info?.message || "Invalid credentials" });
+      req.logIn(user, (loginErr) => {
+        if (loginErr) return res.status(500).json({ message: "Failed to establish session" });
+        res.json({ user: { id: user.id, username: user.username, role: user.role, firstName: user.firstName, lastName: user.lastName, email: user.email } });
+      });
+    })(req, res, next);
   });
 
   app.post("/api/auth/logout", (req, res) => {
