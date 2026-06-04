@@ -32,7 +32,7 @@ export default function Login() {
         title: t("loginSuccessful"),
         description: t("welcomeMdCars"),
       });
-      window.location.href = "/dashboard";
+      setLocation("/dashboard");
     } catch (error) {
       toast({
         title: t("loginFailed"),

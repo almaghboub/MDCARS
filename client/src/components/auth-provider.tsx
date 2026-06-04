@@ -19,7 +19,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const { data: authData, isLoading: isAuthLoading } = useQuery({
     queryKey: ["/api/auth/me"],
-    queryFn: () => authApi.me(),
+    queryFn: async () => {
+      try {
+        return await authApi.me();
+      } catch {
+        return null;
+      }
+    },
     retry: false,
     refetchOnWindowFocus: false,
   });
