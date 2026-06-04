@@ -65,6 +65,10 @@ export default function Login() {
                       <Input
                         placeholder={t("username")}
                         data-testid="input-username"
+                        autoCapitalize="none"
+                        autoCorrect="off"
+                        autoComplete="username"
+                        spellCheck={false}
                         {...field}
                       />
                     </FormControl>
@@ -84,6 +88,9 @@ export default function Login() {
                         type="password"
                         placeholder={t("password")}
                         data-testid="input-password"
+                        autoComplete="current-password"
+                        autoCorrect="off"
+                        spellCheck={false}
                         {...field}
                       />
                     </FormControl>

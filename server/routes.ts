@@ -231,10 +231,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
     saveUninitialized: false,
     store: new SessionStore({ checkPeriod: 86400000 }),
     cookie: { 
-      secure: process.env.COOKIE_SECURE === 'true',
+      secure: false,
       httpOnly: true, 
-      sameSite: 'lax',
-      maxAge: 24 * 60 * 60 * 1000 
+      sameSite: false,
+      maxAge: 7 * 24 * 60 * 60 * 1000 
     },
   }));
 
